@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build
+.next/
+dist/
+build/
+
+# Claude
+.claude/
+
+# Backend uploads
+indian-rajniti-backend/uploads/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
