@@ -61,7 +61,8 @@ routes.get("/wordpress/posts/slug/:slug", getPostBySlug);
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: integer }
+ *         schema: { type: string, example: wp-1550 }
+ *         description: Accepts either the normalized wp-prefixed ID or the original numeric WordPress ID
  *     responses:
  *       200:
  *         description: The matching post, including a resolved featured_image URL

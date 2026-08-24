@@ -10,6 +10,37 @@ const WpPostMeta = require("./wpPostMeta.model");
 const TABLE = "wplh_posts";
 const THUMBNAIL_META_KEY = "_thumbnail_id";
 
+// Keep legacy WordPress column names inside this model. Everything returned
+// to controllers uses the same field names as an approved native article, so
+// the public news API can mix both sources without special-casing every card.
+function toArticle(post) {
+  if (!post) return post;
+
+  return {
+    id: `wp-${post.ID}`,
+    wordpress_id: post.ID,
+    source: "WORDPRESS",
+    type: "ARTICLE",
+    slug: post.post_name,
+    title: post.post_title,
+    excerpt: post.post_excerpt || "",
+    content: post.post_content || "",
+    featured_image: post.featured_image || null,
+    category: "News",
+    state: null,
+    author_name: "Indian Rajniti",
+    status: post.post_status === "publish" ? "APPROVED" : "DRAFT",
+    published_at: post.post_date_gmt || post.post_date,
+    created_at: post.post_date_gmt || post.post_date,
+    views: 0,
+    tags: [],
+  };
+}
+
+function wordpressIdOf(id) {
+  return String(id).replace(/^wp-/i, "");
+}
+
 async function resolveFeaturedImageUrl(attachmentId) {
   if (!attachmentId) return null;
   const [rows] = await pool.query(`SELECT guid FROM ${TABLE} WHERE ID = ?`, [attachmentId]);
@@ -51,7 +82,8 @@ const WpPost = {
       `SELECT * FROM ${TABLE} WHERE post_status = ? AND post_type = ? ORDER BY post_date DESC LIMIT ? OFFSET ?`,
       [status, type, Number(limit), Number(offset)]
     );
-    return attachFeaturedImages(rows);
+    const posts = await attachFeaturedImages(rows);
+    return posts.map(toArticle);
   },
 
   async count({ status = "publish", type = "post" } = {}) {
@@ -63,12 +95,13 @@ const WpPost = {
   },
 
   async findById(id) {
-    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE ID = ?`, [id]);
+    const wordpressId = wordpressIdOf(id);
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE ID = ?`, [wordpressId]);
     if (!rows[0]) return null;
 
-    const thumbnailId = await WpPostMeta.findValue(id, THUMBNAIL_META_KEY);
+    const thumbnailId = await WpPostMeta.findValue(wordpressId, THUMBNAIL_META_KEY);
     const featuredImage = await resolveFeaturedImageUrl(thumbnailId);
-    return { ...rows[0], featured_image: featuredImage };
+    return toArticle({ ...rows[0], featured_image: featuredImage });
   },
 
   async findBySlug(slug) {
@@ -77,7 +110,33 @@ const WpPost = {
 
     const thumbnailId = await WpPostMeta.findValue(rows[0].ID, THUMBNAIL_META_KEY);
     const featuredImage = await resolveFeaturedImageUrl(thumbnailId);
-    return { ...rows[0], featured_image: featuredImage };
+    return toArticle({ ...rows[0], featured_image: featuredImage });
+  },
+
+  // Public-news helpers deliberately expose published WordPress posts only.
+  async findPublished({ limit = 60 } = {}) {
+    const [rows] = await pool.query(
+      `SELECT * FROM ${TABLE}
+       WHERE post_status = 'publish' AND post_type = 'post'
+       ORDER BY post_date DESC LIMIT ?`,
+      [Number(limit)]
+    );
+    const posts = await attachFeaturedImages(rows);
+    return posts.map(toArticle);
+  },
+
+  async findPublishedBySlug(slug) {
+    const [rows] = await pool.query(
+      `SELECT * FROM ${TABLE}
+       WHERE post_name = ? AND post_status = 'publish' AND post_type = 'post'
+       LIMIT 1`,
+      [slug]
+    );
+    if (!rows[0]) return null;
+
+    const thumbnailId = await WpPostMeta.findValue(rows[0].ID, THUMBNAIL_META_KEY);
+    const featuredImage = await resolveFeaturedImageUrl(thumbnailId);
+    return toArticle({ ...rows[0], featured_image: featuredImage });
   },
 };
 

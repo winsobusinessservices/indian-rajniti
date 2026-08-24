@@ -5,6 +5,7 @@
 // dummy-content table. Non-authored widgets (hero-adjacent stats, election
 // results, poll of the day, etc.) still come from home_widgets.
 const Article = require("../../models/article.model");
+const WpPost = require("../../models/wordpress/wpPost.model");
 const Blog = require("../../models/blog.model");
 const Video = require("../../models/video.model");
 const HomeWidget = require("../../models/homeWidget.model");
@@ -75,6 +76,23 @@ function paragraphsOf(content) {
     .map((p) => p.trim())
     .filter(Boolean);
   return parts.length ? parts : [content || ""];
+}
+
+// WordPress post_content is HTML, while the current detail page renders an
+// array of plain-text paragraphs. Preserve paragraph/line boundaries and
+// decode the common entities rather than displaying HTML tags as text.
+function wordpressParagraphsOf(content) {
+  const text = String(content || "")
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|blockquote)>/gi, "\n\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0?39;|&apos;/gi, "'");
+  return paragraphsOf(text);
 }
 
 function dateLabel(row) {
@@ -154,12 +172,19 @@ function distinctStates(articles) {
 
 const getHome = async (req, res) => {
   try {
-    const [articlesPool, blogsPool, videosPool, widgets] = await Promise.all([
+    const [nativeArticles, wordpressArticles, blogsPool, videosPool, widgets] = await Promise.all([
       Article.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
+      WpPost.findPublished({ limit: POOL_LIMIT }),
       Blog.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
       Video.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
       HomeWidget.getAll(),
     ]);
+
+    // WordPress IDs are prefixed with `wp-`, so they cannot collide with
+    // native numeric article IDs in section de-duplication or React keys.
+    const articlesPool = [...nativeArticles, ...wordpressArticles]
+      .sort((a, b) => new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at))
+      .slice(0, POOL_LIMIT);
 
     const byViews = [...articlesPool].sort(
       (a, b) => b.views - a.views || new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at)
@@ -255,11 +280,15 @@ const getPostBySlug = async (req, res) => {
       kind = "BLOG";
     }
     if (!row) {
+      row = await WpPost.findPublishedBySlug(slug);
+      kind = "WORDPRESS";
+    }
+    if (!row) {
       return res.status(404).json({ success: false, message: "Post not found" });
     }
 
     if (kind === "ARTICLE") await Article.incrementViews(row.id);
-    else await Blog.incrementViews(row.id);
+    else if (kind === "BLOG") await Blog.incrementViews(row.id);
 
     const post = {
       slug: row.slug,
@@ -271,7 +300,7 @@ const getPostBySlug = async (req, res) => {
       author: row.author_name,
       readTime: readTimeOf(row.content),
       tags: row.tags || [],
-      content: paragraphsOf(row.content),
+      content: kind === "WORDPRESS" ? wordpressParagraphsOf(row.content) : paragraphsOf(row.content),
     };
 
     return res.status(200).json({ success: true, post });
