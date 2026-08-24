@@ -125,7 +125,7 @@ export default function NewsCard({ variant = "stacked", story }) {
         {story.author && (
           <span className="text-outline text-[10px] mt-1">
             By {story.author}
-            {story.time && ` • ${story.time}`}
+            {/* {story.time && ` • ${story.time}`} */}
             {" • "}<ViewCount views={story.views} />
           </span>
         )}
