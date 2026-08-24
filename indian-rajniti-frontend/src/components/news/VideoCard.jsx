@@ -1,6 +1,7 @@
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
+import { formatViews } from "@/lib/formatViews";
 
-export default function VideoCard({ title, category, image }) {
+export default function VideoCard({ title, category, image, views = 0 }) {
   return (
     <div className="group cursor-pointer">
       <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-3">
@@ -15,6 +16,9 @@ export default function VideoCard({ title, category, image }) {
       <h3 className="font-headline-md text-sm text-on-surface group-hover:text-primary transition-colors leading-snug mt-1">
         {title}
       </h3>
+      <span className="inline-flex items-center gap-1 text-[10px] text-outline mt-1">
+        <i className="fa-regular fa-eye" /> {formatViews(views)}
+      </span>
     </div>
   );
 }

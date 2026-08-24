@@ -8,6 +8,7 @@ import NewsAsideLeft from "@/components/news/NewsAsideLeft";
 import NewsAsideRight from "@/components/news/NewsAsideRight";
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 import { slugify } from "@/lib/slugify";
+import { formatViews } from "@/lib/formatViews";
 
 import { getBreakingNews, getPostBySlug, getRelatedPosts } from "@/features/news/news.api";
 
@@ -72,6 +73,9 @@ export default async function PostDetailPage({ params }) {
                 </span>
                 <span className="flex items-center gap-2">
                   <i className="fa-regular fa-clock text-primary" /> {post.readTime}
+                </span>
+                <span className="flex items-center gap-2">
+                  <i className="fa-regular fa-eye text-primary" /> {formatViews(post.views)}
                 </span>
               </div>
 

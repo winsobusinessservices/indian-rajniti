@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatViews } from "@/lib/formatViews";
 
 export default function TrendingNews({ items, viewAllHref }) {
   return (
@@ -27,6 +28,9 @@ export default function TrendingNews({ items, viewAllHref }) {
                   {item.title}
                 </h4>
                 <p className="font-body-md text-xs text-on-surface-variant line-clamp-2">{item.excerpt}</p>
+                <span className="text-[10px] text-outline inline-flex items-center gap-1">
+                  <i className="fa-regular fa-eye" /> {formatViews(item.views)}
+                </span>
               </div>
             </Wrapper>
           );

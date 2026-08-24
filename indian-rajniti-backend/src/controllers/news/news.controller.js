@@ -211,6 +211,7 @@ const getHome = async (req, res) => {
       title: row.title,
       excerpt: row.excerpt,
       image: row.featured_image || null,
+      views: row.views,
     }));
 
     const cutoff = new Date(Date.now() - TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -300,6 +301,7 @@ const getPostBySlug = async (req, res) => {
       author: row.author_name,
       readTime: readTimeOf(row.content),
       tags: row.tags || [],
+      views: kind === "WORDPRESS" ? row.views : (Number(row.views) || 0) + 1,
       content: kind === "WORDPRESS" ? wordpressParagraphsOf(row.content) : paragraphsOf(row.content),
     };
 

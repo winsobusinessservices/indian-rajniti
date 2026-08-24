@@ -1,6 +1,11 @@
 import Link from "next/link";
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 import { slugify } from "@/lib/slugify";
+import { formatViews } from "@/lib/formatViews";
+
+function ViewCount({ views }) {
+  return <span className="inline-flex items-center gap-1"><i className="fa-regular fa-eye" /> {formatViews(views)}</span>;
+}
 
 /**
  * variant: "stacked" (Top Stories), "horizontal" (Editorial Opinion), "compact" (Regional Focus)
@@ -54,7 +59,7 @@ export default function NewsCard({ variant = "stacked", story }) {
           )}
           <p className="font-body-md text-on-surface-variant line-clamp-2 text-xs mt-1">{story.excerpt}</p>
           <span className="text-outline text-[10px] mt-1">
-            By {story.author} • {story.time}
+            By {story.author} • {story.time} • <ViewCount views={story.views} />
           </span>
         </div>
       </article>
@@ -79,6 +84,7 @@ export default function NewsCard({ variant = "stacked", story }) {
             {story.author && <>By {story.author}</>}
             {story.author && story.time && " • "}
             {story.time}
+            {" • "}<ViewCount views={story.views} />
           </span>
         )}
       </Wrapper>
@@ -120,6 +126,7 @@ export default function NewsCard({ variant = "stacked", story }) {
           <span className="text-outline text-[10px] mt-1">
             By {story.author}
             {story.time && ` • ${story.time}`}
+            {" • "}<ViewCount views={story.views} />
           </span>
         )}
       </div>

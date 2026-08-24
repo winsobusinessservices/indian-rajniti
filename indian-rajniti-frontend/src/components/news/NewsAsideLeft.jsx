@@ -4,6 +4,7 @@ import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 import WidgetHeading from "@/components/common/WidgetHeading";
 import AdSlot from "@/components/common/AdSlot";
 import { getTrending, getTopStories, getVideoHighlights } from "@/features/news/news.api";
+import { formatViews } from "@/lib/formatViews";
 
 export default async function NewsAsideLeft() {
   const [trending, topStories, videoHighlights] = await Promise.all([
@@ -56,6 +57,9 @@ export default async function NewsAsideLeft() {
               <h4 className="font-body-md font-semibold text-xs text-on-surface line-clamp-2 group-hover:text-primary transition-colors">
                 {video.title}
               </h4>
+              <span className="inline-flex items-center gap-1 text-[10px] text-outline mt-1">
+                <i className="fa-regular fa-eye" /> {formatViews(video.views)}
+              </span>
             </div>
           ))}
         </div>

@@ -14,7 +14,7 @@ export default async function VideosPage() {
       gridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
     >
       {videos.map((video) => (
-        <VideoCard key={video.id} title={video.title} category={video.category} image={video.image} />
+        <VideoCard key={video.id} title={video.title} category={video.category} image={video.image} views={video.views} />
       ))}
     </CategoryPageShell>
   );

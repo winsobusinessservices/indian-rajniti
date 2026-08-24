@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
+import { formatViews } from "@/lib/formatViews";
 
 const BADGE_CLASS = {
   primary: "bg-primary text-on-primary",
@@ -50,6 +51,9 @@ export default function HeroNews({ slides }) {
             <p className="font-body-md text-gray-200 hidden md:block max-w-3xl drop-shadow-sm text-sm">
               {slide.excerpt}
             </p>
+            <span className="text-xs text-gray-200 mt-2 inline-flex items-center gap-1">
+              <i className="fa-regular fa-eye" /> {formatViews(slide.views)}
+            </span>
           </div>
         </div>
       ))}

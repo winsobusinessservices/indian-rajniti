@@ -11,6 +11,7 @@ import PartyCard from "@/components/politician/PartyCard";
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 import AdSlot from "@/components/common/AdSlot";
 import { slugify } from "@/lib/slugify";
+import { formatViews } from "@/lib/formatViews";
 
 import {
   getBreakingNews,
@@ -292,6 +293,9 @@ export default async function Home() {
                     <h3 className="font-headline-md text-lg text-white group-hover:text-inverse-primary transition-colors leading-snug">
                       {video.title}
                     </h3>
+                    <span className="inline-flex items-center gap-1 text-[10px] text-white/70 mt-1">
+                      <i className="fa-regular fa-eye" /> {formatViews(video.views)}
+                    </span>
                   </div>
                 ))}
               </div>
