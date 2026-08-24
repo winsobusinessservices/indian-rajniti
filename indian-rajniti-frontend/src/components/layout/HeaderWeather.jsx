@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useIsClient } from "@/hooks/useIsClient";
 
 const weatherIcons = {
   0: "☀️",
@@ -60,6 +61,7 @@ const weatherDescriptions = {
 };
 
 export default function HeaderWeather() {
+  const isClient = useIsClient();
   const [weather, setWeather] = useState(null);
   const [location, setLocation] = useState("Bengaluru");
   const [dateTime, setDateTime] = useState(new Date());
@@ -234,11 +236,11 @@ export default function HeaderWeather() {
       <div className="flex items-center gap-3  text-xs font-label-md text-on-surface-variant">
 
           <p className="text-xs text-gray-500 ">
-            {formattedDate}
+            {isClient ? formattedDate : ""}
           </p>
         <span className="text-gray-300">|</span>
           <p className="font-headline-md text-xs text-primary">
-            {formattedTime}
+            {isClient ? formattedTime : ""}
           </p>
 
         </div>

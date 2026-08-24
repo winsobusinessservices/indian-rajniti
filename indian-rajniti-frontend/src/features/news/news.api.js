@@ -182,9 +182,15 @@ export async function getWeatherSnapshot() {
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code` +
     `&timezone=auto`;
 
-  const response = await fetch(url);
-  const data = await response.json();
-  return data;
+    try{
+        const response = await fetch(url);
+        const data = await response.json();
+        return data;
+    }catch(err){
+        console.error("Api not working")
+    }
+
+
 }
 
 export async function getLegislativeTracker() {
@@ -222,9 +228,15 @@ export function allTeasers() {
 // single source the /category/[slug] registry aggregates from, so no
 // clickable label 404s.
 export async function getAllCategoryLabels() {
-  const { posts, news, widgets } = await getHomeData();
+  const [{ posts, news, widgets }, categoriesRes] = await Promise.all([
+    getHomeData(),
+    fetch(`${API_BASE_URL}/categories`, { cache: "no-store" }),
+  ]);
+  if (!categoriesRes.ok) throw new Error(`Failed to load categories (${categoriesRes.status})`);
+  const { categories } = await categoriesRes.json();
   const postTags = posts.flatMap((post) => post.tags || []);
   return [
+    ...categories.map((category) => category.name),
     ...posts.map((post) => post.category),
     ...news.regionalFocus.states,
     ...widgets.popular_tags,
@@ -234,6 +246,15 @@ export async function getAllCategoryLabels() {
     ...widgets.political_keywords.categories,
     ...postTags,
   ].filter(Boolean);
+}
+
+export async function getPostsForTopics(terms) {
+  const params = new URLSearchParams();
+  terms.filter(Boolean).forEach((term) => params.append("term", term));
+  const res = await fetch(`${API_BASE_URL}/news/topics?${params.toString()}`, { next: { revalidate: 60 } });
+  if (!res.ok) throw new Error(`Failed to load topic posts (${res.status})`);
+  const { posts } = await res.json();
+  return posts.map(withDisplayFields);
 }
 
 export async function getPostBySlug(slug) {

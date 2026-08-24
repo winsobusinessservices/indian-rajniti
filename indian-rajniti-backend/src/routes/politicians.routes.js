@@ -4,7 +4,7 @@
 //   GET /parties                  every party
 //   GET /parties/:slug            one party's full profile
 const express = require("express");
-const { getPoliticians, getPoliticianBySlug, getParties, getPartyBySlug } = require("../controllers/politicians/politicians.controller");
+const { getPoliticians, getPoliticianBySlug, getParties, getPartyBySlug, getStates, getStateBySlug } = require("../controllers/politicians/politicians.controller");
 
 const router = express.Router();
 
@@ -69,5 +69,8 @@ router.get("/parties", getParties);
  *         description: Party not found
  */
 router.get("/parties/:slug", getPartyBySlug);
+
+router.get("/states", getStates);
+router.get("/states/:slug", getStateBySlug);
 
 module.exports = router;

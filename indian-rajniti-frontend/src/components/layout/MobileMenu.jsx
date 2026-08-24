@@ -165,6 +165,11 @@ function AuthorTools({ onClose, isModerator, isAdmin, roleLabel }) {
         {isAdmin && (
           <>
             <li>
+              <Link href="/author/categories" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+                <i className="fa-solid fa-folder-tree w-4" /> Manage Categories
+              </Link>
+            </li>
+            <li>
             <Link
               href="/author/team"
               onClick={onClose}

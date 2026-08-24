@@ -26,6 +26,13 @@ function runAiCheck({ title, description, videoUrl }) {
 }
 
 const Video = {
+  async findCategories() {
+    const [rows] = await pool.query(
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+    );
+    return rows.map((row) => row.category);
+  },
+
   runAiCheck,
 
   async create({ authorId, title, description, videoSource, videoUrl, thumbnail, category, state, tags, relatedArticleId, relatedPolitician }) {

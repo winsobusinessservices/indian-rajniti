@@ -111,6 +111,13 @@ async function runAiCheck({
 const Article = {
   runAiCheck,
 
+  async findCategories() {
+    const [rows] = await pool.query(
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+    );
+    return rows.map((row) => row.category);
+  },
+
   /*
    * CREATE
    * New article always starts as DRAFT.
@@ -234,6 +241,24 @@ const Article = {
        WHERE ${conditions.join(" AND ")}
        ORDER BY ${order}
        LIMIT ?`,
+      [...params, limit]
+    );
+    return rows.map(parseRow);
+  },
+
+  async findPublishedForTopics(topics, limit = 60) {
+    if (!topics.length) return [];
+    const topicCondition = topics.map(() => `(
+      LOWER(a.category) = LOWER(?) OR LOWER(a.state) = LOWER(?) OR
+      LOWER(a.related_politician) = LOWER(?) OR LOWER(a.related_election) = LOWER(?) OR
+      JSON_CONTAINS(COALESCE(a.tags, JSON_ARRAY()), JSON_QUOTE(?)) OR
+      LOWER(CONCAT_WS(' ', a.title, a.excerpt, a.content)) LIKE LOWER(?)
+    )`).join(" OR ");
+    const params = topics.flatMap((topic) => [topic, topic, topic, topic, topic, `%${topic}%`]);
+    const [rows] = await pool.query(
+      `SELECT a.*, u.name AS author_name FROM ${TABLE} a JOIN users u ON u.id = a.author_id
+       WHERE a.status = 'APPROVED' AND (${topicCondition})
+       ORDER BY a.published_at DESC, a.views DESC LIMIT ?`,
       [...params, limit]
     );
     return rows.map(parseRow);

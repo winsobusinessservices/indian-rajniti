@@ -13,6 +13,50 @@ const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const POOL_LIMIT = 60;
 const TRENDING_WINDOW_DAYS = 14;
 
+const getCategories = async (req, res) => {
+  try {
+    const [articleCategories, blogCategories, videoCategories, widgets] = await Promise.all([
+      Article.findCategories(),
+      Blog.findCategories(),
+      Video.findCategories(),
+      HomeWidget.getAll(),
+    ]);
+
+    const configuredCategories = widgets.political_keywords?.categories || [];
+    const categories = [...new Set([
+      ...configuredCategories,
+      ...articleCategories,
+      ...blogCategories,
+      ...videoCategories,
+    ].map((category) => category.trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+
+    return res.status(200).json({ success: true, categories });
+  } catch (error) {
+    console.error("Get categories error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+const getTopicPosts = async (req, res) => {
+  try {
+    const rawTerms = Array.isArray(req.query.term) ? req.query.term : [req.query.term];
+    const terms = [...new Set(rawTerms.map((term) => String(term || "").trim()).filter(Boolean))].slice(0, 10);
+    if (!terms.length) return res.status(400).json({ success: false, message: "At least one topic term is required" });
+
+    const [articles, blogs] = await Promise.all([
+      Article.findPublishedForTopics(terms),
+      Blog.findPublishedForTopics(terms),
+    ]);
+    const posts = [...articles.map(toArticleTeaser), ...blogs.map(toBlogTeaser)]
+      .sort((a, b) => new Date(b.time) - new Date(a.time));
+    return res.status(200).json({ success: true, posts });
+  } catch (error) {
+    console.error("Get topic posts error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
 function wordsOf(text) {
   return (text || "").trim().split(/\s+/).filter(Boolean);
 }
@@ -175,8 +219,14 @@ const getHome = async (req, res) => {
       // Rallies/Careers above), not a positional slice — with only a
       // handful of videos total, slicing past the first 6 left this section
       // permanently empty even when press-briefing videos genuinely existed.
+      // Same non-press pool as Multimedia Hub above, not a disjoint slice of
+      // it — slice(2, 6) left this permanently empty whenever that pool had
+      // 2 or fewer videos (its first 2 already went to Multimedia Hub), even
+      // though "highlights" and "hub" showing overlapping picks from a small
+      // pool is normal and expected until there's enough video inventory to
+      // split cleanly.
       multimediaHub: byCategory(videosPool, "press", true).slice(0, 2).map(toVideoTeaser),
-      videoHighlights: byCategory(videosPool, "press", true).slice(2, 6).map(toVideoTeaser),
+      videoHighlights: byCategory(videosPool, "press", true).slice(0, 4).map(toVideoTeaser),
       pressConferenceArchive: byCategory(videosPool, "press").map(toVideoTeaser),
       allVideos: videosPool.map(toVideoTeaser),
     };
@@ -231,4 +281,4 @@ const getPostBySlug = async (req, res) => {
   }
 };
 
-module.exports = { getHome, getPostBySlug };
+module.exports = { getCategories, getTopicPosts, getHome, getPostBySlug };

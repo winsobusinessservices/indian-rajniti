@@ -58,6 +58,13 @@ async function runAiCheck({ title, excerpt, content }) {
 const Blog = {
   runAiCheck,
 
+  async findCategories() {
+    const [rows] = await pool.query(
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+    );
+    return rows.map((row) => row.category);
+  },
+
   async create({ authorId, title, excerpt, content, featuredImage, category, tags, relatedArticleId }) {
     const slug = await uniqueSlug(title, async (candidate) => Boolean(await Blog.findBySlug(candidate)));
 
@@ -102,6 +109,22 @@ const Blog = {
        WHERE ${conditions.join(" AND ")}
        ORDER BY ${order}
        LIMIT ?`,
+      [...params, limit]
+    );
+    return rows.map(parseRow);
+  },
+
+  async findPublishedForTopics(topics, limit = 60) {
+    if (!topics.length) return [];
+    const topicCondition = topics.map(() => `(
+      LOWER(b.category) = LOWER(?) OR JSON_CONTAINS(COALESCE(b.tags, JSON_ARRAY()), JSON_QUOTE(?)) OR
+      LOWER(CONCAT_WS(' ', b.title, b.excerpt, b.content)) LIKE LOWER(?)
+    )`).join(" OR ");
+    const params = topics.flatMap((topic) => [topic, topic, `%${topic}%`]);
+    const [rows] = await pool.query(
+      `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id
+       WHERE b.status = 'APPROVED' AND (${topicCondition})
+       ORDER BY b.published_at DESC, b.views DESC LIMIT ?`,
       [...params, limit]
     );
     return rows.map(parseRow);

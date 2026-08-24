@@ -33,6 +33,7 @@ const IMG = {
   farmerProtest: "/uploads/seed/farmer_protest.jpg",
   pressConference: "/uploads/seed/press_conference.jpg",
   biharAssembly: "/uploads/seed/bihar_assembly.jpg",
+  rajasthanAssembly: "/uploads/seed/rajasthan_assembly.jpg",
 };
 
 const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
@@ -324,6 +325,26 @@ const VIDEOS = [
     title: "Election Commission's Poll Preparedness Media Briefing",
     description: "The Election Commission briefs media on logistics and security preparedness ahead of the announced polls.",
   },
+  {
+    category: "Press Briefing", image: IMG.rbi, views: 465, days: 3,
+    title: "RBI Governor Briefs Media on Monetary Policy Committee Decision",
+    description: "The central bank's press briefing following the latest repo rate decision, with the Governor addressing the inflation outlook and liquidity measures.",
+  },
+  {
+    category: "Press Briefing", image: IMG.supremeCourt, views: 340, days: 6,
+    title: "Supreme Court Registry Briefing on Case-Listing Reforms",
+    description: "A media briefing on new case-management and listing procedures aimed at reducing pendency in the apex court.",
+  },
+  {
+    category: "Press Briefing", image: IMG.rajasthanAssembly, views: 210, days: 8,
+    title: "Rajasthan Assembly Speaker's Briefing Ahead of the Budget Session",
+    description: "The Speaker's office briefs reporters on the agenda and scheduled bills for the upcoming budget session.",
+  },
+  {
+    category: "Press Briefing", image: IMG.parliament, views: 395, days: 9,
+    title: "Winter Session Curtain-Raiser: Parliamentary Affairs Ministry Briefing",
+    description: "The government's pre-session briefing outlining the legislative agenda for the Winter Session.",
+  },
 ];
 
 async function pickUsers() {
@@ -384,7 +405,14 @@ async function seed() {
   }
   console.log(`Seeded ${BLOGS.length} approved blogs.`);
 
+  // Per-title skip (rather than articles' coarse "skip if >= N exist"
+  // check above) so re-running this script to add new entries — as opposed
+  // to seeding from scratch — doesn't duplicate the ones already inserted.
+  const [existingVideoRows] = await pool.query("SELECT title FROM videos");
+  const existingVideoTitles = new Set(existingVideoRows.map((r) => r.title));
+  let videosSeeded = 0;
   for (const item of VIDEOS) {
+    if (existingVideoTitles.has(item.title)) continue;
     const created = await Video.create({
       authorId: nextAuthor(),
       title: item.title,
@@ -399,8 +427,9 @@ async function seed() {
       category: item.category,
     });
     await approve("videos", created.id, reviewerId, item.views, daysAgo(item.days));
+    videosSeeded++;
   }
-  console.log(`Seeded ${VIDEOS.length} approved videos.`);
+  console.log(`Seeded ${videosSeeded} approved videos (${VIDEOS.length - videosSeeded} already existed).`);
 }
 
 seed()

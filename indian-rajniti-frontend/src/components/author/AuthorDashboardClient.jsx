@@ -317,20 +317,34 @@ export default function AuthorDashboardClient() {
             )}
 
             {isAdmin && (
-              <Link
-                href="/author/team"
-                className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
-              >
-                <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
-                  <i className="fa-solid fa-user-plus" />
-                </span>
-                <div>
-                  <h3 className="font-headline-md text-base text-on-surface">Add Team Member</h3>
-                  <p className="font-body-md text-xs text-on-surface-variant">
-                    Create an Author, Editor, or Investor account with their required documents
-                  </p>
-                </div>
-              </Link>
+              <>
+                <Link
+                  href="/author/categories"
+                  className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
+                >
+                  <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-folder-tree" />
+                  </span>
+                  <div>
+                    <h3 className="font-headline-md text-base text-on-surface">Manage Categories</h3>
+                    <p className="font-body-md text-xs text-on-surface-variant">Add or remove categories used by author forms and public pages</p>
+                  </div>
+                </Link>
+                <Link
+                  href="/author/team"
+                  className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
+                >
+                  <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-user-plus" />
+                  </span>
+                  <div>
+                    <h3 className="font-headline-md text-base text-on-surface">Add Team Member</h3>
+                    <p className="font-body-md text-xs text-on-surface-variant">
+                      Create an Author, Editor, or Investor account with their required documents
+                    </p>
+                  </div>
+                </Link>
+              </>
             )}
           </div>
 

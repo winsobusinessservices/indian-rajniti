@@ -1,13 +1,12 @@
 import { slugify } from "@/lib/slugify";
-import { allTeasers, getAllCategoryLabels } from "@/features/news/news.api";
+import { allTeasers, getAllCategoryLabels, getPostsForTopics } from "@/features/news/news.api";
 import {
   getChiefMinisters,
   getParties,
   getFormerPMs,
   getKeyFigures,
-  getStateProfile,
 } from "@/features/politicians/politician.api";
-import { getAllStatesAndUTs } from "@/features/geography/geography.api";
+import { getAllStatesAndUTs, getStateProfile } from "@/features/geography/geography.api";
 
 // Fallback figures used whenever a page needs to show "the PM" or "the
 // Leader of Opposition" without a more specific match (party counterpart,
@@ -46,20 +45,20 @@ async function buildRegistry() {
   // Individuals and specific entities are registered first (with their
   // specific type) so generic topic labels never shadow a more specific match.
   chiefMinisters.forEach((cm) => {
-    add(cm.state, "state");
+    add(cm.state, "state", { name: cm.state });
     add(cm.name, "politician", { subtype: "cm", ...cm });
   });
   // Every state and union territory gets a page even without a CM profile —
   // getCategoryInfo() just falls back to its generic description for those.
   statesAndUTs.forEach((place) => {
-    add(place.name, "state");
+    add(place.name, "state", place);
     add(`Election in ${place.name}`, "topic");
   });
   formerPMs.forEach((pm) => add(pm.name, "politician", { subtype: "former-pm", ...pm }));
   keyFigures.forEach((figure) => add(figure.name, "politician", { subtype: "key-figure", ...figure }));
   parties.forEach((party) => {
-    add(party.abbreviation, "party");
-    add(party.name, "party");
+    add(party.abbreviation, "party", party);
+    add(party.name, "party", party);
   });
   labels.forEach((label) => add(label, "topic"));
 
@@ -168,9 +167,11 @@ export async function getCategoryInfo(slug) {
     }
   }
 
-  const relatedNews = allTeasers()
-    .filter((story) => story.category && slugify(story.category) === slug)
-    .slice(0, 6);
+  const topicTerms = [label];
+  if (type === "party" && data) topicTerms.push(data.name, data.abbreviation);
+  if (type === "politician" && data) topicTerms.push(data.name);
+  if (type === "state") topicTerms.push(data?.name);
+  const relatedNews = (await getPostsForTopics([...new Set(topicTerms.filter(Boolean))])).slice(0, 12);
 
   const relatedSlugs = new Set(relatedNews.map((story) => story.slug));
   const recommendedNews = allTeasers()

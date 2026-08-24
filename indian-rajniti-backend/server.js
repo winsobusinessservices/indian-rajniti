@@ -19,6 +19,7 @@ const applicationRoutes = require("./src/routes/applications.routes.js")
 const newsRoutes = require("./src/routes/news.routes.js")
 const politiciansRoutes = require("./src/routes/politicians.routes.js")
 const careersRoutes = require("./src/routes/careers.routes.js")
+const categoriesRoutes = require("./src/routes/categories.routes.js")
 // credentials: true + an explicit origin (never "*") so the auth cookie can be sent/received
 app.use(
   cors({
@@ -39,6 +40,7 @@ app.use("/api", applicationRoutes)
 app.use("/api", newsRoutes)
 app.use("/api", politiciansRoutes)
 app.use("/api", careersRoutes)
+app.use("/api", categoriesRoutes)
 
 app.get("/", (req, res) => {
   res.send("API is running...");

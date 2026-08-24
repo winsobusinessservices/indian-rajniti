@@ -3,7 +3,7 @@
 //   GET /news/posts/:slug  a single post (direct lookup, not currently
 //                          used by the frontend but available for API consumers)
 const express = require("express");
-const { getHome, getPostBySlug } = require("../controllers/news/news.controller");
+const { getCategories, getTopicPosts, getHome, getPostBySlug } = require("../controllers/news/news.controller");
 
 const router = express.Router();
 
@@ -19,6 +19,20 @@ const router = express.Router();
  *         description: Home page content bundle (news sections, flat posts list, widgets)
  */
 router.get("/news/home", getHome);
+
+/**
+ * @openapi
+ * /api/news/categories:
+ *   get:
+ *     summary: List available content categories
+ *     description: Returns configured categories plus distinct categories already used by articles, blogs, and videos.
+ *     tags: [News]
+ *     responses:
+ *       200:
+ *         description: Alphabetized category list
+ */
+router.get("/news/categories", getCategories);
+router.get("/news/topics", getTopicPosts);
 
 /**
  * @openapi

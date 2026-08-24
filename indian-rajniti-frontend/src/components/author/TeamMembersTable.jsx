@@ -11,10 +11,10 @@ import ReasonModal from "@/components/common/ReasonModal";
 const TEAM_ROLES = ["ADMIN", "EDITOR", "AUTHOR", "INVESTOR"];
 
 const ROLE_BADGE = {
-  ADMIN: "bg-primary text-on-primary",
-  EDITOR: "bg-secondary text-on-secondary",
-  AUTHOR: "bg-surface-tint text-on-surface",
-  INVESTOR: "bg-amber-500 text-black",
+  ADMIN: "bg-primary text-white",
+  EDITOR: "bg-primary text-white",
+  AUTHOR: "bg-primary text-white",
+  INVESTOR: "bg-primary text-white",
 };
 
 const STATUS_BADGE = {

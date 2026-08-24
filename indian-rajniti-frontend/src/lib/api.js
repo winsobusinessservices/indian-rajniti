@@ -80,6 +80,7 @@ export const authorApi = {
   createArticle: (formData) => requestForm("/articles", { formData }),
   createBlog: (formData) => requestForm("/blogs", { formData }),
   createVideo: (formData) => requestForm("/videos", { formData }),
+  listCategories: () => request("/categories"),
 
   listByType: (type, filters) => request(`/${RESOURCE_PATH[type]}${toQueryString(filters)}`),
 
@@ -111,6 +112,12 @@ export const authorApi = {
   reviewPost: (type, id, payload) => request(`/${RESOURCE_PATH[type]}/${id}/review`, { method: "POST", body: payload }),
 };
 
+export const categoriesApi = {
+  list: () => request("/categories"),
+  create: (name) => request("/categories", { method: "POST", body: { name } }),
+  remove: (id) => request(`/categories/${id}`, { method: "DELETE" }),
+};
+
 // Job postings the site is hiring for — admin creates/manages, any logged-in
 // member can browse and apply. Distinct from authApi's role-application
 // flow (self-signup to become an Author/Editor/Investor on the platform).
@@ -127,5 +134,3 @@ export const careersApi = {
   listApplications: (id) => request(`/careers/${id}/applications`),
   reviewApplication: (id, appId, payload) => request(`/careers/${id}/applications/${appId}/review`, { method: "POST", body: payload }),
 };
-
-

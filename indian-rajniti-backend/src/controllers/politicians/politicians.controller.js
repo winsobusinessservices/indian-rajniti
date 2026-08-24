@@ -4,6 +4,7 @@
 // politician.api.js, which used to return hardcoded dummy data.
 const Politician = require("../../models/politician.model");
 const Party = require("../../models/party.model");
+const State = require("../../models/state.model");
 
 const getPoliticians = async (req, res) => {
   try {
@@ -55,4 +56,25 @@ const getPartyBySlug = async (req, res) => {
   }
 };
 
-module.exports = { getPoliticians, getPoliticianBySlug, getParties, getPartyBySlug };
+const getStates = async (req, res) => {
+  try {
+    const states = await State.findAll();
+    return res.status(200).json({ success: true, states });
+  } catch (error) {
+    console.error("Get states error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+const getStateBySlug = async (req, res) => {
+  try {
+    const state = await State.findBySlug(req.params.slug);
+    if (!state) return res.status(404).json({ success: false, message: "State not found" });
+    return res.status(200).json({ success: true, state });
+  } catch (error) {
+    console.error("Get state by slug error:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+module.exports = { getPoliticians, getPoliticianBySlug, getParties, getPartyBySlug, getStates, getStateBySlug };

@@ -203,6 +203,9 @@ export default function PostForm({ type, post, redirectTo = "/author/content" })
   const [form, setForm] = useState(() => initialForm(post));
   const [files, setFiles] = useState({});
   const [articles, setArticles] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -218,6 +221,28 @@ export default function PostForm({ type, post, redirectTo = "/author/content" })
     const request = isModerator ? authorApi.listHistoryByType("ARTICLE") : authorApi.listByType("ARTICLE");
     request.then((data) => setArticles(data.posts)).catch(() => setArticles([]));
   }, [type, user?.role]);
+
+  useEffect(() => {
+    let active = true;
+
+    authorApi.listCategories()
+      .then((data) => {
+        if (!active) return;
+        setCategories((data.categories || []).map((category) => category.name));
+        setCategoriesError("");
+      })
+      .catch((err) => {
+        if (!active) return;
+        setCategoriesError(err.message);
+      })
+      .finally(() => {
+        if (active) setCategoriesLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -417,7 +442,29 @@ export default function PostForm({ type, post, redirectTo = "/author/content" })
               <FieldLabel icon="fa-folder-open" required>
                 Category
               </FieldLabel>
-              <input type="text" name="category" required value={form.category} onChange={handleChange} className={fieldClass} />
+              <select
+                name="category"
+                required
+                value={form.category}
+                onChange={handleChange}
+                disabled={categoriesLoading}
+                className={`${fieldClass} disabled:opacity-60`}
+              >
+                <option value="">{categoriesLoading ? "Loading categories..." : "Choose a category"}</option>
+                {form.category && !categories.includes(form.category) && (
+                  <option value={form.category}>{form.category}</option>
+                )}
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+              {categoriesError && (
+                <p className="mt-1.5 text-xs font-body-md text-error" role="alert">
+                  Could not load categories: {categoriesError}
+                </p>
+              )}
             </div>
 
             {(type === "ARTICLE" || type === "VIDEO") && (
