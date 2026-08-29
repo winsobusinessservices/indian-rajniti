@@ -39,13 +39,13 @@ const setContentType = (type) => (req, res, next) => {
   next();
 };
 
-// Articles/blogs upload a single featured image; videos upload a thumbnail
-// and, when videoSource is UPLOAD, the video file itself.
+// Articles/blogs upload one featured image and up to ten body/gallery images;
+// videos upload a thumbnail and, when videoSource is UPLOAD, the video file.
 function mediaFieldsFor(type) {
   if (type === "VIDEO") {
     return [{ name: "thumbnail", maxCount: 1 }, { name: "videoFile", maxCount: 1 }];
   }
-  return [{ name: "featuredImage", maxCount: 1 }];
+  return [{ name: "featuredImage", maxCount: 1 }, { name: "additionalImages", maxCount: 10 }];
 }
 
 function buildResourceRoutes(resource, type) {

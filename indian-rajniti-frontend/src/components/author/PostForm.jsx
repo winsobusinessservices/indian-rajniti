@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { authorApi, mediaUrl } from "@/lib/api";
+import { splitContentMedia } from "@/lib/contentMedia";
 
 const TYPE_LABEL = {
   ARTICLE: "Article",
@@ -16,10 +17,12 @@ const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 const VIDEO_SOURCES = ["YOUTUBE", "VIMEO", "UPLOAD", "EXTERNAL"];
 
 function initialForm(post, initialCategory = "") {
+  const contentMedia = splitContentMedia(post?.content);
   return {
     title: post?.title || "",
     excerpt: post?.excerpt || "",
-    content: post?.content || "",
+    content: contentMedia.text,
+    additionalImages: contentMedia.images,
     description: post?.description || "",
     featuredImage: post?.featured_image || "",
     thumbnail: post?.thumbnail || "",
@@ -54,6 +57,8 @@ function buildFormData(type, form, files) {
     fd.append("content", form.content);
     if (files.featuredImage) fd.append("featuredImage", files.featuredImage);
     else if (form.featuredImage) fd.append("featuredImage", form.featuredImage);
+    fd.append("existingAdditionalImages", JSON.stringify(form.additionalImages));
+    (files.additionalImages || []).forEach((file) => fd.append("additionalImages", file));
   }
 
   if (type === "ARTICLE") {
@@ -209,6 +214,9 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [linkText, setLinkText] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const contentRef = useRef(null);
 
   // Blogs and videos can reference an article — pull the picker options from
   // whatever articles this user is permitted to see. GET /articles is always
@@ -251,6 +259,54 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   const handleFileChange = (e) => {
     const { name, files: fileList } = e.target;
     setFiles((prev) => ({ ...prev, [name]: fileList?.[0] || null }));
+  };
+
+  const handleAdditionalImages = (e) => {
+    const selected = Array.from(e.target.files || []);
+    setFiles((prev) => ({
+      ...prev,
+      additionalImages: [...(prev.additionalImages || []), ...selected].slice(0, Math.max(0, 10 - form.additionalImages.length)),
+    }));
+    e.target.value = "";
+  };
+
+  const removeExistingImage = (index) => {
+    setForm((prev) => ({ ...prev, additionalImages: prev.additionalImages.filter((_, itemIndex) => itemIndex !== index) }));
+  };
+
+  const removeNewImage = (index) => {
+    setFiles((prev) => ({ ...prev, additionalImages: (prev.additionalImages || []).filter((_, itemIndex) => itemIndex !== index) }));
+  };
+
+  const insertExternalLink = () => {
+    const label = linkText.trim();
+    let url = linkUrl.trim();
+    if (!label || !url) {
+      setError("Enter both the link text and website address.");
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch {
+      setError("Enter a valid website address, for example https://example.com.");
+      return;
+    }
+
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? start;
+    const link = `[${label}](${url})`;
+    const nextContent = `${form.content.slice(0, start)}${link}${form.content.slice(end)}`;
+    setForm((prev) => ({ ...prev, content: nextContent }));
+    setLinkText("");
+    setLinkUrl("");
+    setError("");
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(start + link.length, start + link.length);
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -341,6 +397,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                   Content
                 </FieldLabel>
                 <textarea
+                  ref={contentRef}
                   name="content"
                   required
                   rows={16}
@@ -348,6 +405,34 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                   onChange={handleChange}
                   className={`${fieldClass} resize-y`}
                 />
+                <div className="mt-3 rounded-lg border border-outline-variant/30 bg-surface-container-low p-3">
+                  <p className="font-label-md text-xs text-on-surface mb-2">
+                    <i className="fa-solid fa-link text-primary mr-1.5" /> Add a website link
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.4fr_auto] gap-2">
+                    <input
+                      type="text"
+                      value={linkText}
+                      onChange={(event) => setLinkText(event.target.value)}
+                      placeholder="Text to display"
+                      aria-label="Link text"
+                      className={fieldClass}
+                    />
+                    <input
+                      type="text"
+                      inputMode="url"
+                      value={linkUrl}
+                      onChange={(event) => setLinkUrl(event.target.value)}
+                      placeholder="https://example.com"
+                      aria-label="Website address"
+                      className={fieldClass}
+                    />
+                    <button type="button" onClick={insertExternalLink} className="px-4 py-2.5 rounded bg-primary text-on-primary font-label-md text-sm whitespace-nowrap">
+                      Insert Link
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-on-surface-variant">Place the cursor where the link should appear, then select Insert Link.</p>
+                </div>
               </div>
             )}
           </div>
@@ -421,16 +506,54 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                 )}
               </>
             ) : (
-              <FileUploadField
-                name="featuredImage"
-                icon="fa-image"
-                label="Featured Image"
-                accept="image/*"
-                required={!isEdit}
-                currentUrl={form.featuredImage}
-                selectedFile={files.featuredImage}
-                onChange={handleFileChange}
-              />
+              <>
+                <FileUploadField
+                  name="featuredImage"
+                  icon="fa-image"
+                  label="Featured Image"
+                  accept="image/*"
+                  required={!isEdit}
+                  currentUrl={form.featuredImage}
+                  selectedFile={files.featuredImage}
+                  onChange={handleFileChange}
+                />
+                <div>
+                  <FieldLabel icon="fa-images">Extra Images</FieldLabel>
+                  <label
+                    htmlFor="field-additionalImages"
+                    className="flex items-center gap-3 px-3 py-2.5 border-2 border-dashed border-outline-variant/40 rounded-lg bg-surface-container-low hover:border-primary/60 cursor-pointer"
+                  >
+                    <span className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                      <i className="fa-solid fa-images text-primary" />
+                    </span>
+                    <span className="font-label-md text-sm">Choose multiple images</span>
+                  </label>
+                  <input id="field-additionalImages" type="file" accept="image/*" multiple onChange={handleAdditionalImages} className="hidden" />
+                  <p className="mt-1.5 text-[11px] text-on-surface-variant">Optional — upload up to 10 images for the article or blog gallery.</p>
+
+                  {(form.additionalImages.length > 0 || files.additionalImages?.length > 0) && (
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                      {form.additionalImages.map((url, index) => (
+                        <div key={url} className="relative aspect-video rounded overflow-hidden bg-surface-container-high">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={mediaUrl(url)} alt={`Extra image ${index + 1}`} className="w-full h-full object-cover" />
+                          <button type="button" onClick={() => removeExistingImage(index)} aria-label="Remove image" className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 text-white">
+                            <i className="fa-solid fa-xmark" />
+                          </button>
+                        </div>
+                      ))}
+                      {(files.additionalImages || []).map((file, index) => (
+                        <div key={`${file.name}-${file.lastModified}`} className="relative p-2 rounded bg-primary/10 text-xs truncate pr-8">
+                          {file.name}
+                          <button type="button" onClick={() => removeNewImage(index)} aria-label="Remove selected image" className="absolute top-1 right-1 w-6 h-6 rounded-full bg-primary text-white">
+                            <i className="fa-solid fa-xmark" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

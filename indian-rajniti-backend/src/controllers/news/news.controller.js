@@ -10,6 +10,7 @@ const Blog = require("../../models/blog.model");
 const Video = require("../../models/video.model");
 const HomeWidget = require("../../models/homeWidget.model");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
+const { splitContentMedia } = require("../../utils/contentMedia");
 
 const POOL_LIMIT = 60;
 const TRENDING_WINDOW_DAYS = 14;
@@ -299,6 +300,7 @@ const getPostBySlug = async (req, res) => {
     if (kind === "ARTICLE") await Article.incrementViews(row.id);
     else if (kind === "BLOG") await Blog.incrementViews(row.id);
 
+    const contentMedia = kind === "WORDPRESS" ? null : splitContentMedia(row.content);
     const post = {
       slug: row.slug,
       category: row.category || row.state || "News",
@@ -310,7 +312,8 @@ const getPostBySlug = async (req, res) => {
       readTime: readTimeOf(row.content),
       tags: row.tags || [],
       views: kind === "WORDPRESS" ? row.views : (Number(row.views) || 0) + 1,
-      content: kind === "WORDPRESS" ? wordpressParagraphsOf(row.content) : paragraphsOf(row.content),
+      content: kind === "WORDPRESS" ? wordpressParagraphsOf(row.content) : paragraphsOf(contentMedia.text),
+      additionalImages: contentMedia?.images || [],
     };
 
     return res.status(200).json({ success: true, post });

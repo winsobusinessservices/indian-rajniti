@@ -10,6 +10,8 @@ import AiCheckLoader from "@/components/common/AiCheckLoader";
 import ReasonModal from "@/components/common/ReasonModal";
 import { resolveBackTarget } from "@/lib/postNav";
 import { ArticleBodySkeleton } from "@/components/common/PageSkeletons";
+import { splitContentMedia } from "@/lib/contentMedia";
+import LinkedText from "@/components/common/LinkedText";
 
 const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 
@@ -49,6 +51,7 @@ export default function ViewPostClient({ type, id }) {
   const [aiChecking, setAiChecking] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const contentMedia = splitContentMedia(post?.content);
 
   // `loading` already starts true, so the effect only needs to flip it back
   // (from an async callback, not synchronously) — nothing here re-fetches,
@@ -225,15 +228,23 @@ export default function ViewPostClient({ type, id }) {
         {(post.excerpt || post.description) && (
           <p className="font-body-lg text-on-surface leading-relaxed italic">{post.excerpt || post.description}</p>
         )}
-        {post.content &&
-          post.content
+        {contentMedia.text &&
+          contentMedia.text
             .split("\n")
             .filter((paragraph) => paragraph.trim())
             .map((paragraph, index) => (
               <p key={index} className="font-body-md text-on-surface-variant leading-relaxed">
-                {paragraph}
+                <LinkedText>{paragraph}</LinkedText>
               </p>
             ))}
+        {contentMedia.images.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+            {contentMedia.images.map((url, index) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={url} src={mediaUrl(url)} alt={`${post.title} — image ${index + 2}`} className="w-full aspect-video object-cover rounded-xl" />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tags */}

@@ -7,6 +7,7 @@ const Blog = require("../../models/blog.model");
 const Video = require("../../models/video.model");
 const { fileUrl } = require("../../middleware/upload.middleware");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
+const { joinContentMedia } = require("../../utils/contentMedia");
 
 const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 const isModerator = (role) => MODERATOR_ROLES.includes(role);
@@ -46,6 +47,17 @@ function parseTags(raw) {
   }
 }
 
+function parseImageUrls(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw !== "string" || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function extractFields(type, body, files = {}) {
   const tags = parseTags(body.tags);
 
@@ -56,7 +68,10 @@ function extractFields(type, body, files = {}) {
     return {
       title,
       excerpt,
-      content,
+      content: joinContentMedia(content, [
+        ...parseImageUrls(body.existingAdditionalImages),
+        ...(files.additionalImages || []).map((file) => fileUrl(type, file)),
+      ]),
       featuredImage,
       category,
       state: orUndefined(body.state),
@@ -72,7 +87,10 @@ function extractFields(type, body, files = {}) {
     return {
       title,
       excerpt: orUndefined(body.excerpt),
-      content,
+      content: joinContentMedia(content, [
+        ...parseImageUrls(body.existingAdditionalImages),
+        ...(files.additionalImages || []).map((file) => fileUrl(type, file)),
+      ]),
       featuredImage,
       category,
       tags,

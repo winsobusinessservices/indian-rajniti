@@ -12,6 +12,8 @@ import { formatViews } from "@/lib/formatViews";
 
 import { getBreakingNews, getPostBySlug, getRelatedPosts } from "@/features/news/news.api";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { mediaUrl } from "@/lib/api";
+import LinkedText from "@/components/common/LinkedText";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -129,7 +131,7 @@ export default async function PostDetailPage({ params }) {
                         : "font-body-md text-on-surface-variant leading-relaxed"
                     }
                   >
-                    {paragraph}
+                    <LinkedText>{paragraph}</LinkedText>
                   </p>
                 ))}
 
@@ -137,6 +139,15 @@ export default async function PostDetailPage({ params }) {
                   &ldquo;{post.excerpt}&rdquo;
                 </blockquote>
               </div>
+
+              {post.additionalImages?.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8" aria-label="Article images">
+                  {post.additionalImages.map((url, index) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={url} src={mediaUrl(url)} alt={`${post.title} — image ${index + 2}`} loading="lazy" className="w-full aspect-video object-cover rounded-xl" />
+                  ))}
+                </div>
+              )}
 
               <div className="mt-10 pt-6 border-t border-outline-variant/30">
                 <h3 className="font-label-md text-primary text-xs uppercase tracking-widest mb-3">Related Keywords</h3>
