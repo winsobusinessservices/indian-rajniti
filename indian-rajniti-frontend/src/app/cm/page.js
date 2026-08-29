@@ -16,6 +16,7 @@ export default async function ChiefMinistersPage() {
           name={cm.name}
           subtitle={`Chief Minister, ${cm.state}`}
           photo={cm.photo}
+          photoFallback={cm.photoFallback}
           href={`/category/${slugify(cm.name)}`}
         />
       ))}

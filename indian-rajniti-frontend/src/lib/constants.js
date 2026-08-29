@@ -1,5 +1,5 @@
 export const SITE = {
-  name: "Indian Rajniti",
+  name: "Indian Rajneeti",
   tagline: "The Definitive Chronicle of Indian Political Discourse",
 };
 

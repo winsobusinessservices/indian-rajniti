@@ -53,7 +53,7 @@ export default function LoginForm() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+      <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="mt-8 space-y-6">
         <div className="space-y-5 rounded-md">
           <AuthTextField
             id="email-address"

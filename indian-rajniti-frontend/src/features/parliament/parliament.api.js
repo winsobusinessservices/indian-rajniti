@@ -5,8 +5,16 @@
  * components/category/CategoryDetailView.jsx), plus a lightweight summary
  * for the home page and sidebar widgets.
  */
-import { allTeasers } from "@/features/news/news.api";
+import { allTeasers, getElectionResults, getPageProfiles } from "@/features/news/news.api";
 import { getKeyFigures, findFigureByName } from "@/features/politicians/politician.api";
+import { createJsonResource } from "@/lib/jsonResource";
+import { DEFAULT_PAGE_PROFILES } from "@/features/events/pageProfiles";
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const readParliamentResource = createJsonResource(`${API_BASE_URL}/parliament`, {
+  ttl: 30_000,
+  fetchOptions: { next: { revalidate: 30 } },
+});
 
 const LOK_SABHA = {
   key: "loksabha",
@@ -52,8 +60,8 @@ const RAJYA_SABHA = {
   currentTerm: "Permanent house — one-third of members retire every two years",
   presidingOfficer: { name: "Jagdeep Dhankhar", role: "Chairman, Rajya Sabha (ex-officio Vice President)", party: "Non-partisan" },
   deputyPresidingOfficer: { name: "Harivansh Narayan Singh", role: "Deputy Chairman", party: "JD(U)" },
-  leaderOfHouse: { name: "J. P. Nadda", role: "Leader of the House, Rajya Sabha", party: "BJP" },
-  leaderOfOpposition: { name: "Mallikarjun Kharge", role: "Leader of Opposition, Rajya Sabha", party: "INC" },
+  leaderOfHouse: { name: "J. P. Nadda", role: "Leader of the House, Rajya Sabha", party: "BJP", photo: "https://images.indianexpress.com/2021/04/nadda1-1.jpg?w=1024" },
+  leaderOfOpposition: { name: "Mallikarjun Kharge", role: "Leader of Opposition, Rajya Sabha", party: "INC", photo: "https://res.cloudinary.com/dkplc2mbj/image/upload/v1668748045/small_Mallikarjun_Kharge_dc71c21baf_b792f99382_copy_e11f8f47be.jpg" },
   composition: [
     { party: "BJP", seats: 96, colorClass: "bg-primary" },
     { party: "INC", seats: 27, colorClass: "bg-secondary" },
@@ -93,13 +101,24 @@ const GENERAL_ELECTION = {
 };
 
 const HOUSES = { loksabha: LOK_SABHA, rajyasabha: RAJYA_SABHA };
+export const DEFAULT_PARLIAMENT = HOUSES;
+
+async function getHouses() {
+  try {
+    const { parliament } = await readParliamentResource();
+    return parliament && typeof parliament === "object" ? { ...HOUSES, ...parliament } : HOUSES;
+  } catch {
+    return HOUSES;
+  }
+}
 
 function majorityBloc(composition) {
   return [...composition].sort((a, b) => b.seats - a.seats)[0];
 }
 
 export async function getParliamentSummary() {
-  return [LOK_SABHA, RAJYA_SABHA].map((house) => {
+  const houses = await getHouses();
+  return [houses.loksabha, houses.rajyasabha].map((house) => {
     const leading = majorityBloc(house.composition);
     return {
       key: house.key,
@@ -114,7 +133,8 @@ export async function getParliamentSummary() {
 }
 
 export async function getHouseInfo(house) {
-  const data = HOUSES[house];
+  const houses = await getHouses();
+  const data = houses[house];
   if (!data) return null;
 
   const relatedNews = allTeasers().filter((story) => data.relatedSlugs.includes(story.slug));
@@ -131,8 +151,20 @@ export async function getHouseInfo(house) {
     label: data.label,
     type: "house",
     description: `The ${data.label} (${data.fullName}) is one of the two houses of the Indian Parliament, currently comprising ${data.totalSeats} seats. Track its leadership, party composition, and the latest legislative developments.`,
-    current: { name: data.leaderOfHouse.name, role: data.leaderOfHouse.role, icon: "fa-solid fa-user-tie", photo: leaderOfHouseMatch?.photo },
-    opposition: { name: data.leaderOfOpposition.name, role: data.leaderOfOpposition.role, icon: "fa-solid fa-user-tie", photo: leaderOfOppositionMatch?.photo },
+    current: {
+      name: data.leaderOfHouse.name,
+      role: data.leaderOfHouse.role,
+      icon: "fa-solid fa-user-tie",
+      photo: leaderOfHouseMatch?.photo || data.leaderOfHouse.photo,
+      photoFallback: leaderOfHouseMatch?.photoFallback,
+    },
+    opposition: {
+      name: data.leaderOfOpposition.name,
+      role: data.leaderOfOpposition.role,
+      icon: "fa-solid fa-user-tie",
+      photo: leaderOfOppositionMatch?.photo || data.leaderOfOpposition.photo,
+      photoFallback: leaderOfOppositionMatch?.photoFallback,
+    },
     currentLabel: "Leader of the House",
     oppositionLabel: "Leader of Opposition",
     bio: [data.history, data.achievements],
@@ -149,7 +181,10 @@ export async function getHouseInfo(house) {
 }
 
 export async function getElectionInfo() {
-  const relatedNews = allTeasers().filter((story) => GENERAL_ELECTION.relatedSlugs.includes(story.slug));
+  const [, profiles] = await Promise.all([getElectionResults(), getPageProfiles()]);
+  const saved = profiles?.elections || {};
+  const page = { ...DEFAULT_PAGE_PROFILES.elections, ...saved, current: { ...DEFAULT_PAGE_PROFILES.elections.current, ...saved.current }, opposition: { ...DEFAULT_PAGE_PROFILES.elections.opposition, ...saved.opposition } };
+  const relatedNews = allTeasers().filter((story) => GENERAL_ELECTION.relatedSlugs.includes(story.slug) || String(story.category || story.tag || "").toLowerCase().includes("election"));
   const relatedSlugSet = new Set(relatedNews.map((story) => story.slug));
   const recommendedNews = allTeasers()
     .filter((story) => story.slug && !relatedSlugSet.has(story.slug))
@@ -158,18 +193,13 @@ export async function getElectionInfo() {
   return {
     label: GENERAL_ELECTION.label,
     type: "election",
-    description: `India's ${GENERAL_ELECTION.lastGeneralElection} decided the composition of the current Lok Sabha. Track the ruling coalition versus the opposition, the party-wise result, and the Election Commission's role in overseeing the process.`,
-    current: { name: GENERAL_ELECTION.rulingCoalition.name, role: `Ruling Coalition — ${GENERAL_ELECTION.rulingCoalition.seats} seats`, icon: "fa-solid fa-people-group" },
-    opposition: { name: GENERAL_ELECTION.oppositionCoalition.name, role: `Opposition Alliance — ${GENERAL_ELECTION.oppositionCoalition.seats} seats`, icon: "fa-solid fa-people-group" },
-    currentLabel: "Ruling Coalition",
-    oppositionLabel: "Opposition Alliance",
-    bio: [GENERAL_ELECTION.history, GENERAL_ELECTION.achievements],
-    facts: [
-      { icon: "fa-solid fa-user-tie", label: `Chief Election Commissioner: ${GENERAL_ELECTION.chiefElectionCommissioner}` },
-      { icon: "fa-solid fa-box-ballot", label: `${GENERAL_ELECTION.lastGeneralElection} — ${GENERAL_ELECTION.phases} phases` },
-      { icon: "fa-solid fa-chart-simple", label: `Voter turnout: ${GENERAL_ELECTION.turnout}` },
-      { icon: "fa-solid fa-calendar", label: `Next general election due: ${GENERAL_ELECTION.nextDue}` },
-    ],
+    description: page.description,
+    current: { ...page.current, icon: "fa-solid fa-people-group" },
+    opposition: { ...page.opposition, icon: "fa-solid fa-people-group" },
+    currentLabel: page.currentLabel,
+    oppositionLabel: page.oppositionLabel,
+    bio: page.bio,
+    facts: page.facts.map((label) => ({ icon: "fa-solid fa-box-ballot", label })),
     composition: LOK_SABHA.composition,
     relatedNews,
     recommendedNews,

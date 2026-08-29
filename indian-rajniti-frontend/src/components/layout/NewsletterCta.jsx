@@ -15,7 +15,7 @@ export default function NewsletterCta({ followUs }) {
       </Link>
       <div className="flex items-center justify-center gap-4 border-t border-white/20 pt-4">
         {followUs.map((social) => (
-          <a key={social.id} href="#" aria-label={social.label} className="text-white/80 hover:text-white transition-colors">
+          <a key={social.id} href={social.url || "#"} target={social.url ? "_blank" : undefined} rel={social.url ? "noopener noreferrer" : undefined} aria-label={social.label} className="text-white/80 hover:text-white transition-colors">
             <i className={`${social.icon} text-lg`} />
           </a>
         ))}

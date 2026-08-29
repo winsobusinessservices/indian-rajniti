@@ -1,7 +1,7 @@
 import RegisterForm from "./RegisterForm";
 
 export const metadata = {
-  title: "Create Account | Indian Rajniti",
+  title: "Create Account | Indian Rajneeti",
 };
 
 export default function RegisterPage() {

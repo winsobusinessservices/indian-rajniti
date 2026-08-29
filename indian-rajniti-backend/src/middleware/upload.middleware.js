@@ -6,6 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const sharp = require("sharp");
 
 const UPLOAD_ROOT = path.join(__dirname, "..", "..", "uploads");
 
@@ -35,7 +36,42 @@ function fileFilter(req, file, cb) {
 
 const upload = multer({ storage, fileFilter, limits: { fileSize: 200 * 1024 * 1024 } });
 
-const uploadFields = (fields) => upload.fields(fields);
+async function optimizeUploadedImages(req, res, next) {
+  const files = Object.values(req.files || {}).flat();
+
+  try {
+    await Promise.all(
+      files
+        .filter((file) => IMAGE_TYPES.test(file.mimetype))
+        .map(async (file) => {
+          const parsed = path.parse(file.path);
+          const outputPath = path.join(parsed.dir, `${parsed.name}.optimized.webp`);
+          const finalPath = path.join(parsed.dir, `${parsed.name}.webp`);
+
+          await sharp(file.path, { animated: true })
+            .rotate()
+            .resize({ width: 1920, height: 1920, fit: "inside", withoutEnlargement: true })
+            .webp({ quality: 80, effort: 4 })
+            .toFile(outputPath);
+
+          await fs.promises.unlink(file.path);
+          await fs.promises.rename(outputPath, finalPath);
+
+          file.path = finalPath;
+          file.filename = path.basename(finalPath);
+          file.mimetype = "image/webp";
+          file.size = (await fs.promises.stat(finalPath)).size;
+        })
+    );
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Multer writes the files first, then images are capped to a sensible display
+// size and encoded as WebP before a controller stores their URLs.
+const uploadFields = (fields) => [upload.fields(fields), optimizeUploadedImages];
 
 function fileUrl(type, file) {
   return `/uploads/${type.toLowerCase()}/${file.filename}`;

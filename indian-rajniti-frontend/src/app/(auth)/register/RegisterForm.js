@@ -20,6 +20,9 @@ export default function RegisterForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState("details");
+  const [otp, setOtp] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -30,11 +33,11 @@ export default function RegisterForm() {
     setError("");
     setSuccess("");
 
-    if (!agreedToTerms) {
+    if (step === "details" && !agreedToTerms) {
       setError("Please agree to the Terms of Service and Privacy Policy.");
       return;
     }
-    if (form.password !== form.confirmPassword) {
+    if (step === "details" && form.password !== form.confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
@@ -43,12 +46,26 @@ export default function RegisterForm() {
 
 
     try {
+      if (step === "details") {
+        const data = await authApi.requestRegistrationOtp(form.email.trim());
+        setChallengeToken(data.challengeToken);
+        setOtp("");
+        setStep("otp");
+        setSuccess(`A six-digit verification code was sent to ${form.email.trim()}.`);
+        return;
+      }
+
+      const verified = await authApi.verifyRegistrationOtp({
+        email: form.email.trim(),
+        otp,
+        challengeToken,
+      });
       await authApi.register({
         name: form.name.trim(),
         email: form.email.trim(),
         password: form.password,
         agreeToTerms: agreedToTerms,
-
+        verificationToken: verified.verificationToken,
       });
       setSuccess("Account created successfully. Redirecting to sign in...");
       setTimeout(() => router.push("/login"), 1200);
@@ -57,6 +74,30 @@ export default function RegisterForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const resendOtp = async () => {
+    setError("");
+    setSuccess("");
+    setLoading(true);
+    try {
+      const data = await authApi.requestRegistrationOtp(form.email.trim());
+      setChallengeToken(data.challengeToken);
+      setOtp("");
+      setSuccess("A new verification code was sent.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changeEmail = () => {
+    setStep("details");
+    setOtp("");
+    setChallengeToken("");
+    setError("");
+    setSuccess("");
   };
 
   return (
@@ -79,7 +120,8 @@ export default function RegisterForm() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+      <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="mt-8 space-y-6">
+        {step === "details" ? (
         <div className="space-y-5 rounded-md">
           <AuthTextField
             id="full-name"
@@ -124,6 +166,41 @@ export default function RegisterForm() {
             />
           </div>
         </div>
+        ) : (
+          <div className="rounded-lg border border-outline-variant/30 bg-surface-container-low p-5 text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <i className="fa-solid fa-envelope-circle-check" aria-hidden="true" />
+            </span>
+            <h2 className="mt-4 font-headline-md text-lg text-on-surface">Verify your email</h2>
+            <p className="mt-1 font-body-md text-sm text-on-surface-variant">
+              Enter the six-digit code sent to <strong className="text-on-surface">{form.email}</strong>.
+            </p>
+            <label htmlFor="registration-otp" className="sr-only">Verification code</label>
+            <input
+              id="registration-otp"
+              name="otp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              pattern="[0-9]{6}"
+              maxLength={6}
+              required
+              autoFocus
+              value={otp}
+              onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="mt-5 w-full rounded border border-outline-variant/40 bg-surface px-4 py-3 text-center font-headline-lg text-2xl tracking-[0.45em] text-on-surface outline-none focus:border-primary"
+              placeholder="000000"
+            />
+            <div className="mt-4 flex flex-wrap justify-center gap-4 text-xs font-label-md">
+              <button type="button" onClick={resendOtp} disabled={loading} className="text-primary hover:underline disabled:opacity-50">
+                Resend code
+              </button>
+              <button type="button" onClick={changeEmail} disabled={loading} className="text-on-surface-variant hover:text-primary hover:underline disabled:opacity-50">
+                Change email
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-error font-body-md" role="alert">
@@ -136,7 +213,7 @@ export default function RegisterForm() {
           </p>
         )}
 
-        <div className="flex items-center">
+        {step === "details" && <div className="flex items-center">
           <div className="flex items-center h-5">
             <input
               id="terms"
@@ -151,17 +228,17 @@ export default function RegisterForm() {
           <div className="ml-3 text-sm">
             <label htmlFor="terms" className="font-label-sm text-on-surface-variant cursor-pointer">
               I agree to the{" "}
-              <a className="text-primary hover:underline font-label-md" href="#">
+              <Link className="text-primary hover:underline font-label-md" href="/terms-of-service">
                 Terms of Service
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a className="text-primary hover:underline font-label-md" href="#">
+              <Link className="text-primary hover:underline font-label-md" href="/privacy-policy">
                 Privacy Policy
-              </a>
+              </Link>
               .
             </label>
           </div>
-        </div>
+        </div>}
 
         <div>
           <button
@@ -171,7 +248,9 @@ export default function RegisterForm() {
           >
             <span className="absolute inset-0 w-full h-full -mt-1 opacity-30 bg-gradient-to-b from-transparent via-transparent to-black pointer-events-none" />
             <span className="relative flex items-center gap-2">
-              {loading ? "Creating Account..." : "Create Account"}
+              {loading
+                ? step === "details" ? "Sending Code..." : "Verifying..."
+                : step === "details" ? "Send Verification Code" : "Verify & Create Account"}
               <i className="fa-solid fa-arrow-right text-xs transition-transform group-hover:translate-x-1" />
             </span>
           </button>

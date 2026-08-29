@@ -27,6 +27,33 @@ const HomeWidget = {
       [widgetKey, JSON.stringify(data)]
     );
   },
+
+  async votePoll(optionIndex) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [rows] = await connection.query(`SELECT data FROM ${TABLE} WHERE widget_key = ? FOR UPDATE`, ["poll_of_the_day"]);
+      if (!rows[0]) throw new Error("Poll is not available");
+      const poll = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
+      if (!Array.isArray(poll.options) || optionIndex < 0 || optionIndex >= poll.options.length) throw new Error("Please choose a valid poll option");
+      const options = poll.options.map((option) => ({ ...option, votes: Number(option.votes) || 0 }));
+      options[optionIndex].votes += 1;
+      const totalVotes = options.reduce((total, option) => total + option.votes, 0);
+      const result = {
+        ...poll,
+        options: options.map((option) => ({ ...option, pct: totalVotes ? Math.round((option.votes / totalVotes) * 100) : 0 })),
+        totalVotes,
+      };
+      await connection.query(`UPDATE ${TABLE} SET data = ? WHERE widget_key = ?`, [JSON.stringify(result), "poll_of_the_day"]);
+      await connection.commit();
+      return result;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  },
 };
 
 module.exports = HomeWidget;

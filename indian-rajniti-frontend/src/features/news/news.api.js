@@ -10,6 +10,7 @@
  * data, so no consuming component needed to change.
  */
 import { mediaUrl } from "@/lib/api";
+import { createJsonResource } from "@/lib/jsonResource";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -18,32 +19,44 @@ function formatDate(iso) {
   return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 }
 
+function playbackUrl(value) {
+  const url = String(value || "").trim();
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("//")) return `https:${url}`;
+  if (/^(?:www\.)?(?:youtube\.com|youtu\.be|vimeo\.com)\//i.test(url)) return `https://${url}`;
+  return mediaUrl(url.startsWith("/") ? url : `/${url}`);
+}
+
 // Populated on every fetch — lets allTeasers() (called synchronously by
 // features/category/category.api.js, after it has already awaited another
 // getter from this module in the same Promise.all) read already-fetched
 // data without itself being async.
 //
-// Deliberately NOT wrapped in a module-level promise cache: `next dev` (and
-// most Next.js server runtimes) reuse the same Node process across many
-// requests, so a "cache the promise in a module variable" pattern would
-// resolve once on the very first request and then serve that same stale
-// snapshot forever. Calling fetch() directly on every getHomeData() call
-// instead relies on Next's own request memoization (dedupes identical
-// fetches within one render) and its `next.revalidate` Data Cache (dedupes
-// — with actual expiry — across requests), which is what we actually want.
 let lastKnownBundle = null;
 
+const readHomeResource = createJsonResource(`${API_BASE_URL}/news/home`, {
+  // Admin-managed widgets must be visible on the next refresh. In-flight
+  // requests are still shared by createJsonResource, so all home sections
+  // use one API call without retaining stale resolved data.
+  ttl: 0,
+  fetchOptions: { cache: "no-store" },
+});
+
 async function getHomeData() {
-  const res = await fetch(`${API_BASE_URL}/news/home`, { next: { revalidate: 60 } });
-  if (!res.ok) throw new Error(`Failed to load news content (${res.status})`);
-  const json = await res.json();
+  const json = await readHomeResource();
   lastKnownBundle = json;
   return json;
 }
 
 function withDisplayFields(item) {
   if (!item) return item;
-  return { ...item, image: mediaUrl(item.image), time: formatDate(item.time) };
+  return {
+    ...item,
+    image: mediaUrl(item.image),
+    videoUrl: playbackUrl(item.videoUrl),
+    time: formatDate(item.time),
+  };
 }
 
 // The "horizontal" NewsCard variant (Editorial Opinion) and the in-depth
@@ -110,6 +123,10 @@ export async function getBlogs() {
   const { news } = await getHomeData();
   return news.blogs.map(withDisplayFields);
 }
+export async function getLatestPosts(limit = 10) {
+  const { posts } = await getHomeData();
+  return posts.slice(0, limit).map(withDisplayFields);
+}
 export async function getCareers() {
   const { news } = await getHomeData();
   return news.careers.map(withDisplayFields);
@@ -169,6 +186,10 @@ export async function getRtiCorner() {
 export async function getFollowUs() {
   const { widgets } = await getHomeData();
   return widgets.follow_us;
+}
+export async function getPageProfiles() {
+  const { widgets } = await getHomeData();
+  return widgets.page_profiles || null;
 }
 
 export async function getWeatherSnapshot() {

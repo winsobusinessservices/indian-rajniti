@@ -232,7 +232,9 @@ const Article = {
       params.push(sinceDays);
     }
 
-    const order = orderBy === "views" ? "a.views DESC, a.published_at DESC" : "a.published_at DESC, a.views DESC";
+    const order = orderBy === "views"
+      ? "a.views DESC, COALESCE(a.published_at, a.created_at) DESC, a.id DESC"
+      : "COALESCE(a.published_at, a.created_at) DESC, a.created_at DESC, a.id DESC";
 
     const [rows] = await pool.query(
       `SELECT a.*, u.name AS author_name

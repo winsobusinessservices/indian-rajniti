@@ -5,7 +5,7 @@
 const DEMO_ADS = [
   {
     icon: "fa-solid fa-newspaper",
-    eyebrow: "Indian Rajniti Premium",
+    eyebrow: "Indian Rajneeti Premium",
     headline: "Go Ad-Free & Unlock Deep-Dive Reports",
     body: "Support independent political journalism.",
     cta: "Try Premium",

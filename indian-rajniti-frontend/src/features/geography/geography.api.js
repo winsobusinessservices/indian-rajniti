@@ -1,9 +1,14 @@
+import { createJsonResource } from "@/lib/jsonResource";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
+const readGeographyResource = createJsonResource(`${API_BASE_URL}/states`, {
+  ttl: 300_000,
+  fetchOptions: { next: { revalidate: 300 } },
+});
+
 async function getGeographyData() {
-  const res = await fetch(`${API_BASE_URL}/states`, { next: { revalidate: 300 } });
-  if (!res.ok) throw new Error(`Failed to load states (${res.status})`);
-  const { states } = await res.json();
+  const { states } = await readGeographyResource();
   return states;
 }
 

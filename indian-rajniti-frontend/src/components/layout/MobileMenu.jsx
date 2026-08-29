@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useIsClient } from "@/hooks/useIsClient";
 import SearchBox from "@/components/search/SearchBox";
 import Link from "next/link";
+import { slugify } from "@/lib/slugify";
 
 const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
 const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
@@ -58,17 +59,17 @@ function CategoryList({ title, items, onClose }) {
                   {label}
                 </Link>
               ) : (
-                <a href="#" className="hover:text-primary transition-colors duration-300 hover:underline">
+                <Link href={`/${slugify(label)}`} onClick={onClose} className="hover:text-primary transition-colors duration-300 hover:underline">
                   {label}
-                </a>
+                </Link>
               )}
             </li>
           );
         })}
         <li className="pt-2">
-          <a href="#" className="group text-surface-tint font-label-sm flex items-center gap-1 hover:underline">
+          <Link href="/more" onClick={onClose} className="group text-surface-tint font-label-sm flex items-center gap-1 hover:underline">
             VIEW ALL <i className="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition-transform" />
-          </a>
+          </Link>
         </li>
       </ul>
     </section>
@@ -142,6 +143,11 @@ function AuthorTools({ onClose, isModerator, isAdmin, roleLabel }) {
         </li>
         {isModerator && (
           <>
+            <li>
+              <Link href="/author/site-data" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+                <i className="fa-solid fa-database w-4" /> Manage Site Data
+              </Link>
+            </li>
             <li>
               <Link
                 href="/author/review"

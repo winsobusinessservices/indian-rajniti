@@ -14,8 +14,9 @@ export async function generateMetadata({ params }) {
   return { title: `Create ${TYPE_LABEL[type] || "Content"}` };
 }
 
-export default async function CreateContentPage({ params }) {
+export default async function CreateContentPage({ params, searchParams }) {
   const { type } = await params;
+  const { category = "" } = await searchParams;
   if (!VALID_TYPES.includes(type)) notFound();
 
   const breakingNews = await getBreakingNews();
@@ -32,7 +33,7 @@ export default async function CreateContentPage({ params }) {
             <p className="font-body-md text-on-surface-variant mb-8">
               Start a new {label.toLowerCase()} draft. You can submit it for editorial review once it&apos;s ready.
             </p>
-            <PostForm type={type.toUpperCase()} />
+            <PostForm type={type.toUpperCase()} initialCategory={category} />
           </div>
         </RequireContributorRole>
       </main>

@@ -15,7 +15,7 @@ const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 
 const VIDEO_SOURCES = ["YOUTUBE", "VIMEO", "UPLOAD", "EXTERNAL"];
 
-function initialForm(post) {
+function initialForm(post, initialCategory = "") {
   return {
     title: post?.title || "",
     excerpt: post?.excerpt || "",
@@ -25,7 +25,7 @@ function initialForm(post) {
     thumbnail: post?.thumbnail || "",
     videoSource: post?.video_source || VIDEO_SOURCES[0],
     videoUrl: post?.video_url || "",
-    category: post?.category || "",
+    category: post?.category || initialCategory,
     state: post?.state || "",
     tags: (post?.tags || []).join(", "),
     relatedArticleId: post?.related_article_id || "",
@@ -196,11 +196,11 @@ function FileUploadField({ name, icon, label, accept, required, currentUrl, onCh
  */
 
 
-export default function PostForm({ type, post, redirectTo = "/author/content" }) {
+export default function PostForm({ type, post, redirectTo = "/author/content", initialCategory = "" }) {
   const router = useRouter();
   const { user } = useAuth();
   const isEdit = Boolean(post);
-  const [form, setForm] = useState(() => initialForm(post));
+  const [form, setForm] = useState(() => initialForm(post, initialCategory));
   const [files, setFiles] = useState({});
   const [articles, setArticles] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -292,7 +292,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content" })
   const label = TYPE_LABEL[type];
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+    <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       {/* Main column: the actual writing */}
       <div className="lg:col-span-2 space-y-5">
         <div className={sectionClass}>

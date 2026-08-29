@@ -13,6 +13,7 @@ export const metadata = {
 
 export default async function RajyaSabhaPage() {
   const info = await getHouseInfo("rajyasabha");
+
   if (!info) notFound();
 
   const breakingNews = await getBreakingNews();

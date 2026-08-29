@@ -55,7 +55,7 @@ export default async function CategorySidebar() {
         <ul className="space-y-2">
           {leaders.slice(0, 6).map((leader) => (
             <li key={leader.id} className="group cursor-pointer">
-              <Link href="/key-political-figures" className="font-body-md text-sm text-on-surface group-hover:text-primary transition-colors">
+              <Link href={`/category/${slugify(leader.slug)}`} className="font-body-md text-sm text-on-surface group-hover:text-primary transition-colors">
                 {leader.name}
               </Link>
             </li>

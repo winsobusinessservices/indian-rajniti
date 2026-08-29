@@ -12,18 +12,13 @@ const pool = mysql.createPool({
   queueLimit: 0,
 });
 
-const testConnection = async () => {
+pool.verifyConnection = async () => {
+  const connection = await pool.getConnection();
   try {
-    const connection = await pool.getConnection();
-
-    console.log("MySQL connected successfully");
-
+    await connection.query("SELECT 1");
+  } finally {
     connection.release();
-  } catch (error) {
-    console.error("MySQL connection failed:", error.message);
   }
 };
-
-testConnection();
 
 module.exports = pool;

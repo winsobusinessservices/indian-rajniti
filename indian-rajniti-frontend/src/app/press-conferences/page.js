@@ -14,7 +14,7 @@ export default async function PressConferencesPage() {
       gridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
     >
       {pressConferences.map((item) => (
-        <VideoCard key={item.id} title={item.title} category={item.category} image={item.image} views={item.views} />
+        <VideoCard key={item.id} title={item.title} category={item.category} image={item.image} views={item.views} href={item.videoUrl} />
       ))}
     </CategoryPageShell>
   );

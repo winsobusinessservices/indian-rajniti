@@ -5,6 +5,7 @@ import Footer from "@/components/layout/Footer";
 import HeroNews from "@/components/news/HeroNews";
 import NewsCard from "@/components/news/NewsCard";
 import TrendingNews from "@/components/news/TrendingNews";
+import PollOfTheDay from "@/components/news/PollOfTheDay";
 import PoliticianCard from "@/components/politician/PoliticianCard";
 import CMCard from "@/components/politician/CMCard";
 import PartyCard from "@/components/politician/PartyCard";
@@ -43,6 +44,8 @@ import {
   getRtiCorner,
   getFollowUs,
   getBlogs,
+  getLatestPosts,
+  getAllVideos,
 } from "@/features/news/news.api";
 import {
   getKeyFigures,
@@ -54,6 +57,8 @@ import {
 } from "@/features/politicians/politician.api";
 import { getParliamentSummary } from "@/features/parliament/parliament.api";
 import { getStates, getUnionTerritories } from "@/features/geography/geography.api";
+
+export const metadata = { alternates: { canonical: "/" } };
 
 function SectionHeader({ title, viewAllHref }) {
   return (
@@ -90,6 +95,25 @@ function KeywordTagGroup({ title, icon, tags }) {
       </div>
     </div>
   );
+}
+
+function SocialPostCard({ post, children }) {
+  const className = "bg-surface p-3 rounded-lg border border-outline-variant/20 flex flex-col gap-2 transition-colors hover:border-primary/40";
+  const rawHref = String(post.url || post.link || "").trim();
+  const embeddedUrl = rawHref.match(/https:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[^\s"'<>]+\/status\/\d+[^\s"'<>]*/i)?.[0];
+  const href = (embeddedUrl || rawHref).replace(/&amp;/g, "&");
+  if (!href) return <div className={className}>{children}</div>;
+  let host = "";
+  try { host = new URL(href).hostname.replace(/^www\./, ""); } catch { /* Show the safe external-link fallback below. */ }
+  if (["facebook.com", "m.facebook.com"].includes(host)) {
+    const src = `https://www.facebook.com/plugins/post.php?href=${encodeURIComponent(href)}&show_text=true&width=500`;
+    return <iframe src={src} title="Facebook post" loading="lazy" className="h-[500px] w-full rounded-lg border-0 bg-surface" allow="encrypted-media; clipboard-write" />;
+  }
+  const tweetId = ["x.com", "twitter.com", "mobile.twitter.com"].includes(host) ? href.match(/\/status\/(\d+)/)?.[1] : null;
+  if (tweetId) {
+    return <iframe src={`https://platform.twitter.com/embed/Tweet.html?id=${tweetId}&theme=light`} title="X post" loading="lazy" className="h-[520px] w-full rounded-lg border-0 bg-surface" allowFullScreen />;
+  }
+  return <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={className}>Open social post</a>;
 }
 
 export default async function Home() {
@@ -132,6 +156,8 @@ export default async function Home() {
     parliamentSummary,
     states,
     unionTerritories,
+    latestPosts,
+    allVideos,
   ] = await Promise.all([
     getBreakingNews(),
     getHeroSlides(),
@@ -171,6 +197,8 @@ export default async function Home() {
     getParliamentSummary(),
     getStates(),
     getUnionTerritories(),
+    getLatestPosts(10),
+    getAllVideos(),
   ]);
 
   return (
@@ -220,8 +248,8 @@ export default async function Home() {
             {/* Regional Focus */}
             <section className="border-t border-outline-variant/30 pt-6">
               <div className="flex items-center justify-between mb-6 border-b border-outline-variant/30 pb-2 flex-wrap gap-3">
-                <h2 className="font-display-lg text-2xl md:text-3xl text-primary tracking-tight">Regional Focus</h2>
-                <div className="flex gap-2">
+                <h2 className="font-display-lg text-2xl md:text-3xl text-primary tracking-tight w-full sm:w-auto">Regional Focus</h2>
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                   {regionalFocus.states.map((state, index) => (
                     <Link
                       key={state}
@@ -283,10 +311,17 @@ export default async function Home() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {multimediaHub.map((video) => (
-                  <div key={video.id} className="group cursor-pointer">
+                  <a
+                    key={video.id}
+                    href={video.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Play video: ${video.title}`}
+                    className="group cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:outline-inverse-primary"
+                  >
                     <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-3">
                       <ImagePlaceholder icon="fa-solid fa-video" image={video.image} alt={video.title} gradient="inverse" className="w-full h-full" iconClassName="text-4xl" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
                         <i className="fa-solid fa-circle-play text-white text-5xl opacity-90 group-hover:scale-110 transition-transform" />
                       </div>
                     </div>
@@ -296,14 +331,19 @@ export default async function Home() {
                     <span className="inline-flex items-center gap-1 text-[10px] text-white/70 mt-1">
                       <i className="fa-regular fa-eye" /> {formatViews(video.views)}
                     </span>
-                  </div>
+                  </a>
                 ))}
               </div>
             </section>
 
             {/* Ad banner */}
-            <div className="w-full flex flex-col items-center border-y border-outline-variant/30 py-4">
-              <AdSlot width="728px" height="90px" label="728x90 Leaderboard Ad" orientation="horizontal" />
+            <div className="w-full border-y border-outline-variant/30">
+              <div className="w-full flex justify-center py-4 md:hidden">
+                <AdSlot width="320px" height="50px" label="Mobile Leaderboard Ad" orientation="horizontal" />
+              </div>
+              <div className="hidden md:flex w-full justify-center py-4">
+                <AdSlot width="728px" height="90px" label="728x90 Leaderboard Ad" orientation="horizontal" />
+              </div>
             </div>
 
             {/* Key Political Figures */}
@@ -311,7 +351,7 @@ export default async function Home() {
               <SectionHeader title="Key Political Figures" viewAllHref="/key-political-figures" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {keyFigures.map((figure) => (
-                  <PoliticianCard key={figure.id} name={figure.name} subtitle={figure.position} photo={figure.photo} href={`/category/${slugify(figure.name)}`} />
+                  <PoliticianCard key={figure.id} name={figure.name} subtitle={figure.position} photo={figure.photo} photoFallback={figure.photoFallback} href={`/category/${slugify(figure.name)}`} />
                 )).slice(0, 5)}
               </div>
             </section>
@@ -352,7 +392,7 @@ export default async function Home() {
               <SectionHeader title="State Leadership" viewAllHref="/cm" />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {chiefMinisters.map((cm) => (
-                  <CMCard key={cm.id} name={cm.name} subtitle={`Chief Minister, ${cm.state}`} photo={cm.photo} href={`/category/${slugify(cm.name)}`} />
+                  <CMCard key={cm.id} name={cm.name} subtitle={`Chief Minister, ${cm.state}`} photo={cm.photo} photoFallback={cm.photoFallback} href={`/category/${slugify(cm.name)}`} />
                 )).slice(0, 5)}
               </div>
             </section>
@@ -362,7 +402,7 @@ export default async function Home() {
               <SectionHeader title="Indian Political Parties" viewAllHref="/parties" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {parties.slice(0, 5).map((party) => (
-                  <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} />
+                  <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} photoFallback={party.photoFallback} />
                 ))}
               </div>
             </section>
@@ -422,10 +462,17 @@ export default async function Home() {
                     Video Highlights
                   </h3>
                   {videoHighlights.map((video) => (
-                    <div key={video.id} className="bg-surface rounded-lg overflow-hidden border border-outline-variant/20 group cursor-pointer">
+                    <a
+                      key={video.id}
+                      href={video.videoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Play video: ${video.title}`}
+                      className="block bg-surface rounded-lg overflow-hidden border border-outline-variant/20 group cursor-pointer focus-visible:outline-2 focus-visible:outline-primary"
+                    >
                       <div className="relative aspect-video">
                         <ImagePlaceholder icon="fa-solid fa-video" image={video.image} alt={video.title} gradient="secondary" className="w-full h-full" iconClassName="text-3xl" />
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center pointer-events-none">
                           <i className="fa-solid fa-circle-play text-white text-4xl opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all" />
                         </div>
                       </div>
@@ -434,7 +481,7 @@ export default async function Home() {
                           {video.title}
                         </h4>
                       </div>
-                    </div>
+                    </a>
                   )).slice(0, 2)}
                 </div>
 
@@ -442,7 +489,7 @@ export default async function Home() {
                 <div className="flex flex-col gap-4">
                   <h3 className="font-headline-md text-base text-primary border-l-4 border-primary pl-3">X Feed</h3>
                   {xFeed.map((post) => (
-                    <div key={post.id} className="bg-surface p-3 rounded-lg border border-outline-variant/20 flex flex-col gap-2">
+                    <SocialPostCard key={post.id} post={post}>
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center text-on-primary-fixed">
                           <i className="fa-solid fa-user text-sm" />
@@ -461,16 +508,16 @@ export default async function Home() {
                       )}
                       <div className="flex items-center justify-between text-outline mt-1 pt-2 border-t border-outline-variant/20">
                         <span className="flex items-center gap-1 text-[10px]">
-                          <i className="fa-regular fa-comment" /> {post.stats.comments}
+                          <i className="fa-regular fa-comment" /> {post.stats?.comments || 0}
                         </span>
                         <span className="flex items-center gap-1 text-[10px]">
-                          <i className="fa-solid fa-retweet" /> {post.stats.retweets}
+                          <i className="fa-solid fa-retweet" /> {post.stats?.retweets || 0}
                         </span>
                         <span className="flex items-center gap-1 text-[10px]">
-                          <i className="fa-solid fa-heart" /> {post.stats.likes}
+                          <i className="fa-solid fa-heart" /> {post.stats?.likes || 0}
                         </span>
                       </div>
-                    </div>
+                    </SocialPostCard>
                   ))}
                 </div>
 
@@ -480,7 +527,7 @@ export default async function Home() {
                     Facebook Updates
                   </h3>
                   {facebookUpdates.map((post) => (
-                    <div key={post.id} className="bg-surface p-3 rounded-lg border border-outline-variant/20 flex flex-col gap-2">
+                    <SocialPostCard key={post.id} post={post}>
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary">
                           <i className="fa-solid fa-people-group text-sm" />
@@ -505,7 +552,7 @@ export default async function Home() {
                           <i className="fa-solid fa-share" /> Share
                         </span>
                       </div>
-                    </div>
+                    </SocialPostCard>
                   ))}
                 </div>
               </div>
@@ -549,47 +596,34 @@ export default async function Home() {
               <SectionHeader title="Press Conference Archive" viewAllHref="/press-conferences" />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {pressConference.map((item) => (
-                  <div key={item.id} className="group cursor-pointer">
+                  <a
+                    key={item.id}
+                    href={item.videoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Play press conference: ${item.title}`}
+                    className="group block cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:outline-primary"
+                  >
                     <div className="relative w-full aspect-video rounded-lg overflow-hidden mb-3">
                       <ImagePlaceholder icon="fa-solid fa-microphone" image={item.image} alt={item.title} gradient="secondary" className="w-full h-full" iconClassName="text-3xl" />
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
                         <i className="fa-solid fa-circle-play text-white text-4xl opacity-90 group-hover:scale-110 transition-transform" />
                       </div>
                     </div>
                     <h3 className="font-headline-md text-sm text-on-surface group-hover:text-primary transition-colors leading-snug">
                       {item.title}
                     </h3>
-                  </div>
+                  </a>
                 )).slice(0, 4)}
               </div>
             </section>
           </div>
 
           {/* Sidebar */}
-          <aside className="lg:w-1/4 h-full flex flex-col bg-surface-container rounded-xl p-4 border border-outline-variant/30 gap-6">
+          <aside className="self-stretch lg:w-1/4 flex flex-col bg-surface-container rounded-xl p-4 border border-outline-variant/30 gap-6">
             <TrendingNews items={trending} viewAllHref="/trending" />
 
-            <div className="pt-4 border-t border-outline-variant/30">
-              <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Poll of the Day</h3>
-                <i className="fa-solid fa-square-poll-vertical text-secondary text-lg" />
-              </div>
-              <p className="font-body-md text-sm text-on-surface mb-3">{pollOfTheDay.question}</p>
-              <div className="space-y-2">
-                {pollOfTheDay.options.map((option) => (
-                  <div key={option.label}>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-label-md text-on-surface-variant">{option.label}</span>
-                      <span className="font-label-md text-primary font-bold">{option.pct}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-surface-container-low rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full" style={{ width: `${option.pct}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="text-outline text-[10px] mt-3">{pollOfTheDay.totalVotes} votes cast</p>
-            </div>
+            <PollOfTheDay initialPoll={pollOfTheDay} />
 
             <div className="pt-4 border-t border-outline-variant/30">
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
@@ -828,6 +862,54 @@ export default async function Home() {
                 <p className="font-body-md text-xs text-on-surface-variant mt-1">{constituencySpotlight.excerpt}</p>
               </div>
             </div>
+
+            <div className="pt-4 border-t border-outline-variant/30">
+              <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">Latest Updates</h3>
+                <Link href="/top-news" className="text-[10px] font-label-md text-secondary hover:underline">VIEW ALL</Link>
+              </div>
+              <div className="flex flex-col gap-4">
+                {latestPosts.map((post, index) => (
+                  <Link
+                    key={`${post.type}-${post.id}`}
+                    href={`/news/${post.slug}`}
+                    className={`group flex gap-3 ${index ? "border-t border-outline-variant/20 pt-4" : ""}`}
+                  >
+                    <ImagePlaceholder
+                      image={post.image}
+                      alt={post.title}
+                      className="h-16 w-20 flex-shrink-0 rounded-md"
+                      sizes="80px"
+                    />
+                    <div className="min-w-0">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-secondary">{post.type}</span>
+                      <h4 className="mt-1 line-clamp-2 font-headline-md text-xs leading-snug text-on-surface transition-colors group-hover:text-primary">
+                        {post.title}
+                      </h4>
+                      {post.time && <span className="mt-1 block text-[9px] text-outline">{post.time}</span>}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {blogs.length > 3 && (
+              <div className="pt-4 border-t border-outline-variant/30">
+                <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
+                  <h3 className="font-headline-md text-primary tracking-tight text-lg">More Blogs</h3>
+                  <Link href="/blogs" className="text-[10px] font-label-md text-secondary hover:underline">VIEW ALL</Link>
+                </div>
+                <div className="space-y-3">
+                  {blogs.slice(3, 9).map((blog) => (
+                    <Link key={blog.id} href={`/news/${blog.slug}`} className="group block rounded-md bg-surface-container-low p-3">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-secondary">{blog.category || "Blog"}</span>
+                      <h4 className="mt-1 line-clamp-2 font-headline-md text-sm text-on-surface transition-colors group-hover:text-primary">{blog.title}</h4>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
 
            
           </aside>

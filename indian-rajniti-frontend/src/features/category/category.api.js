@@ -17,7 +17,7 @@ import { getAllStatesAndUTs, getStateProfile } from "@/features/geography/geogra
 function findNationalFigure(keyFigures, roleKeyword, fallbackName) {
   const match = keyFigures.find((figure) => figure.position?.toLowerCase().includes(roleKeyword));
   if (match) {
-    return { name: match.name, role: `${match.position} — ${match.party}`, icon: "fa-solid fa-user-tie", photo: match.photo };
+    return { name: match.name, role: `${match.position} — ${match.party}`, icon: "fa-solid fa-user-tie", photo: match.photo, photoFallback: match.photoFallback };
   }
   return { name: fallbackName, role: roleKeyword, icon: "fa-solid fa-user-tie" };
 }
@@ -96,7 +96,7 @@ export async function getCategoryInfo(slug) {
     const cm = chiefMinisters.find((c) => c.state.toLowerCase() === label.toLowerCase());
     const stateProfile = await getStateProfile(label);
     if (cm) {
-      current = { name: cm.name, role: `Chief Minister, ${cm.state} — ${cm.party}`, icon: "fa-solid fa-user-tie", photo: cm.photo };
+      current = { name: cm.name, role: `Chief Minister, ${cm.state} — ${cm.party}`, icon: "fa-solid fa-user-tie", photo: cm.photo, photoFallback: cm.photoFallback };
       opposition = { name: cm.oppositionParty, role: `Principal Opposition, ${cm.state} Assembly`, icon: "fa-solid fa-people-group" };
       description = `${label} is governed by the ${cm.party}, led by Chief Minister ${cm.name}. Track the latest political developments, policy decisions, and electoral dynamics shaping ${label}.`;
 
@@ -118,15 +118,28 @@ export async function getCategoryInfo(slug) {
     if (party) {
       const isRuling = party.abbreviation === "BJP";
       const counterpart = parties.find((p) => p.abbreviation === (isRuling ? "INC" : "BJP"));
-      const partyAsCard = { name: `${party.name} (${party.abbreviation})`, role: isRuling ? "Ruling Party (National)" : "Opposition Party", icon: "fa-solid fa-flag" };
+      const partyAsCard = {
+        name: `${party.name} (${party.abbreviation})`,
+        role: isRuling ? "Ruling Party (National)" : "Opposition Party",
+        icon: "fa-solid fa-flag",
+        photo: party.photo,
+        photoFallback: party.photoFallback,
+      };
       const counterpartAsCard = counterpart
-        ? { name: `${counterpart.name} (${counterpart.abbreviation})`, role: isRuling ? "Principal Opposition" : "Ruling Party (National)", icon: "fa-solid fa-flag" }
+        ? {
+            name: `${counterpart.name} (${counterpart.abbreviation})`,
+            role: isRuling ? "Principal Opposition" : "Ruling Party (National)",
+            icon: "fa-solid fa-flag",
+            photo: counterpart.photo,
+            photoFallback: counterpart.photoFallback,
+          }
         : isRuling
           ? NATIONAL_OPPOSITION
           : NATIONAL_RULING;
 
       current = isRuling ? partyAsCard : counterpartAsCard;
       opposition = isRuling ? counterpartAsCard : partyAsCard;
+      currentLabel = isRuling ? "Ruling Party" : "National Counterpart";
       description = `${party.name} (${party.abbreviation}), founded in ${party.founded}, is a major political party in India. Explore its latest activities, statements, and role in the current political landscape.`;
 
       profile = {
@@ -143,7 +156,7 @@ export async function getCategoryInfo(slug) {
     bio = data.bio ?? null;
 
     if (data.subtype === "cm") {
-      current = { name: data.name, role: `Chief Minister, ${data.state} — ${data.party}`, icon: "fa-solid fa-user-tie", photo: data.photo };
+      current = { name: data.name, role: `Chief Minister, ${data.state} — ${data.party}`, icon: "fa-solid fa-user-tie", photo: data.photo, photoFallback: data.photoFallback };
       opposition = { name: data.oppositionParty, role: `Principal Opposition, ${data.state} Assembly`, icon: "fa-solid fa-people-group" };
       currentLabel = "Chief Minister";
       oppositionLabel = "Principal Opposition";
@@ -152,14 +165,14 @@ export async function getCategoryInfo(slug) {
         yearsAsRuler ? `, in office since ${data.since} (around ${yearsAsRuler} years)` : ""
       }.`;
     } else if (data.subtype === "former-pm") {
-      current = { name: data.name, role: `Former Prime Minister of India (${data.tenure})`, icon: "fa-solid fa-user-tie", photo: data.photo };
+      current = { name: data.name, role: `Former Prime Minister of India (${data.tenure})`, icon: "fa-solid fa-user-tie", photo: data.photo, photoFallback: data.photoFallback };
       opposition = NATIONAL_RULING;
       currentLabel = "Former Prime Minister";
       oppositionLabel = "Current Prime Minister";
       description = `${data.name} served as the Prime Minister of India (${data.tenure}). Explore their legacy and lasting impact on Indian politics.`;
     } else {
       const isOppositionFigure = data.position.toLowerCase().includes("opposition");
-      current = { name: data.name, role: data.position, icon: "fa-solid fa-user-tie", photo: data.photo };
+      current = { name: data.name, role: data.position, icon: "fa-solid fa-user-tie", photo: data.photo, photoFallback: data.photoFallback };
       opposition = isOppositionFigure ? NATIONAL_RULING : NATIONAL_OPPOSITION;
       currentLabel = "Featured Leader";
       oppositionLabel = isOppositionFigure ? "Ruling Counterpart" : "Principal Opposition";

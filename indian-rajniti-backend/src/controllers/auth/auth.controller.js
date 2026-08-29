@@ -1,13 +1,106 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const User = require("../../models/user.model");
 const {
   sendPasswordResetEmail,
   sendRoleChangedEmail,
+  sendRegistrationOtpEmail,
 } = require("../../services/nodemailer.service");
 const { userDocumentUrl } = require("../../middleware/upload.middleware");
 
 const EMAIL_REGEX = /^[a-zA-Z0-9](?!.*\.\.)[a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+const OTP_TTL = "10m";
+const VERIFIED_EMAIL_TTL = "15m";
+const OTP_RESEND_DELAY_MS = 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
+const otpSendTimes = new Map();
+const otpAttempts = new Map();
+
+function normalizedEmailOf(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function otpHash(email, otp) {
+  return crypto.createHmac("sha256", process.env.JWT_SECRET).update(`${email}:${otp}`).digest("hex");
+}
+
+function tokenKey(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+const requestRegistrationOtp = async (req, res) => {
+  try {
+    const email = normalizedEmailOf(req.body.email);
+    if (!EMAIL_REGEX.test(email)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+    }
+    if (await User.findByEmail(email)) {
+      return res.status(409).json({ success: false, message: "An account with this email already exists" });
+    }
+
+    const rateKey = `${req.ip}:${email}`;
+    const lastSentAt = otpSendTimes.get(rateKey) || 0;
+    const waitSeconds = Math.ceil((OTP_RESEND_DELAY_MS - (Date.now() - lastSentAt)) / 1000);
+    if (waitSeconds > 0) {
+      return res.status(429).json({ success: false, message: `Please wait ${waitSeconds} seconds before requesting another code` });
+    }
+
+    const otp = crypto.randomInt(100000, 1000000).toString();
+    const challengeToken = jwt.sign(
+      { purpose: "registration-otp", email, otpHash: otpHash(email, otp) },
+      process.env.JWT_SECRET,
+      { expiresIn: OTP_TTL }
+    );
+    await sendRegistrationOtpEmail(email, otp);
+    otpSendTimes.set(rateKey, Date.now());
+    setTimeout(() => otpSendTimes.delete(rateKey), OTP_RESEND_DELAY_MS).unref();
+    return res.status(200).json({ success: true, message: "Verification code sent", challengeToken });
+  } catch (error) {
+    console.error("Request registration OTP error:", error);
+    return res.status(500).json({ success: false, message: "Unable to send verification code" });
+  }
+};
+
+const verifyRegistrationOtp = async (req, res) => {
+  try {
+    const email = normalizedEmailOf(req.body.email);
+    const otp = String(req.body.otp || "").trim();
+    const challengeToken = String(req.body.challengeToken || "");
+    if (!/^\d{6}$/.test(otp) || !challengeToken) {
+      return res.status(400).json({ success: false, message: "Enter the six-digit verification code" });
+    }
+
+    const key = tokenKey(challengeToken);
+    const attempts = (otpAttempts.get(key) || 0) + 1;
+    otpAttempts.set(key, attempts);
+    if (attempts === 1) setTimeout(() => otpAttempts.delete(key), 10 * 60 * 1000).unref();
+    if (attempts > MAX_OTP_ATTEMPTS) {
+      return res.status(429).json({ success: false, message: "Too many incorrect attempts. Request a new code" });
+    }
+
+    const challenge = jwt.verify(challengeToken, process.env.JWT_SECRET);
+    if (challenge.purpose !== "registration-otp" || challenge.email !== email) {
+      return res.status(400).json({ success: false, message: "Verification request does not match this email" });
+    }
+    const expected = Buffer.from(challenge.otpHash, "hex");
+    const supplied = Buffer.from(otpHash(email, otp), "hex");
+    if (expected.length !== supplied.length || !crypto.timingSafeEqual(expected, supplied)) {
+      return res.status(400).json({ success: false, message: "Incorrect verification code" });
+    }
+
+    otpAttempts.delete(key);
+    const verificationToken = jwt.sign(
+      { purpose: "registration-verified", email },
+      process.env.JWT_SECRET,
+      { expiresIn: VERIFIED_EMAIL_TTL }
+    );
+    return res.status(200).json({ success: true, message: "Email verified", verificationToken });
+  } catch (error) {
+    const expired = error.name === "TokenExpiredError";
+    return res.status(400).json({ success: false, message: expired ? "Verification code expired. Request a new code" : "Invalid verification request" });
+  }
+};
 
 const signToken = (user) =>
   jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET, {
@@ -16,10 +109,12 @@ const signToken = (user) =>
 
 // Must match the name/options auth.middleware.js reads and logout clears.
 const AUTH_COOKIE_NAME = "token";
+const cookieSameSite = (process.env.COOKIE_SAME_SITE || "lax").toLowerCase();
 const AUTH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
+  secure: process.env.NODE_ENV === "production" || cookieSameSite === "none",
+  sameSite: cookieSameSite,
+  ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
 };
 const AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // keep in sync with JWT_EXPIRES_IN
 
@@ -29,7 +124,7 @@ const AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // keep in sync with JWT_EX
 
 const register = async (req, res) => {
   try {
-    const { name, email, password, agreeToTerms } = req.body;
+    const { name, email, password, agreeToTerms, verificationToken } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -64,6 +159,15 @@ const register = async (req, res) => {
         success: false,
         message: "Please enter a valid email address",
       });
+    }
+
+    try {
+      const verification = jwt.verify(verificationToken || "", process.env.JWT_SECRET);
+      if (verification.purpose !== "registration-verified" || verification.email !== normalizedEmail) {
+        return res.status(400).json({ success: false, message: "Please verify this email address before registering" });
+      }
+    } catch {
+      return res.status(400).json({ success: false, message: "Email verification has expired. Please verify again" });
     }
 
     const validNameRegex = /^[a-zA-Z\s]+$/;
@@ -719,6 +823,8 @@ const changePassword = async (req, res) => {
 };
 
 module.exports = {
+  requestRegistrationOtp,
+  verifyRegistrationOtp,
   register,
   login,
   getCurrentUser,

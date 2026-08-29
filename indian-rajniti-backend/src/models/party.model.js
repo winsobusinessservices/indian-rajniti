@@ -17,6 +17,16 @@ const Party = {
     return rows[0];
   },
 
+  async findById(id) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ?`, [id]);
+    return rows[0];
+  },
+
+  async delete(id) {
+    const [result] = await pool.query(`DELETE FROM ${TABLE} WHERE id = ?`, [id]);
+    return result.affectedRows > 0;
+  },
+
   async upsert({
     slug,
     name,
@@ -31,6 +41,7 @@ const Party = {
     currentStatus,
     yearsInPower,
     sortOrder,
+    replacePhoto = false,
   }) {
     await pool.query(
       `INSERT INTO ${TABLE}
@@ -39,7 +50,7 @@ const Party = {
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          abbreviation = VALUES(abbreviation),
-         photo_url = VALUES(photo_url),
+         photo_url = ${replacePhoto ? "VALUES(photo_url)" : "COALESCE(photo_url, VALUES(photo_url))"},
          founded_year = VALUES(founded_year),
          founded_place = VALUES(founded_place),
          founders = VALUES(founders),

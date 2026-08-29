@@ -100,6 +100,10 @@ function dateLabel(row) {
   return at ? new Date(at).toISOString() : null;
 }
 
+function publishedTime(row) {
+  return new Date(row.published_at || row.created_at || 0).getTime();
+}
+
 function toArticleTeaser(row) {
   return {
     id: row.id,
@@ -142,6 +146,7 @@ function toVideoTeaser(row) {
     // author skipped it) still get a real thumbnail here, derived the same
     // way, instead of a bare icon placeholder on every card.
     image: row.thumbnail || deriveExternalThumbnail(row.video_url) || null,
+    videoUrl: row.video_url,
     author: row.author_name,
     time: dateLabel(row),
     views: row.views,
@@ -183,11 +188,11 @@ const getHome = async (req, res) => {
     // WordPress IDs are prefixed with `wp-`, so they cannot collide with
     // native numeric article IDs in section de-duplication or React keys.
     const articlesPool = [...nativeArticles, ...wordpressArticles]
-      .sort((a, b) => new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at))
+      .sort((a, b) => publishedTime(b) - publishedTime(a))
       .slice(0, POOL_LIMIT);
 
     const byViews = [...articlesPool].sort(
-      (a, b) => b.views - a.views || new Date(b.published_at || b.created_at) - new Date(a.published_at || a.created_at)
+      (a, b) => b.views - a.views || publishedTime(b) - publishedTime(a)
     );
 
     const usedIds = new Set();
@@ -197,8 +202,10 @@ const getHome = async (req, res) => {
       return picked;
     };
 
-    const heroRows = take(byViews, 3);
-    const topStoryRows = take(byViews, 6);
+    // The primary homepage positions always show newly published content
+    // first. Popularity belongs only in the dedicated Trending section.
+    const heroRows = take(articlesPool, 3);
+    const topStoryRows = take(articlesPool, 6);
     const editorialRows = take(articlesPool, 4);
     const inDepthRows = take(byViews, 1);
 
@@ -260,7 +267,8 @@ const getHome = async (req, res) => {
     // Everything with a slug (articles + blogs) — backs getPostBySlug's
     // fallback pool, getRelatedPosts, allTeasers, and getAllCategoryLabels
     // on the frontend, without a second round trip per lookup.
-    const posts = [...articlesPool.map(toArticleTeaser), ...blogsPool.map(toBlogTeaser)];
+    const posts = [...articlesPool.map(toArticleTeaser), ...blogsPool.map(toBlogTeaser)]
+      .sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
 
     return res.status(200).json({ success: true, news, posts, widgets });
   } catch (error) {

@@ -7,20 +7,30 @@
  * original name/shape so no consuming component needed to change.
  */
 import { mediaUrl } from "@/lib/api";
+import { createJsonResource } from "@/lib/jsonResource";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
-async function getPoliticiansData() {
-  const res = await fetch(`${API_BASE_URL}/politicians`, { next: { revalidate: 300 } });
-  if (!res.ok) throw new Error(`Failed to load politicians (${res.status})`);
-  return res.json();
-}
+const POLITICIAN_UPLOAD_ALIASES = {
+  "c-p-radhakrishnan": "cp-radhakrishnan",
+  "dr-manmohan-singh": "manmohan-singh",
+  "i-k-gujral": "ik-gujral",
+  "h-d-deve-gowda": "hd-deve-gowda",
+  "p-v-narasimha-rao": "pv-narasimha-rao",
+  "v-p-singh": "vp-singh",
+};
 
-async function getPartiesData() {
-  const res = await fetch(`${API_BASE_URL}/parties`, { next: { revalidate: 300 } });
-  if (!res.ok) throw new Error(`Failed to load parties (${res.status})`);
-  return res.json();
-}
+const PARTY_UPLOAD_ALIASES = { "jd-u": "jdu", "cpi-m": "cpim" };
+
+const getPoliticiansData = createJsonResource(`${API_BASE_URL}/politicians`, {
+  ttl: 30_000,
+  fetchOptions: { next: { revalidate: 30 } },
+});
+
+const getPartiesData = createJsonResource(`${API_BASE_URL}/parties`, {
+  ttl: 30_000,
+  fetchOptions: { next: { revalidate: 30 } },
+});
 
 function toPoliticianShape(row) {
   return {
@@ -28,6 +38,7 @@ function toPoliticianShape(row) {
     slug: row.slug,
     name: row.name,
     photo: mediaUrl(row.photo_url),
+    photoFallback: mediaUrl(`/uploads/seed/politicians/${POLITICIAN_UPLOAD_ALIASES[row.slug] || row.slug}.jpg`),
     born: row.born_year,
     died: row.died_year,
     birthPlace: row.birth_place,
@@ -109,6 +120,7 @@ export async function getParties() {
     name: row.name,
     abbreviation: row.abbreviation,
     photo: mediaUrl(row.photo_url),
+    photoFallback: mediaUrl(`/uploads/seed/parties/${PARTY_UPLOAD_ALIASES[row.slug] || row.slug}.jpg`),
     founded: row.founded_year ? String(row.founded_year) : null,
     foundedPlace: row.founded_place,
     founders: row.founders || [],

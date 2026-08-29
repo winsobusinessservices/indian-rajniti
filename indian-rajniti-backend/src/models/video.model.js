@@ -77,7 +77,9 @@ const Video = {
       conditions.push("v.category LIKE ?");
       params.push(`%${category}%`);
     }
-    const order = orderBy === "views" ? "v.views DESC, v.published_at DESC" : "v.published_at DESC, v.views DESC";
+    const order = orderBy === "views"
+      ? "v.views DESC, COALESCE(v.published_at, v.created_at) DESC, v.id DESC"
+      : "COALESCE(v.published_at, v.created_at) DESC, v.created_at DESC, v.id DESC";
     const [rows] = await pool.query(
       `SELECT v.*, u.name AS author_name
        FROM ${TABLE} v

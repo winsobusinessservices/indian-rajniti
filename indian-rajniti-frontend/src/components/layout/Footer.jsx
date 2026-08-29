@@ -87,7 +87,7 @@ export default async function Footer() {
       <div className="max-w-[1280px] mx-auto px-4 md:px-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div>
-            <h2 className="font-headline-md text-primary mb-3 text-base">INDIAN RAJNITI</h2>
+            <h2 className="font-headline-md text-primary mb-3 text-base">INDIAN RAJNEETI</h2>
             <p className="font-body-md text-on-surface-variant mb-4 text-xs">
               Authoritative political analysis and policy discourse from the heart of the world&apos;s largest democracy.
             </p>
@@ -102,15 +102,51 @@ export default async function Footer() {
               <h3 className="font-label-md text-primary mb-2 text-xs">{section.title}</h3>
               <ul className="space-y-1 font-body-md text-on-surface-variant text-xs">
                 {section.links.map((link) =>
-                  link === "Careers" ? (
+                  link === "Our History" ? (
+                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
+                      <Link href="/about" className="inline-block">
+                        {link}
+                      </Link>
+                    </li>
+                  ) : link === "Careers" ? (
                     <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
                       <Link href="/careers" className="inline-block">
                         {link}
                       </Link>
                     </li>
-                  ) : (
+                  ) :
+                  link ==="Lok Sabha"?(
+                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
+                      <Link href="/loksabha" className="inline-block">
+                        {link}
+                      </Link>
+                    </li>
+                  ):
+                                    link ==="Rajya Sabha"?(
+                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
+                      <Link href="/rajyasabha" className="inline-block">
+                        {link}
+                      </Link>
+                    </li>
+                  ):
+                                    link ==="Legislative Assembly"?(
+                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
+                      <Link href="/category/assembly-election" className="inline-block">
+                        {link}
+                      </Link>
+                    </li>
+                  ):
+                                    link ==="Policy Analysis"?(
+                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
+                      <Link href="/category/policy-analysis" className="inline-block">
+                        {link}
+                      </Link>
+                    </li>
+                  ):(
                     <li key={link} className="hover:text-primary hover:translate-x-1 transition-all cursor-pointer">
-                      {link}
+                      <Link href={`/${slugify(link)}`} className="inline-block">
+                        {link}
+                      </Link>
                     </li>
                   )
                 )}
@@ -140,7 +176,7 @@ export default async function Footer() {
         </div>
 
         <div className="border-t border-outline-variant/30 pt-4 flex flex-col md:flex-row justify-between items-center gap-4 text-on-surface-variant font-label-sm text-[10px]">
-          <p>&copy; 2026 Indian Rajniti Publications. All rights reserved.</p>
+          <p>&copy; 2026 Indian Rajneeti Publications. All rights reserved.</p>
           <p className="flex flex-wrap justify-center gap-4">
             <span className="hover:text-primary transition-colors cursor-pointer">NEW DELHI</span>
             <span className="hover:text-primary transition-colors cursor-pointer">MUMBAI</span>

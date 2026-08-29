@@ -101,7 +101,9 @@ const Blog = {
       conditions.push("b.category LIKE ?");
       params.push(`%${category}%`);
     }
-    const order = orderBy === "views" ? "b.views DESC, b.published_at DESC" : "b.published_at DESC, b.views DESC";
+    const order = orderBy === "views"
+      ? "b.views DESC, COALESCE(b.published_at, b.created_at) DESC, b.id DESC"
+      : "COALESCE(b.published_at, b.created_at) DESC, b.created_at DESC, b.id DESC";
     const [rows] = await pool.query(
       `SELECT b.*, u.name AS author_name
        FROM ${TABLE} b

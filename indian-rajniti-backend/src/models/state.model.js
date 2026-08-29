@@ -14,6 +14,16 @@ const State = {
     return rows[0];
   },
 
+  async findById(id) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ?`, [id]);
+    return rows[0];
+  },
+
+  async delete(id) {
+    const [result] = await pool.query(`DELETE FROM ${TABLE} WHERE id = ?`, [id]);
+    return result.affectedRows > 0;
+  },
+
   async upsert({ slug, name, capital, kind, formed, history, achievements, sortOrder }) {
     await pool.query(
       `INSERT INTO ${TABLE} (slug, name, capital, kind, formed, history, achievements, sort_order)

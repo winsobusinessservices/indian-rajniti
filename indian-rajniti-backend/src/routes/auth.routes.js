@@ -13,9 +13,57 @@ const {
   forgotPassword,
   resetPassword,
   changePassword,
+  requestRegistrationOtp,
+  verifyRegistrationOtp,
 } = require("../controllers/auth/auth.controller");
 const { authenticate, authorize } = require("../middleware/auth.middleware");
 const { uploadUserDocuments } = require("../middleware/upload.middleware");
+
+/**
+ * @openapi
+ * /api/auth/register/request-otp:
+ *   post:
+ *     summary: Email a six-digit registration verification code
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email: { type: string, format: email }
+ *     responses:
+ *       200: { description: Verification code sent }
+ *       409: { description: Account already exists }
+ *       429: { description: Code requested too frequently }
+ */
+routes.post("/auth/register/request-otp", requestRegistrationOtp);
+
+/**
+ * @openapi
+ * /api/auth/register/verify-otp:
+ *   post:
+ *     summary: Verify the emailed registration code
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, otp, challengeToken]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               otp: { type: string, example: "123456" }
+ *               challengeToken: { type: string }
+ *     responses:
+ *       200: { description: Email verified; returns a registration verification token }
+ *       400: { description: Incorrect, invalid, or expired code }
+ *       429: { description: Too many attempts }
+ */
+routes.post("/auth/register/verify-otp", verifyRegistrationOtp);
 
 /**
  * @openapi
@@ -29,11 +77,12 @@ const { uploadUserDocuments } = require("../middleware/upload.middleware");
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name, email, password]
+ *             required: [name, email, password, verificationToken]
  *             properties:
  *               name: { type: string, example: John Doe }
  *               email: { type: string, example: john@example.com }
  *               password: { type: string, format: password, example: secret123 }
+ *               verificationToken: { type: string }
  *     responses:
  *       201:
  *         description: User registered successfully

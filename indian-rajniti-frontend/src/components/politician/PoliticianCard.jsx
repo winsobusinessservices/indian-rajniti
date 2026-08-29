@@ -12,7 +12,7 @@ function initials(name) {
     .toUpperCase();
 }
 
-export default function PoliticianCard({ name, subtitle, href, photo }) {
+export default function PoliticianCard({ name, subtitle, href, photo, photoFallback }) {
   const Wrapper = href ? Link : "div";
   const wrapperProps = href ? { href } : {};
 
@@ -23,6 +23,7 @@ export default function PoliticianCard({ name, subtitle, href, photo }) {
     >
       <Avatar
         photo={photo}
+        fallbackPhoto={photoFallback}
         alt={name}
         fallbackText={initials(name)}
         gradient="from-primary to-primary-container"

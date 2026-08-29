@@ -7,7 +7,7 @@ export default function AuthPoster() {
           <i className="fa-solid fa-gopuram text-3xl text-secondary-container" />
         </div>
         <h3 className="font-display-lg text-3xl tracking-tight leading-tight">
-          Indian Rajniti
+          Indian Rajneeti
         </h3>
         <p className="font-body-lg mt-3 text-on-primary/90">
           The Definitive Chronicle of Indian Political Discourse

@@ -27,7 +27,7 @@ function FigureCard({ figure, accent, label }) {
     <div className={`flex flex-col items-center text-center p-6 rounded-xl bg-surface-container border-2 ${accent}`}>
       <span className="font-label-md text-xs uppercase tracking-widest text-on-surface-variant mb-4">{label}</span>
       {figure.photo ? (
-        <Avatar photo={figure.photo} alt={figure.name} gradient="from-primary to-primary-container" className="w-28 h-28 mb-4" />
+        <Avatar photo={figure.photo} fallbackPhoto={figure.photoFallback} alt={figure.name} gradient="from-primary to-primary-container" className="w-28 h-28 mb-4" />
       ) : (
         <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center mb-4 relative overflow-hidden">
           <span className="shimmer-sweep" aria-hidden="true" />

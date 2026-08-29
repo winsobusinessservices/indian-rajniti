@@ -36,7 +36,7 @@ export default function HeroNews({ slides }) {
             index === current ? "opacity-100 z-10" : "opacity-0 z-0"
           }`}
         >
-          <ImagePlaceholder icon={slide.icon} image={slide.image} alt={slide.title} gradient="primary" className="w-full h-full" iconClassName="text-6xl" />
+          <ImagePlaceholder icon={slide.icon} image={slide.image} alt={slide.title} gradient="primary" className="w-full h-full" iconClassName="text-6xl" priority={index === 0} sizes="100vw" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-6">
             <span
               className={`text-xs font-bold px-3 py-1 uppercase tracking-widest self-start mb-2 rounded-sm ${

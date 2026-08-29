@@ -319,6 +319,18 @@ export default function AuthorDashboardClient() {
             {isAdmin && (
               <>
                 <Link
+                  href="/author/site-data"
+                  className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
+                >
+                  <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-database" />
+                  </span>
+                  <div>
+                    <h3 className="font-headline-md text-base text-on-surface">Manage Site Data</h3>
+                    <p className="font-body-md text-xs text-on-surface-variant">Politicians, biographies, parties, states, assemblies and Parliament</p>
+                  </div>
+                </Link>
+                <Link
                   href="/author/categories"
                   className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
                 >

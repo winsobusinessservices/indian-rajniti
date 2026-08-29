@@ -16,6 +16,7 @@ export default async function KeyPoliticalFiguresPage() {
           name={figure.name}
           subtitle={figure.position}
           photo={figure.photo}
+          photoFallback={figure.photoFallback}
           href={`/category/${slugify(figure.name)}`}
         />
       ))}

@@ -109,14 +109,15 @@ export default function Header() {
     <header className="w-full bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div className="w-full bg-surface border-b border-outline-variant/30 py-4">
         <div className="max-w-full mx-auto px-4 md:px-16 grid grid-cols-3 items-center">
-          <div className="justify-self-start">
+          <div className=" flex flex-col items-start">
             <UpcomingRallies />
-            <HeaderWeather />
+             <HeaderWeather />
+
           </div>
 
           <Link href="/" className="block justify-self-center flex flex-col items-center gap-1 md:gap-2">
           
-            <Image src="/images/logo.png" alt="Indian Rajniti" width={160} height={64} className="h-20 md:h-30 w-auto object-contain" priority />
+            <Image src="/images/logo.png" alt="Indian Rajneeti" width={160} height={64} className="h-20 md:h-30 w-auto object-contain" priority />
           </Link>
           <div className="justify-self-end">
             <UpcomingEvents />

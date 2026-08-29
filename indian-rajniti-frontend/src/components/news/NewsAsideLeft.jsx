@@ -47,10 +47,17 @@ export default async function NewsAsideLeft() {
         <WidgetHeading title="Videos" icon="fa-solid fa-video" />
         <div className="flex flex-col gap-4">
           {videoHighlights.map((video) => (
-            <div key={video.id} className="group cursor-pointer">
+            <a
+              key={video.id}
+              href={video.videoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Play video: ${video.title}`}
+              className="group block cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-primary"
+            >
               <div className="relative w-full aspect-video rounded-md overflow-hidden mb-2">
                 <ImagePlaceholder icon="fa-solid fa-video" image={video.image} alt={video.title} gradient="secondary" className="w-full h-full" iconClassName="text-2xl" />
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
                   <i className="fa-solid fa-circle-play text-white text-2xl opacity-90 group-hover:scale-110 transition-transform" />
                 </div>
               </div>
@@ -60,7 +67,7 @@ export default async function NewsAsideLeft() {
               <span className="inline-flex items-center gap-1 text-[10px] text-outline mt-1">
                 <i className="fa-regular fa-eye" /> {formatViews(video.views)}
               </span>
-            </div>
+            </a>
           ))}
         </div>
       </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
+import { isOptimizableImageHost } from "@/lib/api";
 
 const GRADIENTS = {
   primary: "from-primary to-primary-container",
@@ -15,24 +17,42 @@ export default function ImagePlaceholder({
   className = "",
   iconClassName = "text-2xl",
   image = "",
+  fallbackImage = "",
   alt = "",
+  priority = false,
+  sizes = "(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw",
 }) {
   const [loaded, setLoaded] = useState(false);
+  // Uploads-folder fallback (e.g. a seeded photo) used only if the primary
+  // URL is missing or fails to load, so a broken/absent photo_url still
+  // shows a real image instead of dropping straight to the icon.
+  const [useFallback, setUseFallback] = useState(false);
 
-  if (image) {
+  const src = (!useFallback && image) || (useFallback && fallbackImage) || image || fallbackImage;
+
+  if (src) {
     return (
       <div className={`relative overflow-hidden bg-gradient-to-br ${GRADIENTS[gradient] || GRADIENTS.primary} ${className}`}>
         {/* Shown until the real photo finishes loading, then fades out —
             real images can take a moment over the network, so this covers
             that gap instead of leaving a blank/broken-looking box. */}
         {!loaded && <span className="shimmer-sweep" aria-hidden="true" />}
-        {/* eslint-disable-next-line @next/next/no-img-element -- remote, arbitrary-origin URLs; no next.config domain to pin */}
-        <img
-          src={image}
+        <Image
+          src={src}
           alt={alt}
-          loading="lazy"
+          fill
+          sizes={sizes}
+          unoptimized={!isOptimizableImageHost(src)}
+          priority={priority}
+          loading={priority ? undefined : "lazy"}
           onLoad={() => setLoaded(true)}
-          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+          onError={() => {
+            if (!useFallback && fallbackImage && src !== fallbackImage) {
+              setUseFallback(true);
+              setLoaded(false);
+            }
+          }}
+          className={`object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
         />
       </div>
     );

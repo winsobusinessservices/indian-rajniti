@@ -30,6 +30,16 @@ const Politician = {
     return rows[0];
   },
 
+  async findById(id) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ?`, [id]);
+    return rows[0];
+  },
+
+  async delete(id) {
+    const [result] = await pool.query(`DELETE FROM ${TABLE} WHERE id = ?`, [id]);
+    return result.affectedRows > 0;
+  },
+
   async upsert({
     slug,
     name,
@@ -49,6 +59,7 @@ const Politician = {
     summary,
     bio,
     sortOrder,
+    replacePhoto = false,
   }) {
     await pool.query(
       `INSERT INTO ${TABLE}
@@ -56,7 +67,7 @@ const Politician = {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
-         photo_url = VALUES(photo_url),
+         photo_url = ${replacePhoto ? "VALUES(photo_url)" : "COALESCE(photo_url, VALUES(photo_url))"},
          born_year = VALUES(born_year),
          died_year = VALUES(died_year),
          birth_place = VALUES(birth_place),

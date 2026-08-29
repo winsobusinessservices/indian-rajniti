@@ -11,6 +11,7 @@ import { slugify } from "@/lib/slugify";
 import { formatViews } from "@/lib/formatViews";
 
 import { getBreakingNews, getPostBySlug, getRelatedPosts } from "@/features/news/news.api";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -19,6 +20,21 @@ export async function generateMetadata({ params }) {
   return {
     title: post.title,
     description: post.excerpt,
+    alternates: { canonical: `/news/${slug}` },
+    openGraph: {
+      type: "article",
+      url: `/news/${slug}`,
+      title: post.title,
+      description: post.excerpt,
+      siteName: SITE_NAME,
+      images: post.image ? [{ url: post.image, alt: post.title }] : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.excerpt,
+      images: post.image ? [post.image] : [],
+    },
   };
 }
 
@@ -31,6 +47,20 @@ export default async function PostDetailPage({ params }) {
   }
 
   const [breakingNews, relatedPosts] = await Promise.all([getBreakingNews(), getRelatedPosts(slug, 4)]);
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: post.title,
+    description: post.excerpt,
+    image: post.image ? [post.image] : undefined,
+    author: { "@type": "Person", name: post.author },
+    publisher: {
+      "@type": "NewsMediaOrganization",
+      name: SITE_NAME,
+      logo: { "@type": "ImageObject", url: `${SITE_URL}/icon.png` },
+    },
+    mainEntityOfPage: `${SITE_URL}/news/${slug}`,
+  };
 
   return (
     <>
@@ -38,6 +68,7 @@ export default async function PostDetailPage({ params }) {
       <Header />
 
       <main className="w-full bg-background flex-grow">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
         <div className="max-w-full mx-auto px-4 md:px-16 py-6">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs font-label-md text-on-surface-variant mb-6">

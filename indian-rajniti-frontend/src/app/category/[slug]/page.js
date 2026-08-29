@@ -10,7 +10,12 @@ export async function generateMetadata({ params }) {
   const { slug } = await params;
   const info = await getCategoryInfo(slug);
   if (!info) return { title: "Category not found" };
-  return { title: info.label, description: info.description };
+  return {
+    title: info.label,
+    description: info.description,
+    alternates: { canonical: `/category/${slug}` },
+    openGraph: { title: info.label, description: info.description, url: `/category/${slug}` },
+  };
 }
 
 export default async function CategoryDetailPage({ params }) {

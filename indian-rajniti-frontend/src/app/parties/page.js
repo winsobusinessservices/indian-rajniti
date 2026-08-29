@@ -11,7 +11,7 @@ export default async function PartiesPage() {
   return (
     <CategoryPageShell title="Political Parties" count={parties.length}>
       {parties.map((party) => (
-        <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} href={`/category/${slugify(party.name)}`} />
+        <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} photoFallback={party.photoFallback} href={`/category/${slugify(party.name)}`} />
       ))}
     </CategoryPageShell>
   );

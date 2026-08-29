@@ -1,7 +1,7 @@
 import Link from "next/link";
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 
-export default function CMCard({ name, subtitle, href, photo }) {
+export default function CMCard({ name, subtitle, href, photo, photoFallback }) {
   const Wrapper = href ? Link : "div";
   const wrapperProps = href ? { href } : {};
 
@@ -13,6 +13,7 @@ export default function CMCard({ name, subtitle, href, photo }) {
       <ImagePlaceholder
         icon="fa-solid fa-user-tie"
         image={photo}
+        fallbackImage={photoFallback}
         alt={name}
         gradient="primary"
         className="aspect-[2/2] rounded-md object-center"

@@ -83,7 +83,7 @@ export default function CategoryAdminClient() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-      <form onSubmit={addCategory} className="bg-surface-container-low/60 rounded-lg border border-primary/30 p-5">
+      <form onSubmit={addCategory} inert={submitting ? "" : undefined} aria-busy={submitting} className="bg-surface-container-low/60 rounded-lg border border-primary/30 p-5">
         <h2 className="font-headline-lg text-xl text-primary mb-4">Add Category</h2>
         <label htmlFor="category-name" className="block font-label-md text-xs text-on-surface-variant mb-1.5">
           Category name <span className="text-error">*</span>

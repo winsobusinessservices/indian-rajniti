@@ -1,4 +1,12 @@
+import { showToast } from "@/lib/toast";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+
+// React Strict Mode mounts effects twice in development to expose unsafe side
+// effects. Keep one promise per in-flight GET so both mounts share the same
+// network call. Entries are removed as soon as the request settles, which
+// means a later user-initiated refresh still fetches fresh data.
+const pendingGetRequests = new Map();
 
 // Uploaded media is served from the backend's root (e.g. /uploads/...), not
 // under /api, so strip the /api suffix to get a base for building <img>/src.
@@ -6,43 +14,103 @@ export const MEDIA_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
 
 export function mediaUrl(path) {
   if (!path) return "";
-  return /^https?:\/\//.test(path) ? path : `${MEDIA_BASE_URL}${path}`;
+  const value = String(path).trim();
+  if (/^(?:https?:)?\/\//i.test(value) || /^(?:data|blob):/i.test(value)) return value;
+  return `${MEDIA_BASE_URL}${value.startsWith("/") ? "" : "/"}${value}`;
 }
 
-async function handleResponse(res) {
+// Hosts next.config.mjs's images.remotePatterns actually allowlists. Content
+// imported from the legacy WordPress site can carry a featured-image URL
+// from any original publisher's CDN (etvbharat, etc) — that set is
+// unbounded, so next/image can't optimize it (unknown host = hard error).
+// Everything outside this list is rendered `unoptimized` (plain <img>
+// passthrough) instead of being wildcarded into the allowlist.
+const OPTIMIZABLE_HOSTNAMES = new Set([
+  new URL(MEDIA_BASE_URL || "http://localhost").hostname,
+  "picsum.photos",
+  "img.youtube.com",
+  "vumbnail.com",
+]);
+
+export function isOptimizableImageHost(src) {
+  if (!src || /^(?:data|blob):/i.test(src)) return true;
+  try {
+    const url = new URL(src, MEDIA_BASE_URL);
+    return OPTIMIZABLE_HOSTNAMES.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function handleResponse(res, { notifySuccess = false, notifyError = true } = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.message || "Something went wrong. Please try again.");
+    const error = new Error(data.message || "Something went wrong. Please try again.");
+    error.toastShown = notifyError;
+    if (notifyError) showToast(error.message, "error");
+    throw error;
   }
+  if (notifySuccess && data.message) showToast(data.message, "success");
   return data;
 }
 
-async function request(path, { method = "GET", body } = {}) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method,
+function handleNetworkError(error) {
+  if (!error.toastShown) showToast(error.message || "Unable to connect to the server. Please try again.", "error");
+  throw error;
+}
+
+async function request(path, { method = "GET", body, notifyError = true } = {}) {
+  const url = `${API_BASE_URL}${path}`;
+  const normalizedMethod = method.toUpperCase();
+
+  if (normalizedMethod === "GET" && pendingGetRequests.has(url)) {
+    return pendingGetRequests.get(url);
+  }
+
+  const responsePromise = fetch(url, {
+    method: normalizedMethod,
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  });
-  return handleResponse(res);
+  })
+    .then((res) => handleResponse(res, { notifySuccess: normalizedMethod !== "GET", notifyError }))
+    .catch((error) => {
+      if (!notifyError) throw error;
+      return handleNetworkError(error);
+    });
+
+  if (normalizedMethod !== "GET") return responsePromise;
+
+  pendingGetRequests.set(url, responsePromise);
+  try {
+    return await responsePromise;
+  } finally {
+    pendingGetRequests.delete(url);
+  }
 }
 
 // For multipart bodies (file uploads) — no Content-Type header, so the
 // browser sets the correct multipart boundary itself.
 async function requestForm(path, { method = "POST", formData } = {}) {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    credentials: "include",
-    body: formData,
-  });
-  return handleResponse(res);
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      credentials: "include",
+      body: formData,
+    });
+    return await handleResponse(res, { notifySuccess: true });
+  } catch (error) {
+    return handleNetworkError(error);
+  }
 }
 
 export const authApi = {
+  requestRegistrationOtp: (email) => request("/auth/register/request-otp", { method: "POST", body: { email } }),
+  verifyRegistrationOtp: (payload) => request("/auth/register/verify-otp", { method: "POST", body: payload }),
   register: (payload) => request("/auth/register", { method: "POST", body: payload }),
   login: (payload) => request("/auth/login", { method: "POST", body: payload }),
   logout: () => request("/auth/logout", { method: "POST" }),
-  me: () => request("/auth/me"),
+  me: () => request("/auth/me", { notifyError: false }),
   changePassword: (payload) => request("/auth/change-password", { method: "POST", body: payload }),
   forgotPassword: (payload) => request("/auth/forgot-password", { method: "POST", body: payload }),
   resetPassword: (payload) => request("/auth/reset-password", { method: "POST", body: payload }),
@@ -58,6 +126,10 @@ export const authApi = {
   // already-registered account — no password is set here, the person must
   // already exist via register().
   assignRole: (formData) => requestForm("/auth/admin/users", { formData }),
+};
+
+export const contactApi = {
+  submit: (payload) => request("/contact", { method: "POST", body: payload }),
 };
 
 function toQueryString(params = {}) {
@@ -116,6 +188,35 @@ export const categoriesApi = {
   list: () => request("/categories"),
   create: (name) => request("/categories", { method: "POST", body: { name } }),
   remove: (id) => request(`/categories/${id}`, { method: "DELETE" }),
+};
+
+export const referenceAdminApi = {
+  async list() {
+    const data = await request("/admin/reference-data");
+    if (Array.isArray(data.events) && Array.isArray(data.rallies)) return data;
+
+    // Compatibility for a backend process that was started before schedule
+    // fields were added to the admin response. The public home bundle is the
+    // same database source used by Header.jsx.
+    const home = await request("/news/home");
+    return {
+      ...data,
+      events: Array.isArray(data.events) ? data.events : (home.widgets?.political_calendar || []),
+      rallies: Array.isArray(data.rallies) ? data.rallies : (home.widgets?.political_rallys || []),
+    };
+  },
+  create: (type, payload) => request(`/admin/reference-data/${type}`, { method: "POST", body: payload }),
+  update: (type, id, payload) => request(`/admin/reference-data/${type}/${id}`, { method: "PATCH", body: payload }),
+  remove: (type, id) => request(`/admin/reference-data/${type}/${id}`, { method: "DELETE" }),
+  updateParliament: (parliament) => request("/admin/reference-data/parliament", { method: "PUT", body: { parliament } }),
+  updateSchedule: (type, items) => request(`/admin/reference-data/schedule/${type}`, { method: "PUT", body: { items } }),
+  updateVidhanSabhas: (items) => request("/admin/reference-data/vidhan-sabhas", { method: "PUT", body: { items } }),
+  updateHomeWidget: (key, data) => request(`/admin/reference-data/home-widgets/${encodeURIComponent(key)}`, { method: "PUT", body: { data } }),
+  updatePageProfiles: (profiles) => request("/admin/reference-data/page-profiles", { method: "PUT", body: { profiles } }),
+};
+
+export const pollApi = {
+  vote: (optionIndex) => request("/poll/vote", { method: "POST", body: { optionIndex } }),
 };
 
 // Job postings the site is hiring for — admin creates/manages, any logged-in

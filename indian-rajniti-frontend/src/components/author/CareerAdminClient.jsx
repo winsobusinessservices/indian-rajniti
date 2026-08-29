@@ -25,7 +25,7 @@ const APPLICATION_STATUS_BADGE = {
 
 const APPLICATION_STATUS_OPTIONS = ["PENDING", "REVIEWED", "ACCEPTED", "REJECTED"];
 
-const sectionClass = "bg-surface-container-low/60 rounded-lg border border-primary/30 p-5";
+const sectionClass = "min-w-0 bg-surface-container-low/60 rounded-lg border border-primary/30 p-3 sm:p-5";
 const initialForm = { title: "", department: "", location: "", employmentType: "FULL_TIME", description: "", requirements: "", responsibilities: "", closesAt: "" };
 
 // Fixed-height scrollable body so a busy posting's applicant list doesn't
@@ -131,6 +131,7 @@ export default function CareerAdminClient() {
   };
 
   const handleDelete = async (job) => {
+    if (!window.confirm(`Are you sure you want to delete “${job.title}”? This action cannot be undone.`)) return;
     await careersApi.remove(job.id);
     await loadJobs();
   };
@@ -161,8 +162,8 @@ export default function CareerAdminClient() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-      <div className="lg:col-span-2 space-y-6">
+    <div className="grid min-w-0 grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="min-w-0 lg:col-span-2 space-y-6">
         <div className={sectionClass}>
           <h2 className="font-headline-md text-sm text-primary uppercase tracking-wide mb-4 flex items-center gap-2">
             <i className="fa-solid fa-briefcase" /> Existing Postings
@@ -174,38 +175,38 @@ export default function CareerAdminClient() {
           ) : (
             <div className="space-y-3">
               {jobs.map((job) => (
-                <div key={job.id} className="border border-outline-variant/20 rounded-lg p-4">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-headline-md text-base text-on-surface">{job.title}</h3>
+                <div key={job.id} className="min-w-0 overflow-hidden border border-outline-variant/20 rounded-lg p-3 sm:p-4">
+                  <div className="flex min-w-0 flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <h3 className="min-w-0 break-words font-headline-md text-base text-on-surface">{job.title}</h3>
                         <span className={`text-[10px] font-label-md uppercase px-2 py-0.5 rounded-sm ${STATUS_BADGE[job.status]}`}>
                           {job.status}
                         </span>
                       </div>
-                      <p className="font-body-md text-xs text-on-surface-variant">
+                      <p className="break-words font-body-md text-xs text-on-surface-variant">
                         {job.department || "General"} • {job.location || "Remote"} • {EMPLOYMENT_TYPES.find((t) => t.value === job.employment_type)?.label}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
                       <Link
                         href={`/careers/${job.slug}`}
                         target="_blank"
-                        className="font-label-sm text-xs uppercase text-primary p-2 border border-primary-500 hover:bg-primary hover:text-white"
+                        className="inline-flex items-center justify-center rounded border border-primary-500 p-2 font-label-sm text-xs uppercase text-primary hover:bg-primary hover:text-white"
                       >
                         View
                       </Link>
                       <button
                         type="button"
                         onClick={() => handleEdit(job)}
-                        className="font-label-sm text-xs uppercase text-primary p-2 border border-primary-500 hover:bg-primary hover:text-white"
+                        className="inline-flex items-center justify-center rounded border border-primary-500 p-2 font-label-sm text-xs uppercase text-primary hover:bg-primary hover:text-white"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => toggleApplications(job)}
-                        className="font-label-sm text-xs uppercase inline-flex items-center gap-1.5 px-3 py-2 rounded bg-primary text-on-primary hover:bg-primary-container transition-colors"
+                        className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded bg-primary px-3 py-2 font-label-sm text-xs uppercase text-on-primary transition-colors hover:bg-primary-container sm:col-auto"
                       >
                         <i className={`fa-solid ${expandedJobId === job.id ? "fa-chevron-up" : "fa-users"}`} />
                         {expandedJobId === job.id ? "Hide Applications" : "View Applications"}
@@ -218,14 +219,14 @@ export default function CareerAdminClient() {
                       <button
                         type="button"
                         onClick={() => toggleStatus(job)}
-                        className={`font-label-sm text-xs uppercase bg-transparent p-2 border ${job.status=="OPEN"? "hover:bg-red-500 hover:text-white text-red-500 border-red-500":" hover:bg-green-500 hover:text-white text-green-500 border-green-500"}`}
+                        className={`inline-flex items-center justify-center rounded border bg-transparent p-2 font-label-sm text-xs uppercase ${job.status=="OPEN"? "hover:bg-red-500 hover:text-white text-red-500 border-red-500":" hover:bg-green-500 hover:text-white text-green-500 border-green-500"}`}
                       >
                         {job.status === "OPEN" ? "Close" : "Reopen"}
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(job)}
-                        className="font-label-sm text-xs uppercase text-error hover:bg-red-700 hover:text-white border border-red-500 p-2"
+                        className="inline-flex items-center justify-center rounded border border-red-500 p-2 font-label-sm text-xs uppercase text-error hover:bg-red-700 hover:text-white"
                       > 
                         Delete
                       </button>
@@ -240,7 +241,7 @@ export default function CareerAdminClient() {
                         <p className="font-body-md text-xs text-on-surface-variant">No applications yet.</p>
                       ) : (
                         <>
-                          <div className="flex items-center gap-3 mb-3">
+                          <div className="flex flex-wrap items-center gap-3 mb-3">
                             <label className="font-label-md text-xs text-on-surface-variant">Status</label>
                             <select
                               value={applicationStatusFilter}
@@ -331,7 +332,7 @@ export default function CareerAdminClient() {
                                           </td>
                                           <td className="px-3 py-2 min-w-[9rem]">
                                             {(app.status === "PENDING" || app.status === "REVIEWED") ? (
-                                              <div className="flex items-center gap-2">
+                                              <div className="flex flex-wrap items-center gap-2">
                                                 <button
                                                   type="button"
                                                   onClick={() => handleReview(job, app, "ACCEPTED")}
@@ -370,7 +371,7 @@ export default function CareerAdminClient() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className={sectionClass}>
+      <form onSubmit={handleSubmit} inert={submitting ? "" : undefined} aria-busy={submitting} className={sectionClass}>
         <h2 className="font-headline-md text-sm text-primary uppercase tracking-wide mb-4 flex items-center gap-2">
           <i className={`fa-solid ${editingJobId ? "fa-pen" : "fa-plus"}`} /> {editingJobId ? "Edit Job Posting" : "New Job Posting"}
         </h2>
@@ -423,7 +424,7 @@ export default function CareerAdminClient() {
             </p>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               type="submit"
               disabled={submitting}

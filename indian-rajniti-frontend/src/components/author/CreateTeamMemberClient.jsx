@@ -139,7 +139,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start ">
+    <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start ">
    
         <div className={sectionClass}>
           <SectionTitle icon="fa-user-check">Account Email</SectionTitle>

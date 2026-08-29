@@ -89,7 +89,7 @@ export default function ReasonModal({
 
           {description && <p className="font-body-md text-sm text-on-surface-variant mb-5">{description}</p>}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="space-y-5">
             <div>
               <label htmlFor="reason-modal-textarea" className="block font-label-md text-xs text-on-surface-variant mb-1.5">
                 Reason {required ? <span className="text-error">*</span> : <span className="opacity-60">(optional)</span>}

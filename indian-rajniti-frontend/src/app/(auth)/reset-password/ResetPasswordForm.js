@@ -73,7 +73,7 @@ export default function ResetPasswordForm() {
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+      <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="mt-8 space-y-6">
         <div className="space-y-5">
           <AuthPasswordField
             id="new-password"

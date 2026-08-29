@@ -2,7 +2,7 @@ import Link from "next/link";
 import { slugify } from "@/lib/slugify";
 import Avatar from "@/components/common/Avatar";
 
-export default function PartyCard({ name, abbreviation, founded, photo }) {
+export default function PartyCard({ name, abbreviation, founded, photo, photoFallback }) {
   return (
     <Link
       href={`/category/${slugify(abbreviation)}`}
@@ -10,6 +10,7 @@ export default function PartyCard({ name, abbreviation, founded, photo }) {
     >
       <Avatar
         photo={photo}
+        fallbackPhoto={photoFallback}
         alt={name}
         fallbackText={abbreviation}
         gradient="from-secondary to-secondary-container"
