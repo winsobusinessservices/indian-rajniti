@@ -28,7 +28,7 @@ export default function HeroNews({ slides }) {
   if (slides.length === 0) return null;
 
   return (
-    <div className="relative w-full aspect-[16/9] md:aspect-[21/9] overflow-hidden shadow-lg group">
+    <div className="relative isolate z-0 w-full aspect-[16/9] md:aspect-[21/9] overflow-hidden shadow-lg group" style={{ zIndex: 0, isolation: "isolate" }}>
       {slides.map((slide, index) => (
         <div
           key={slide.id}

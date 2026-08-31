@@ -32,7 +32,7 @@ export default function ImagePlaceholder({
 
   if (src) {
     return (
-      <div className={`relative overflow-hidden bg-gradient-to-br ${GRADIENTS[gradient] || GRADIENTS.primary} ${className}`}>
+      <div className={`relative z-0 overflow-hidden bg-gradient-to-br ${GRADIENTS[gradient] || GRADIENTS.primary} ${className}`} style={{ zIndex: 0 }}>
         {/* Shown until the real photo finishes loading, then fades out —
             real images can take a moment over the network, so this covers
             that gap instead of leaving a blank/broken-looking box. */}

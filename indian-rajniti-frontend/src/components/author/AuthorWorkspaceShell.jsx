@@ -271,8 +271,10 @@ export default function AuthorWorkspaceShell({ children }) {
       )}
 
       <div
-        className="workspace-main flex min-h-screen min-w-0 flex-1 flex-col"
-        style={isDesktop ? { width: "calc(100% - 18rem)", marginLeft: "18rem" } : { width: "100%", marginLeft: 0 }}
+        className="workspace-main relative isolate flex min-h-screen min-w-0 flex-1 flex-col"
+        style={isDesktop
+          ? { width: "calc(100% - 18rem)", marginLeft: "18rem", position: "relative", zIndex: 0, isolation: "isolate" }
+          : { width: "100%", marginLeft: 0, position: "relative", zIndex: 0, isolation: "isolate" }}
       >
         {children}
       </div>

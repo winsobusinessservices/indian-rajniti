@@ -112,7 +112,10 @@ export default function Header() {
 
   return (
     <>
-    <header className="w-full bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
+    <header
+      className="relative w-full bg-surface shadow-[0_1px_8px_rgba(0,0,0,0.04)]"
+      style={{ zIndex: 185, backgroundColor: "#faf9f7" }}
+    >
       <div className="w-full bg-surface border-b border-outline-variant/30 py-4">
         <div className="max-w-full mx-auto px-4 md:px-16 grid grid-cols-3 items-center">
           <div className=" flex flex-col items-start">
@@ -132,7 +135,10 @@ export default function Header() {
       </div>
     </header>
 
-      <nav className="sticky top-0 z-[190] bg-surface/95 backdrop-blur-md border-b border-outline-variant/30 py-2 shadow-sm">
+      <nav
+        className="sticky top-0 z-[190] isolate border-b border-outline-variant/30 bg-surface py-2 shadow-sm"
+        style={{ position: "sticky", top: 0, zIndex: 190, backgroundColor: "#faf9f7" }}
+      >
         <div className={`max-w-full mx-auto px-4  ${hasWorkspaceSidebar?"md:px-2":"md:px-16 gap-10"}  flex min-w-0 items-center justify-between gap-2`}>
           {hasWorkspaceSidebar ? (
             <button
