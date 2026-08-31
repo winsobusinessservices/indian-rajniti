@@ -203,9 +203,10 @@ const getHome = async (req, res) => {
       return picked;
     };
 
-    // The primary homepage positions always show newly published content
-    // first. Popularity belongs only in the dedicated Trending section.
-    const heroRows = take(articlesPool, 3);
+    // Lead with the three most-read approved articles. `byViews` uses the
+    // newest publication as its tie-breaker, so equal view counts still
+    // produce a stable, editorially sensible order.
+    const heroRows = take(byViews, 3);
     const topStoryRows = take(articlesPool, 6);
     const editorialRows = take(articlesPool, 4);
     const inDepthRows = take(byViews, 1);

@@ -1,6 +1,6 @@
 export default function BreakingNews({ text }) {
   return (
-    <div className="sticky top-0 z-[210] w-full h-10 bg-primary text-on-primary flex items-center overflow-hidden border-b border-white/10">
+    <div className="relative z-[180] w-full h-10 bg-primary text-on-primary flex items-center overflow-hidden border-b border-white/10">
       <div className="flex-shrink-0 bg-secondary px-6 h-full flex items-center font-label-md font-bold tracking-widest text-xs z-10 shadow-[4px_0_8px_rgba(0,0,0,0.2)]">
         BREAKING
       </div>

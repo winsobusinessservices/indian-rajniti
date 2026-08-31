@@ -6,8 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { authorApi, authApi } from "@/lib/api";
 import { SkeletonBlock, SkeletonText } from "@/components/common/Skeleton";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
-
-const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
+import { PERMISSIONS, hasPermission } from "@/lib/permissions";
 
 const CREATE_CARDS = [
   { type: "article", label: "Article", icon: "fa-newspaper" },
@@ -106,10 +105,19 @@ const ROLE_LABEL = { AUTHOR: "Author", EDITOR: "Editor", ADMIN: "Admin", INVESTO
 
 export default function AuthorDashboardClient() {
   const { user } = useAuth();
-  const isModerator = MODERATOR_ROLES.includes(user?.role);
   const isAdmin = user?.role === "ADMIN";
   const isInvestor = user?.role === "INVESTOR";
   const roleLabel = ROLE_LABEL[user?.role] || "Author";
+  const canReview = hasPermission(user, PERMISSIONS.REVIEW_CONTENT);
+  const canViewHistory = hasPermission(user, PERMISSIONS.CONTENT_HISTORY);
+  const canViewOwnContent = hasPermission(user, PERMISSIONS.MY_CONTENT);
+  const visibleCreateCards = CREATE_CARDS.filter((card) =>
+    hasPermission(user, {
+      article: PERMISSIONS.CREATE_ARTICLE,
+      blog: PERMISSIONS.CREATE_BLOG,
+      video: PERMISSIONS.CREATE_VIDEO,
+    }[card.type])
+  );
   const [posts, setPosts] = useState([]);
   const [userCounts, setUserCounts] = useState({ total: 0, authors: 0, editors: 0 });
   const [loading, setLoading] = useState(true);
@@ -172,7 +180,7 @@ export default function AuthorDashboardClient() {
             : "Create new content, or manage everything you've already submitted."}
       </p>
 
-      {isModerator && !loading && (
+      {canReview && !loading && (
         <Link
           href="/author/review"
           className={`flex items-center gap-3 p-5 rounded-lg border-2 transition-all mb-8 ${
@@ -262,11 +270,11 @@ export default function AuthorDashboardClient() {
       {/* Quick actions and Recent Posts are write-oriented (create, edit,
           review, navigate into individual posts) — Investors get totals
           only, per the role's read-only scope. */}
-      {!isInvestor && (
+      {(visibleCreateCards.length > 0 || canViewOwnContent || canViewHistory) && (
         <>
           <h2 className="font-headline-lg text-primary text-xl mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            {CREATE_CARDS.map((card) => (
+            {visibleCreateCards.map((card) => (
               <Link
                 key={card.type}
                 href={`/author/create/${card.type}`}
@@ -284,7 +292,7 @@ export default function AuthorDashboardClient() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
-            <Link
+            {canViewOwnContent && <Link
               href="/author/content"
               className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
             >
@@ -297,9 +305,9 @@ export default function AuthorDashboardClient() {
                   View, edit, delete, and submit your own articles, blogs, and videos
                 </p>
               </div>
-            </Link>
+            </Link>}
 
-            {isModerator && (
+            {canViewHistory && (
               <Link
                 href="/author/history"
                 className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"

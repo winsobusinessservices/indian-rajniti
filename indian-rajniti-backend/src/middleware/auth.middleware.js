@@ -1,10 +1,11 @@
 const jwt = require("jsonwebtoken");
+const User = require("../models/user.model");
 
 const AUTH_COOKIE_NAME = "token";
 
 // Verifies the JWT from the auth cookie (falling back to a Bearer header for
 // non-browser clients) and attaches its payload ({ userId, role }) to req.user
-const authenticate = (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     const bearerToken = authHeader && authHeader.startsWith("Bearer ")
@@ -28,7 +29,11 @@ const authenticate = (req, res, next) => {
     }
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decodedToken;
+    const user = await User.findById(decodedToken.userId);
+    if (!user || user.status !== "ACTIVE") {
+      return res.status(401).json({ success: false, message: "Account is unavailable" });
+    }
+    req.user = { userId: user.id, id: user.id, role: user.role, permissions: user.permissions };
     next();
   } catch (error) {
     return res.status(401).json({
@@ -36,6 +41,17 @@ const authenticate = (req, res, next) => {
       message: "Invalid or expired authentication token",
     });
   }
+};
+
+const authorizePermission = (...requiredPermissions) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ success: false, message: "Authentication required" });
+  if (req.user.role === "ADMIN" || requiredPermissions.some((permission) => req.user.permissions?.includes(permission))) return next();
+  return res.status(403).json({ success: false, message: "You do not have permission to perform this action" });
+};
+
+const authorizeRoleOrPermission = (allowedRoles, ...requiredPermissions) => (req, res, next) => {
+  if (req.user && allowedRoles.includes(req.user.role)) return next();
+  return authorizePermission(...requiredPermissions)(req, res, next);
 };
 
 // Restricts a route to specific roles. Must run after authenticate.
@@ -60,4 +76,4 @@ const authorize = (...allowedRoles) => {
   };
 };
 
-module.exports = { authenticate, authorize };
+module.exports = { authenticate, authorize, authorizePermission, authorizeRoleOrPermission };

@@ -177,7 +177,7 @@ export default async function Footer() {
 
         <div className="border-t border-outline-variant/30 pt-4 flex flex-col md:flex-row justify-between items-center gap-4 text-on-surface-variant font-label-sm text-[10px]">
           <p>&copy; 2026 Indian Rajneeti Publications. All rights reserved.</p>
-          <p>Designed and Developed By Winso Business Services.</p>
+          <p>Designed and Developed By Winso Business Services Private Limited .</p>
 
           <p className="flex flex-wrap justify-center gap-4">
             <span className="hover:text-primary transition-colors cursor-pointer">NEW DELHI</span>

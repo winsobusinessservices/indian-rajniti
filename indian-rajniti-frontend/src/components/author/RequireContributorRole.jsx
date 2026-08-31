@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { hasAnyPermission } from "@/lib/permissions";
 
 const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
 
@@ -10,7 +11,7 @@ const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
  * only, for the review queue) while every existing `<RequireContributorRole>`
  * call with no props keeps the original Author/Editor/Admin behavior.
  */
-export default function RequireContributorRole({ children, roles = CONTRIBUTOR_ROLES, roleLabel = "an Author, Editor, or Admin" }) {
+export default function RequireContributorRole({ children, roles = CONTRIBUTOR_ROLES, permissions, roleLabel = "an authorized team member" }) {
   const { user, loading } = useAuth();
 
   if (loading) return null;
@@ -30,7 +31,7 @@ export default function RequireContributorRole({ children, roles = CONTRIBUTOR_R
     );
   }
 
-  if (!roles.includes(user.role)) {
+  if (!roles.includes(user.role) || (permissions?.length && !hasAnyPermission(user, permissions))) {
     return (
       <div className="max-w-lg mx-auto px-4 py-24 text-center">
         <i className="fa-solid fa-ban text-4xl text-error mb-4" />

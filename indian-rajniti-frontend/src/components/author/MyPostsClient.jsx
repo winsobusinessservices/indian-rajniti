@@ -55,10 +55,11 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
   }, [typeFilter, statusFilter]);
 
   useEffect(() => {
+    // Fetching on mount/filter changes intentionally enters the loading state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPosts();
     // refreshSignal isn't read directly, but bumping it (e.g. after a new
     // post is created elsewhere on the page) should trigger a re-fetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadPosts, refreshSignal]);
 
   const handleDelete = async (reason) => {
@@ -92,28 +93,35 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
       {aiCheckingId != null && <AiCheckLoader />}
       {!compact && <h1 className="font-display-lg text-3xl text-primary mb-6">My Content</h1>}
 
-      <div className="flex gap-3 mb-6 flex-wrap">
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="border border-outline-variant/40 rounded px-3 py-2 text-sm font-label-md bg-surface text-on-surface"
-        >
-          <option value="">All Types</option>
-          <option value="ARTICLE">Articles</option>
-          <option value="BLOG">Blogs</option>
-          <option value="VIDEO">Videos</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-outline-variant/40 rounded px-3 py-2 text-sm font-label-md bg-surface text-on-surface"
-        >
-          <option value="">All Statuses</option>
-          <option value="DRAFT">Draft</option>
-          <option value="PENDING">Pending</option>
-          <option value="APPROVED">Approved</option>
-          <option value="REJECTED">Rejected</option>
-        </select>
+      <div className="mb-6 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:flex lg:items-end">
+        <label className="block w-full min-w-0 lg:w-48">
+          <span className="mb-1 block font-label-md text-xs text-on-surface-variant">Content type</span>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="block min-h-11 w-full max-w-full rounded-lg border border-outline-variant/40 bg-surface px-3 py-2.5 text-sm font-label-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+          >
+            <option value="">All Types</option>
+            <option value="ARTICLE">Articles</option>
+            <option value="BLOG">Blogs</option>
+            <option value="VIDEO">Videos</option>
+          </select>
+        </label>
+
+        <label className="block w-full min-w-0 lg:w-48">
+          <span className="mb-1 block font-label-md text-xs text-on-surface-variant">Review status</span>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="block min-h-11 w-full max-w-full rounded-lg border border-outline-variant/40 bg-surface px-3 py-2.5 text-sm font-label-md text-on-surface outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/15"
+          >
+            <option value="">All Statuses</option>
+            <option value="DRAFT">Draft</option>
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </label>
       </div>
 
       {actionError && (
@@ -135,7 +143,7 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
           {posts.map((post) => (
             <div
               key={`${post.type}-${post.id}`}
-              className="flex items-start gap-4 p-4 bg-surface-container rounded-lg border border-outline-variant/20"
+              className="flex flex-col items-stretch gap-4 p-4 bg-surface-container rounded-lg border border-outline-variant/20 sm:flex-row sm:items-start"
             >
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <i className={`fa-solid ${TYPE_ICON[post.type]} text-primary`} />
@@ -150,7 +158,7 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
                   </span>
                   <span className="text-[10px] font-label-md text-on-surface-variant uppercase">{post.type}</span>
                 </div>
-                <h3 className="font-headline-md text-base text-on-surface truncate">{post.title}</h3>
+                <h3 className="break-words font-headline-md text-base text-on-surface sm:truncate">{post.title}</h3>
                 {(post.excerpt || post.description) && (
                   <p className="font-body-md text-sm text-on-surface-variant line-clamp-2 mt-1">
                     {post.excerpt || post.description}
@@ -167,23 +175,23 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
                   <p className="font-body-md text-xs text-on-surface-variant mt-1 italic">Editor note: {post.review_notes}</p>
                 )}
               </div>
-              <div className="flex flex-col gap-2 flex-shrink-0">
-                <div className="flex gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-shrink-0">
+                <div className="grid grid-cols-3 gap-2 sm:flex">
                   <Link
                     href={`/author/view/${post.type.toLowerCase()}/${post.id}`}
-                    className="px-3 py-1.5 text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors"
+                    className="px-2 py-2 text-center text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors sm:px-3 sm:py-1.5"
                   >
                     View
                   </Link>
                   <Link
                     href={`/author/edit/${post.type.toLowerCase()}/${post.id}`}
-                    className="px-3 py-1.5 text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors"
+                    className="px-2 py-2 text-center text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors sm:px-3 sm:py-1.5"
                   >
                     Edit
                   </Link>
                   <button
                     onClick={() => setDeleteTarget(post)}
-                    className="px-3 py-1.5 text-xs font-label-md border border-error/40 text-error rounded hover:bg-error hover:text-on-error transition-colors"
+                    className="px-2 py-2 text-center text-xs font-label-md border border-error/40 text-error rounded hover:bg-error hover:text-on-error transition-colors sm:px-3 sm:py-1.5"
                   >
                     Delete
                   </button>

@@ -16,7 +16,8 @@ const {
   requestRegistrationOtp,
   verifyRegistrationOtp,
 } = require("../controllers/auth/auth.controller");
-const { authenticate, authorize } = require("../middleware/auth.middleware");
+const { authenticate, authorize, authorizePermission, authorizeRoleOrPermission } = require("../middleware/auth.middleware");
+const { PERMISSIONS } = require("../config/permissions");
 const { uploadUserDocuments } = require("../middleware/upload.middleware");
 
 /**
@@ -150,7 +151,7 @@ routes.get("/auth/me", authenticate, getCurrentUser);
  *       403:
  *         description: Caller is not an admin
  */
-routes.get("/auth/users", authenticate, authorize("ADMIN","INVESTOR"), listUsers);
+routes.get("/auth/users", authenticate, authorizeRoleOrPermission(["ADMIN", "INVESTOR"], PERMISSIONS.TEAM_MEMBERS), listUsers);
 
 /**
  * @openapi
@@ -191,7 +192,7 @@ routes.get("/auth/users", authenticate, authorize("ADMIN","INVESTOR"), listUsers
  *       404:
  *         description: No account exists with that email
  */
-routes.post("/auth/admin/users", authenticate, authorize("ADMIN"), uploadUserDocuments, adminAssignRole);
+routes.post("/auth/admin/users", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), uploadUserDocuments, adminAssignRole);
 
 /**
  * @openapi
@@ -224,7 +225,7 @@ routes.post("/auth/admin/users", authenticate, authorize("ADMIN"), uploadUserDoc
  *       404:
  *         description: User not found
  */
-routes.patch("/auth/users/:id/role", authenticate, authorize("ADMIN"), updateUserRole);
+routes.patch("/auth/users/:id/role", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), updateUserRole);
 
 /**
  * @openapi
@@ -263,7 +264,7 @@ routes.patch("/auth/users/:id/role", authenticate, authorize("ADMIN"), updateUse
  *       409:
  *         description: Email already in use
  */
-routes.patch("/auth/users/:id", authenticate, authorize("ADMIN"), updateUser);
+routes.patch("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), updateUser);
 
 /**
  * @openapi
@@ -287,7 +288,7 @@ routes.patch("/auth/users/:id", authenticate, authorize("ADMIN"), updateUser);
  *       404:
  *         description: User not found
  */
-routes.delete("/auth/users/:id", authenticate, authorize("ADMIN"), deleteUser);
+routes.delete("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), deleteUser);
 
 /**
  * @openapi

@@ -5,19 +5,39 @@ import Link from "next/link";
 import { referenceAdminApi } from "@/lib/api";
 import { DEFAULT_PARLIAMENT } from "@/features/parliament/parliament.api";
 import { DEFAULT_PAGE_PROFILES } from "@/features/events/pageProfiles";
+import { useAuth } from "@/context/AuthContext";
+import { PERMISSIONS, hasPermission } from "@/lib/permissions";
+
+const HOME_WIDGET_PERMISSIONS = [
+  PERMISSIONS.SITE_HOME_WIDGETS,
+  PERMISSIONS.SITE_WIDGET_BREAKING_NEWS,
+  PERMISSIONS.SITE_WIDGET_POLL,
+  PERMISSIONS.SITE_WIDGET_ELECTION_RESULTS,
+  PERMISSIONS.SITE_WIDGET_OTHER,
+];
+
+function canManageWidget(user, key) {
+  if (hasPermission(user, PERMISSIONS.SITE_HOME_WIDGETS)) return true;
+  const permission = {
+    breaking_news: PERMISSIONS.SITE_WIDGET_BREAKING_NEWS,
+    poll_of_the_day: PERMISSIONS.SITE_WIDGET_POLL,
+    election_results: PERMISSIONS.SITE_WIDGET_ELECTION_RESULTS,
+  }[key] || PERMISSIONS.SITE_WIDGET_OTHER;
+  return hasPermission(user, permission);
+}
 
 const PAGE_SIZE = 7;
 const TABS = [
-  ["politicians", "Politicians", "fa-user-tie"],
-  ["parties", "Parties", "fa-flag"],
-  ["states", "States & Assemblies", "fa-landmark"],
-  ["parliament", "Parliament", "fa-building-columns"],
-  ["vidhanSabhas", "Vidhan Sabha", "fa-gavel"],
-  ["events", "Upcoming Events", "fa-calendar-days"],
-  ["rallies", "Upcoming Rallies", "fa-bullhorn"],
-  ["homeWidgets", "Home Widgets", "fa-table-cells-large"],
-  ["pageContent", "Speeches, Rallies & Elections", "fa-newspaper"],
-].map(([key, label, icon]) => ({ key, label, icon }));
+  ["politicians", "Politicians", "fa-user-tie", PERMISSIONS.SITE_POLITICIANS],
+  ["parties", "Parties", "fa-flag", PERMISSIONS.SITE_PARTIES],
+  ["states", "States & Assemblies", "fa-landmark", PERMISSIONS.SITE_STATES],
+  ["parliament", "Parliament", "fa-building-columns", PERMISSIONS.SITE_PARLIAMENT],
+  ["vidhanSabhas", "Vidhan Sabha", "fa-gavel", PERMISSIONS.SITE_VIDHAN_SABHAS],
+  ["events", "Upcoming Events", "fa-calendar-days", PERMISSIONS.SITE_SCHEDULES],
+  ["rallies", "Upcoming Rallies", "fa-bullhorn", PERMISSIONS.SITE_SCHEDULES],
+  ["homeWidgets", "Home Widgets", "fa-table-cells-large", PERMISSIONS.SITE_HOME_WIDGETS],
+  ["pageContent", "Speeches, Rallies & Elections", "fa-newspaper", PERMISSIONS.SITE_PAGE_PROFILES],
+].map(([key, label, icon, permission]) => ({ key, label, icon, permission }));
 
 const EMPTY = {
   politicians: {
@@ -833,8 +853,8 @@ function WidgetValueEditor({ label, value, onChange, depth = 0 }) {
   );
 }
 
-function HomeWidgetsAdmin({ widgets, onReload }) {
-  const keys = Object.keys(widgets || {}).sort();
+function HomeWidgetsAdmin({ widgets, onReload, user }) {
+  const keys = Object.keys(widgets || {}).filter((key) => canManageWidget(user, key)).sort();
   const [selected, setSelected] = useState(keys[0] || "");
   const [value, setValue] = useState(() =>
     prepareWidget(keys[0], widgets?.[keys[0]] ?? ""),
@@ -1159,6 +1179,12 @@ function PageContentAdmin({ profiles, onReload }) {
 }
 
 export default function ReferenceDataAdminClient() {
+  const { user } = useAuth();
+  const allowedTabs = TABS.filter((item) =>
+    item.key === "homeWidgets"
+      ? HOME_WIDGET_PERMISSIONS.some((permission) => hasPermission(user, permission))
+      : hasPermission(user, item.permission)
+  );
   const [data, setData] = useState({
     politicians: [],
     parties: [],
@@ -1168,9 +1194,9 @@ export default function ReferenceDataAdminClient() {
     rallies: [],
     vidhanSabhas: [],
   });
-  const [tab, setTab] = useState("politicians");
+  const [tab, setTab] = useState(() => allowedTabs[0]?.key || "");
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(EMPTY.politicians);
+  const [form, setForm] = useState(() => ({ ...(EMPTY[allowedTabs[0]?.key] || {}) }));
   const [houseKey, setHouseKey] = useState("loksabha");
   const [houseForm, setHouseForm] = useState(() =>
     houseToForm(DEFAULT_PARLIAMENT.loksabha),
@@ -1378,7 +1404,7 @@ export default function ReferenceDataAdminClient() {
     return (
       <div className="space-y-6">
         <div className="flex gap-2 overflow-x-auto rounded-lg border border-outline-variant/30 bg-surface p-2">
-          {TABS.map((item) => (
+          {allowedTabs.map((item) => (
             <button
               key={item.key}
               type="button"
@@ -1398,7 +1424,7 @@ export default function ReferenceDataAdminClient() {
             {error}
           </p>
         )}
-        <HomeWidgetsAdmin widgets={data.homeWidgets} onReload={load} />
+        <HomeWidgetsAdmin widgets={data.homeWidgets} onReload={load} user={user} />
       </div>
     );
 
@@ -1406,7 +1432,7 @@ export default function ReferenceDataAdminClient() {
     return (
       <div className="space-y-6">
         <div className="flex gap-2 overflow-x-auto rounded-lg border border-outline-variant/30 bg-surface p-2">
-          {TABS.map((item) => (
+          {allowedTabs.map((item) => (
             <button
               key={item.key}
               type="button"
@@ -1425,7 +1451,7 @@ export default function ReferenceDataAdminClient() {
   return (
     <div className="space-y-6">
       <div className="flex gap-2 overflow-x-auto rounded-lg border border-outline-variant/30 bg-surface p-2">
-        {TABS.map((item) => (
+        {allowedTabs.map((item) => (
           <button
             key={item.key}
             type="button"

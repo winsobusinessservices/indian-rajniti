@@ -201,12 +201,12 @@ export default function HeaderWeather() {
     : "Loading...";
 
   return (
-    <div className="hidden md:flex gap-1 pt-3">
-      <div className="mx-auto flex gap-5 max-w-3xl items-center justify-between px-3 py-1">
+    <div className="hidden md:flex gap-1 pt-3 whitespace-nowrap">
+      <div className="mx-auto flex flex-nowrap gap-5 max-w-3xl items-center justify-between px-3 py-1">
 
         {/* LEFT: LOCATION + WEATHER */}
 
-      <div className="flex items-center gap-2 text-xs font-label-md text-on-surface-variant">
+      <div className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs font-label-md text-on-surface-variant">
 
           <div className="text-sm">
             {weatherIcon}
@@ -233,7 +233,7 @@ export default function HeaderWeather() {
 
         {/* RIGHT: DATE + TIME */}
 
-      <div className="flex items-center gap-3  text-xs font-label-md text-on-surface-variant">
+      <div className="flex shrink-0 items-center gap-3 whitespace-nowrap text-xs font-label-md text-on-surface-variant">
 
           <p className="text-xs text-gray-500 ">
             {isClient ? formattedDate : ""}

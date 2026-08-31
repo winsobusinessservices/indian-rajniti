@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { authApi } from "@/lib/api";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import ReasonModal from "@/components/common/ReasonModal";
+import { PERMISSIONS, PERMISSION_GROUPS, ROLE_DEFAULT_PERMISSIONS } from "@/lib/permissions";
 
 // Only these roles count as "the team" — plain USER accounts (public
 // self-signups/readers) aren't something an admin manages here.
@@ -40,12 +41,14 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
   const [error, setError] = useState("");
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: "", email: "", role: "" });
+  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", permissions: [] });
   const [rowError, setRowError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   useEffect(() => {
+    // Refetching intentionally enters a loading state when the refresh key changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     authApi
       .listUsers()
@@ -56,7 +59,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
 
   const startEdit = (member) => {
     setEditingId(member.id);
-    setEditForm({ name: member.name, email: member.email, role: member.role });
+    setEditForm({ name: member.name, email: member.email, role: member.role, permissions: member.permissions || [] });
     setRowError("");
   };
 
@@ -66,7 +69,29 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
   };
 
   const handleFieldChange = (e) => {
-    setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setEditForm((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "role" && value !== prev.role ? { permissions: ROLE_DEFAULT_PERMISSIONS[value] || [] } : {}),
+    }));
+  };
+
+  const togglePermission = (permission) => {
+    setEditForm((prev) => {
+      const selected = prev.permissions.includes(permission);
+      let permissions = selected
+        ? prev.permissions.filter((item) => item !== permission)
+        : [...prev.permissions, permission];
+      const siteDataChildren = PERMISSION_GROUPS[2].permissions.map(([value]) => value);
+      if (!selected && siteDataChildren.includes(permission) && !permissions.includes(PERMISSIONS.MANAGE_SITE_DATA)) {
+        permissions.push(PERMISSIONS.MANAGE_SITE_DATA);
+      }
+      if (permission === PERMISSIONS.MANAGE_SITE_DATA && selected) {
+        permissions = permissions.filter((item) => !siteDataChildren.includes(item));
+      }
+      return { ...prev, permissions };
+    });
   };
 
   const saveEdit = async (member) => {
@@ -87,6 +112,9 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
     if (name !== member.name) payload.name = name;
     if (email !== member.email) payload.email = email;
     if (editForm.role !== member.role) payload.role = editForm.role;
+    if (JSON.stringify([...editForm.permissions].sort()) !== JSON.stringify([...(member.permissions || [])].sort())) {
+      payload.permissions = editForm.permissions;
+    }
 
     if (!Object.keys(payload).length) {
       setEditingId(null);
@@ -128,7 +156,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
       ) : members.length === 0 ? (
         <p className="font-body-md text-on-surface-variant mb-8">No team members yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-outline-variant/20 mb-10  max-h-[320px] overflow-y-auto">
+        <div className="mb-10 max-h-[70vh] overflow-auto rounded-lg border border-outline-variant/20">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-surface-container-low sticky top-0 z-10">
               <tr className="text-left font-label-md text-xs uppercase tracking-wide text-on-surface-variant">
@@ -146,7 +174,8 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                 const isSelf = member.id === user?.id;
 
                 return (
-                  <tr key={member.id} className="bg-surface-container align-top">
+                  <Fragment key={member.id}>
+                  <tr className="bg-surface-container align-top">
                     <td className="px-4 py-3 min-w-[10rem]">
                       {isEditing ? (
                         <input name="name" value={editForm.name} onChange={handleFieldChange} className={fieldClass} />
@@ -253,6 +282,51 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                       )}
                     </td>
                   </tr>
+                  {isEditing && (
+                    <tr className="bg-surface-container-low/70">
+                      <td colSpan={6} className="border-t border-outline-variant/15 px-4 py-4">
+                        {editForm.role === "ADMIN" ? (
+                          <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary">
+                            <i className="fa-solid fa-shield-halved" aria-hidden="true" />
+                            Admin accounts always have every privilege.
+                          </div>
+                        ) : (
+                          <div>
+                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <h3 className="font-headline-md text-sm text-primary">Edit Privileges</h3>
+                                <p className="mt-1 text-xs text-on-surface-variant">Changes take effect on the member&apos;s next API request.</p>
+                              </div>
+                              <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-label-md text-primary">
+                                {editForm.permissions.length} selected
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                              {PERMISSION_GROUPS.map((group) => (
+                                <fieldset key={group.label} className="min-w-0 rounded-lg border border-outline-variant/25 bg-surface p-3">
+                                  <legend className="px-1 text-xs font-semibold font-label-md text-primary">{group.label}</legend>
+                                  <div className="space-y-1">
+                                    {group.permissions.map(([value, label]) => (
+                                      <label key={value} className="flex min-h-9 cursor-pointer items-start gap-2 rounded-md p-2 hover:bg-surface-container">
+                                        <input
+                                          type="checkbox"
+                                          checked={editForm.permissions.includes(value)}
+                                          onChange={() => togglePermission(value)}
+                                          className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+                                        />
+                                        <span className="min-w-0 break-words text-xs leading-5 text-on-surface-variant">{label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </fieldset>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>

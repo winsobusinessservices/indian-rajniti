@@ -9,8 +9,8 @@ const { fileUrl } = require("../../middleware/upload.middleware");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { joinContentMedia } = require("../../utils/contentMedia");
 
-const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
-const isModerator = (role) => MODERATOR_ROLES.includes(role);
+const { PERMISSIONS } = require("../../config/permissions");
+const isModerator = (user) => user.role === "ADMIN" || user.permissions?.includes(PERMISSIONS.REVIEW_CONTENT);
 
 const MODEL = { ARTICLE: Article, BLOG: Blog, VIDEO: Video };
 const TYPE_LABEL = { ARTICLE: "Article", BLOG: "Blog", VIDEO: "Video" };
@@ -143,7 +143,7 @@ async function loadOwnedContent(req, res) {
     res.status(404).json({ success: false, message: `${TYPE_LABEL[req.contentType]} not found` });
     return null;
   }
-  if (item.author_id !== req.user.userId && !isModerator(req.user.role)) {
+  if (item.author_id !== req.user.userId && !isModerator(req.user)) {
     res.status(403).json({ success: false, message: "You do not have permission to access this content" });
     return null;
   }

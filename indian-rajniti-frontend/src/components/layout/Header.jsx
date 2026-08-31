@@ -92,6 +92,7 @@ export default function Header() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const profileButtonRef = useRef(null);
+  const hasWorkspaceSidebar = ["AUTHOR", "EDITOR", "ADMIN"].includes(user?.role) || (user?.role === "INVESTOR" && user?.permissions?.length > 0);
 
   const openProfileMenu = () => {
     setAnchorRect(profileButtonRef.current.getBoundingClientRect());
@@ -103,9 +104,14 @@ export default function Header() {
     router.push("/");
   };
 
+  const openWorkspaceMenu = () => {
+    window.dispatchEvent(new Event("open-workspace-menu"));
+  };
+
 
 
   return (
+    <>
     <header className="w-full bg-surface/90 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
       <div className="w-full bg-surface border-b border-outline-variant/30 py-4">
         <div className="max-w-full mx-auto px-4 md:px-16 grid grid-cols-3 items-center">
@@ -124,18 +130,30 @@ export default function Header() {
           </div>
         </div>
       </div>
+    </header>
 
-      <nav className="bg-surface border-b border-outline-variant/30 relative py-2">
-        <div className="max-w-full mx-auto px-4 md:px-16 flex items-center justify-between">
-          <button
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-            className="text-on-surface-variant hover:text-primary transition-colors hover:scale-110 active:scale-95"
-          >
-            <i className="fa-solid fa-bars text-lg" />
-          </button>
+      <nav className="sticky top-0 z-[190] bg-surface/95 backdrop-blur-md border-b border-outline-variant/30 py-2 shadow-sm">
+        <div className={`max-w-full mx-auto px-4  ${hasWorkspaceSidebar?"md:px-2":"md:px-16 gap-10"}  flex min-w-0 items-center justify-between gap-2`}>
+          {hasWorkspaceSidebar ? (
+            <button
+              type="button"
+              onClick={openWorkspaceMenu}
+              aria-label="Open workspace menu"
+              className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary active:scale-95 lg:invisible"
+            >
+              <i className="fa-solid fa-bars text-lg" aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              onClick={() => setMenuOpen(true)}
+              aria-label="Open menu"
+              className="text-on-surface-variant hover:text-primary transition-colors hover:scale-110 active:scale-95"
+            >
+              <i className="fa-solid fa-bars text-lg" />
+            </button>
+          )}
 
-          <div className="hidden lg:flex items-center justify-center gap-3 h-full mx-1">
+          <div className="hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap lg:flex">
             {NAV_LINKS.map((link) => {
               const isActive = pathname === link.href;
               return (
@@ -157,9 +175,8 @@ export default function Header() {
           </div>
            
 
-          <div className="flex items-center gap-1">
+          <div className="flex min-w-0 shrink-0 items-center gap-1">
 
-              <div className="h-full flex items-center px-1 border-b-2 border-transparent text-on-surface-variant font-label-md py-3">
             
                 <SearchBox
                   autoFocus
@@ -169,18 +186,17 @@ export default function Header() {
                   inputClassName="w-full border-b border-outline-variant/50 bg-transparent py-1 text-sm font-body-md text-on-surface focus:outline-none focus:border-primary transition-colors"
                 />
              
-             </div>
 
             {!loading && user ? (
               <button
                 ref={profileButtonRef}
                 onClick={openProfileMenu}
-                className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border border-outline-variant/30 hover:border-primary transition-colors cursor-pointer"
+                className="flex min-w-0 items-center gap-2 rounded-full border border-outline-variant/30 py-1 pl-1 pr-2 hover:border-primary transition-colors cursor-pointer sm:pr-3"
               >
-                <span className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center">
+                <span className="w-8 h-8 shrink-0 rounded-full bg-gradient-to-br from-primary to-primary-container flex items-center justify-center">
                   <i className="fa-solid fa-user text-white text-sm" />
                 </span>
-                <span className="font-label-md text-sm text-on-surface max-w-[120px] truncate">{user.name}</span>
+                <span className="hidden font-label-md text-sm text-on-surface max-w-[120px] truncate sm:block">{user.name}</span>
                 <i className="fa-solid fa-chevron-down text-[10px] text-on-surface-variant" />
               </button>
             ) : (
@@ -205,7 +221,7 @@ export default function Header() {
         </div>
       </nav>
 
-      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)}  />
+      {!hasWorkspaceSidebar && <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} />}
 
       {user && (
         <>
@@ -220,6 +236,6 @@ export default function Header() {
           <ChangePasswordModal open={changePasswordOpen} onClose={() => setChangePasswordOpen(false)} />
         </>
       )}
-    </header>
+    </>
   );
 }

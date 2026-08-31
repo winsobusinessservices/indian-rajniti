@@ -8,6 +8,7 @@ const {
   sendRegistrationOtpEmail,
 } = require("../../services/nodemailer.service");
 const { userDocumentUrl } = require("../../middleware/upload.middleware");
+const { ALL_PERMISSIONS, normalizePermissions } = require("../../config/permissions");
 
 const EMAIL_REGEX = /^[a-zA-Z0-9](?!.*\.\.)[a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
 const OTP_TTL = "10m";
@@ -264,6 +265,7 @@ const login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        permissions: user.permissions,
         status: user.status,
       },
     });
@@ -298,6 +300,7 @@ const getCurrentUser = async (req, res) => {
         id: user.id,
         name: user.name,
         role: user.role,
+        permissions: user.permissions,
         status: user.status,
         termsAccepted: user.terms_accepted,
         termsAcceptedAt: user.terms_accepted_at,
@@ -434,9 +437,19 @@ const adminAssignRole = async (req, res) => {
     }
 
     const previousRole = existingUser.role;
+    let requestedPermissions;
+    try {
+      requestedPermissions = req.body.permissions ? JSON.parse(req.body.permissions) : null;
+    } catch {
+      return res.status(400).json({ success: false, message: "Permissions must be a valid JSON array" });
+    }
+    if (requestedPermissions !== null && (!Array.isArray(requestedPermissions) || requestedPermissions.some((item) => !ALL_PERMISSIONS.includes(item)))) {
+      return res.status(400).json({ success: false, message: "One or more permissions are invalid" });
+    }
 
     const user = await User.update(existingUser.id, {
       role,
+      permissions: normalizePermissions(requestedPermissions, role),
       panDocument: files.panDocument ? userDocumentUrl(files.panDocument) : undefined,
       aadharDocument: files.aadharDocument ? userDocumentUrl(files.aadharDocument) : undefined,
       graduationCertificate: files.graduationCertificate ? userDocumentUrl(files.graduationCertificate) : undefined,
@@ -479,6 +492,9 @@ const updateUserRole = async (req, res) => {
         success: false,
         message: `Role must be one of: ${User.ROLES.join(", ")}`,
       });
+    }
+    if (req.user.role !== "ADMIN" && role === "ADMIN") {
+      return res.status(403).json({ success: false, message: "Only an Admin can assign the Admin role" });
     }
 
     const existing = await User.findById(id);
@@ -523,7 +539,7 @@ const updateUserRole = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role } = req.body;
+    const { name, email, role, permissions } = req.body;
 
     const existing = await User.findById(id);
     if (!existing) {
@@ -539,6 +555,9 @@ const updateUser = async (req, res) => {
           success: false,
           message: `Role must be one of: ${User.ROLES.join(", ")}`,
         });
+      }
+      if (req.user.role !== "ADMIN" && role === "ADMIN") {
+        return res.status(403).json({ success: false, message: "Only an Admin can assign the Admin role" });
       }
       // An admin editing the table could otherwise demote/reassign their own
       // row and lock themselves out with no one left to undo it.
@@ -577,10 +596,19 @@ const updateUser = async (req, res) => {
       });
     }
 
+    if (permissions !== undefined && (!Array.isArray(permissions) || permissions.some((item) => !ALL_PERMISSIONS.includes(item)))) {
+      return res.status(400).json({ success: false, message: "One or more permissions are invalid" });
+    }
+
     const user = await User.update(id, {
       name: name !== undefined ? name.trim() : undefined,
       email: normalizedEmail,
       role,
+      permissions: permissions !== undefined
+        ? normalizePermissions(permissions, role || existing.role)
+        : role !== undefined && role !== existing.role
+          ? null
+          : undefined,
     });
 
     if (role !== undefined && role !== existing.role) {

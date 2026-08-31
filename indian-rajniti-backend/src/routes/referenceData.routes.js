@@ -1,11 +1,20 @@
 const express = require("express");
-const { authenticate, authorize } = require("../middleware/auth.middleware");
+const { authenticate, authorizePermission } = require("../middleware/auth.middleware");
+const { PERMISSIONS } = require("../config/permissions");
 const {
   listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles,
 } = require("../controllers/admin/referenceData.controller");
 
 const router = express.Router();
-const adminOnly = [authenticate, authorize("ADMIN")];
+const siteData = [authenticate, authorizePermission(PERMISSIONS.MANAGE_SITE_DATA)];
+const siteGuard = (permission) => [authenticate, authorizePermission(permission)];
+const widgetPermission = (key) => ({
+  breaking_news: PERMISSIONS.SITE_WIDGET_BREAKING_NEWS,
+  poll_of_the_day: PERMISSIONS.SITE_WIDGET_POLL,
+  election_results: PERMISSIONS.SITE_WIDGET_ELECTION_RESULTS,
+}[key] || PERMISSIONS.SITE_WIDGET_OTHER);
+const authorizeWidget = (req, res, next) =>
+  authorizePermission(PERMISSIONS.SITE_HOME_WIDGETS, widgetPermission(req.params.key))(req, res, next);
 
 /**
  * @openapi
@@ -106,7 +115,7 @@ router.post("/poll/vote", votePoll);
  *       401: { description: Authentication required }
  *       403: { description: Administrator role required }
  */
-router.get("/admin/reference-data", ...adminOnly, listReferenceData);
+router.get("/admin/reference-data", ...siteData, listReferenceData);
 
 /**
  * @openapi
@@ -126,7 +135,7 @@ router.get("/admin/reference-data", ...adminOnly, listReferenceData);
  *       401: { description: Authentication required }
  *       403: { description: Administrator role required }
  */
-router.post("/admin/reference-data/politicians", ...adminOnly, politicianCrud.create);
+router.post("/admin/reference-data/politicians", ...siteGuard(PERMISSIONS.SITE_POLITICIANS), politicianCrud.create);
 
 /**
  * @openapi
@@ -161,8 +170,8 @@ router.post("/admin/reference-data/politicians", ...adminOnly, politicianCrud.cr
  *       200: { description: Politician deleted }
  *       404: { description: Politician not found }
  */
-router.patch("/admin/reference-data/politicians/:id", ...adminOnly, politicianCrud.update);
-router.delete("/admin/reference-data/politicians/:id", ...adminOnly, politicianCrud.remove);
+router.patch("/admin/reference-data/politicians/:id", ...siteGuard(PERMISSIONS.SITE_POLITICIANS), politicianCrud.update);
+router.delete("/admin/reference-data/politicians/:id", ...siteGuard(PERMISSIONS.SITE_POLITICIANS), politicianCrud.remove);
 
 /**
  * @openapi
@@ -180,7 +189,7 @@ router.delete("/admin/reference-data/politicians/:id", ...adminOnly, politicianC
  *       201: { description: Party created }
  *       400: { description: Invalid party details }
  */
-router.post("/admin/reference-data/parties", ...adminOnly, partyCrud.create);
+router.post("/admin/reference-data/parties", ...siteGuard(PERMISSIONS.SITE_PARTIES), partyCrud.create);
 
 /**
  * @openapi
@@ -215,8 +224,8 @@ router.post("/admin/reference-data/parties", ...adminOnly, partyCrud.create);
  *       200: { description: Party deleted }
  *       404: { description: Party not found }
  */
-router.patch("/admin/reference-data/parties/:id", ...adminOnly, partyCrud.update);
-router.delete("/admin/reference-data/parties/:id", ...adminOnly, partyCrud.remove);
+router.patch("/admin/reference-data/parties/:id", ...siteGuard(PERMISSIONS.SITE_PARTIES), partyCrud.update);
+router.delete("/admin/reference-data/parties/:id", ...siteGuard(PERMISSIONS.SITE_PARTIES), partyCrud.remove);
 
 /**
  * @openapi
@@ -234,7 +243,7 @@ router.delete("/admin/reference-data/parties/:id", ...adminOnly, partyCrud.remov
  *       201: { description: State or union territory created }
  *       400: { description: Invalid details }
  */
-router.post("/admin/reference-data/states", ...adminOnly, stateCrud.create);
+router.post("/admin/reference-data/states", ...siteGuard(PERMISSIONS.SITE_STATES), stateCrud.create);
 
 /**
  * @openapi
@@ -269,8 +278,8 @@ router.post("/admin/reference-data/states", ...adminOnly, stateCrud.create);
  *       200: { description: State or union territory deleted }
  *       404: { description: Record not found }
  */
-router.patch("/admin/reference-data/states/:id", ...adminOnly, stateCrud.update);
-router.delete("/admin/reference-data/states/:id", ...adminOnly, stateCrud.remove);
+router.patch("/admin/reference-data/states/:id", ...siteGuard(PERMISSIONS.SITE_STATES), stateCrud.update);
+router.delete("/admin/reference-data/states/:id", ...siteGuard(PERMISSIONS.SITE_STATES), stateCrud.remove);
 
 /**
  * @openapi
@@ -294,7 +303,7 @@ router.delete("/admin/reference-data/states/:id", ...adminOnly, stateCrud.remove
  *       200: { description: Parliament data updated }
  *       400: { description: Parliament details are required }
  */
-router.put("/admin/reference-data/parliament", ...adminOnly, updateParliament);
+router.put("/admin/reference-data/parliament", ...siteGuard(PERMISSIONS.SITE_PARLIAMENT), updateParliament);
 
 /**
  * @openapi
@@ -324,7 +333,7 @@ router.put("/admin/reference-data/parliament", ...adminOnly, updateParliament);
  *       400: { description: Invalid schedule items }
  *       404: { description: Invalid schedule type }
  */
-router.put("/admin/reference-data/schedule/:type", ...adminOnly, updateSchedule);
+router.put("/admin/reference-data/schedule/:type", ...siteGuard(PERMISSIONS.SITE_SCHEDULES), updateSchedule);
 
 /**
  * @openapi
@@ -348,7 +357,7 @@ router.put("/admin/reference-data/schedule/:type", ...adminOnly, updateSchedule)
  *       200: { description: Vidhan Sabha data updated }
  *       400: { description: Invalid Vidhan Sabha records }
  */
-router.put("/admin/reference-data/vidhan-sabhas", ...adminOnly, updateVidhanSabhas);
+router.put("/admin/reference-data/vidhan-sabhas", ...siteGuard(PERMISSIONS.SITE_VIDHAN_SABHAS), updateVidhanSabhas);
 
 /**
  * @openapi
@@ -380,7 +389,7 @@ router.put("/admin/reference-data/vidhan-sabhas", ...adminOnly, updateVidhanSabh
  *       400: { description: Widget data is missing or invalid }
  *       404: { description: Home widget key not found }
  */
-router.put("/admin/reference-data/home-widgets/:key", ...adminOnly, updateHomeWidget);
+router.put("/admin/reference-data/home-widgets/:key", authenticate, authorizeWidget, updateHomeWidget);
 /**
  * @openapi
  * /api/admin/reference-data/page-profiles:
@@ -409,6 +418,6 @@ router.put("/admin/reference-data/home-widgets/:key", ...adminOnly, updateHomeWi
  *       401: { description: Authentication required }
  *       403: { description: Administrator role required }
  */
-router.put("/admin/reference-data/page-profiles", ...adminOnly, updatePageProfiles);
+router.put("/admin/reference-data/page-profiles", ...siteGuard(PERMISSIONS.SITE_PAGE_PROFILES), updatePageProfiles);
 
 module.exports = router;

@@ -2,6 +2,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import ToastProvider from "@/components/common/ToastProvider";
+import AuthorWorkspaceShell from "@/components/author/AuthorWorkspaceShell";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +68,9 @@ export default async function RootLayout({ children }) {
       <body className="min-h-full flex flex-col bg-background text-on-background font-body-md">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }} />
         <ToastProvider />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <AuthorWorkspaceShell>{children}</AuthorWorkspaceShell>
+        </AuthProvider>
       </body>
     </html>
   );

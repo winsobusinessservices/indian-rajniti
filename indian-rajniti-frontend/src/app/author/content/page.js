@@ -4,6 +4,7 @@ import Footer from "@/components/layout/Footer";
 import RequireContributorRole from "@/components/author/RequireContributorRole";
 import MyPostsClient from "@/components/author/MyPostsClient";
 import { getBreakingNews } from "@/features/news/news.api";
+import { PERMISSIONS } from "@/lib/permissions";
 
 export const metadata = { title: "My Content" };
 
@@ -15,7 +16,7 @@ export default async function AuthorContentPage() {
       <BreakingNews text={breakingNews} />
       <Header />
       <main className="w-full bg-background flex-grow">
-        <RequireContributorRole>
+        <RequireContributorRole roles={["AUTHOR", "EDITOR", "ADMIN", "INVESTOR"]} permissions={[PERMISSIONS.MY_CONTENT]}>
           <MyPostsClient />
         </RequireContributorRole>
       </main>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import AuthTextField from "@/components/auth/AuthTextField";
 import { authApi } from "@/lib/api";
+import { PERMISSIONS, PERMISSION_GROUPS, ROLE_DEFAULT_PERMISSIONS } from "@/lib/permissions";
 
 const ROLES = [
   { value: "AUTHOR", label: "Author" },
@@ -87,7 +88,7 @@ function DocumentUploadField({ name, icon, label, required, selectedFile, onChan
   );
 }
 
-const initialForm = { email: "", role: "AUTHOR" };
+const initialForm = { email: "", role: "AUTHOR", permissions: ROLE_DEFAULT_PERMISSIONS.AUTHOR };
 
 export default function CreateTeamMemberClient({ onCreated }) {
   const [form, setForm] = useState(initialForm);
@@ -108,7 +109,8 @@ export default function CreateTeamMemberClient({ onCreated }) {
   };
 
   const handleRoleChange = (e) => {
-    setForm((prev) => ({ ...prev, role: e.target.value }));
+    const role = e.target.value;
+    setForm((prev) => ({ ...prev, role, permissions: ROLE_DEFAULT_PERMISSIONS[role] || [] }));
     // Switching roles changes which documents are required/relevant — drop
     // any already-picked files that no longer apply rather than silently
     // submitting them.
@@ -125,6 +127,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
       const fd = new FormData();
       fd.append("email", form.email.trim());
       fd.append("role", form.role);
+      fd.append("permissions", JSON.stringify(form.permissions));
       requiredDocs.forEach((field) => fd.append(field, files[field]));
       const data = await authApi.assignRole(fd);
       setSuccess(`${data.message}. They've been emailed about the change.`);
@@ -138,9 +141,31 @@ export default function CreateTeamMemberClient({ onCreated }) {
     }
   };
 
+  const togglePermission = (permission) => {
+    setForm((prev) => {
+      const selected = prev.permissions.includes(permission);
+      let permissions = selected
+        ? prev.permissions.filter((item) => item !== permission)
+        : [...prev.permissions, permission];
+      const siteDataChildren = PERMISSION_GROUPS[2].permissions.map(([value]) => value);
+      if (!selected && siteDataChildren.includes(permission) && !permissions.includes(PERMISSIONS.MANAGE_SITE_DATA)) {
+        permissions.push(PERMISSIONS.MANAGE_SITE_DATA);
+      }
+      if (permission === PERMISSIONS.MANAGE_SITE_DATA && selected) {
+        permissions = permissions.filter((item) => !siteDataChildren.includes(item));
+      }
+      return { ...prev, permissions };
+    });
+  };
+
   return (
-    <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start ">
-   
+    <form
+      onSubmit={handleSubmit}
+      inert={loading ? "" : undefined}
+      aria-busy={loading}
+      className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12"
+    >
+      <div className="space-y-6 lg:col-span-5">
         <div className={sectionClass}>
           <SectionTitle icon="fa-user-check">Account Email</SectionTitle>
           <div className="space-y-5">
@@ -160,6 +185,27 @@ export default function CreateTeamMemberClient({ onCreated }) {
               They&apos;ll be emailed that their role has changed.
             </p>
           </div>
+        </div>
+
+        <div className={sectionClass}>
+          <SectionTitle icon="fa-user-tag">Role</SectionTitle>
+          <select
+            name="role"
+            value={form.role}
+            onChange={handleRoleChange}
+            className="w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2.5 text-on-surface transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 font-body-md"
+          >
+            {ROLES.map((role) => (
+              <option key={role.value} value={role.value}>
+                {role.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-3 text-xs font-body-md text-on-surface-variant">
+            {form.role === "AUTHOR" && "Authors need a PAN and Aadhar document on file."}
+            {form.role === "EDITOR" && "Editors need PAN, Aadhar, and a graduation certificate on file."}
+            {form.role === "INVESTOR" && "Investors don't require any documents."}
+          </p>
         </div>
 
         {requiredDocs.length > 0 && (
@@ -182,32 +228,43 @@ export default function CreateTeamMemberClient({ onCreated }) {
             </p>
           </div>
         )}
-  
+      </div>
 
-      <div className="space-y-5">
+      <div className="space-y-6 lg:col-span-7">
         <div className={sectionClass}>
-          <SectionTitle icon="fa-user-tag">Role</SectionTitle>
-          <select
-            name="role"
-            value={form.role}
-            onChange={handleRoleChange}
-            className="w-full border border-outline-variant/30 bg-surface-container-low rounded px-3 py-2.5 text-on-surface focus:border-primary focus:outline-none font-body-md transition-colors"
-          >
-            {ROLES.map((role) => (
-              <option key={role.value} value={role.value}>
-                {role.label}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs font-body-md text-on-surface-variant mt-3">
-            {form.role === "AUTHOR" && "Authors need a PAN and Aadhar document on file."}
-            {form.role === "EDITOR" && "Editors need PAN, Aadhar, and a graduation certificate on file."}
-            {form.role === "INVESTOR" && "Investors don't require any documents."}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 [&_h2]:mb-0">
+            <SectionTitle icon="fa-key">Privileges</SectionTitle>
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 font-label-md text-[11px] text-primary">
+              {form.permissions.length} selected
+            </span>
+          </div>
+          <p className="mb-4 text-xs font-body-md text-on-surface-variant">
+            Select only the tools this team member should be able to open and use.
           </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+            {PERMISSION_GROUPS.map((group) => (
+              <fieldset key={group.label} className="min-w-0 rounded-lg border border-outline-variant/25 bg-surface p-3">
+                <legend className="px-1 font-label-md text-xs font-semibold text-primary">{group.label}</legend>
+                <div className="space-y-2">
+                  {group.permissions.map(([value, label]) => (
+                    <label key={value} className="flex min-h-9 cursor-pointer items-start gap-2 rounded-md p-2 transition-colors hover:bg-surface-container">
+                      <input
+                        type="checkbox"
+                        checked={form.permissions.includes(value)}
+                        onChange={() => togglePermission(value)}
+                        className="mt-0.5 h-4 w-4 accent-primary"
+                      />
+                      <span className="min-w-0 break-words font-body-md text-xs leading-5 text-on-surface-variant">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ))}
+          </div>
         </div>
 
         <div className={sectionClass}>
-          <SectionTitle icon="fa-cloud-arrow-up">Assign Role</SectionTitle>
+          <SectionTitle icon="fa-cloud-arrow-up">Review and Assign</SectionTitle>
 
           {error && (
             <p className="flex items-start gap-1.5 text-sm text-error font-body-md mb-3" role="alert">

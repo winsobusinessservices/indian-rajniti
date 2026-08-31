@@ -24,15 +24,15 @@ const {
   getContentStatus,
   reviewContent,
 } = require("../controllers/content/content.controller");
-const { authenticate, authorize } = require("../middleware/auth.middleware");
+const { authenticate, authorizePermission, authorizeRoleOrPermission } = require("../middleware/auth.middleware");
+const { PERMISSIONS } = require("../config/permissions");
 const { uploadFields } = require("../middleware/upload.middleware");
 
-const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
-const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
-// Investors get the same site-wide, every-status visibility as moderators
-// (for their read-only totals dashboard) but only on the /history GET —
-// never on /review or any write route, which stay MODERATOR_ROLES-only.
-const HISTORY_VIEW_ROLES = [...MODERATOR_ROLES, "INVESTOR"];
+const CREATE_PERMISSION = {
+  ARTICLE: PERMISSIONS.CREATE_ARTICLE,
+  BLOG: PERMISSIONS.CREATE_BLOG,
+  VIDEO: PERMISSIONS.CREATE_VIDEO,
+};
 
 const setContentType = (type) => (req, res, next) => {
   req.contentType = type;
@@ -53,17 +53,17 @@ function buildResourceRoutes(resource, type) {
   const withType = setContentType(type);
   const withUpload = uploadFields(mediaFieldsFor(type));
 
-  router.post(`/${resource}`, authenticate, authorize(...CONTRIBUTOR_ROLES), withType, withUpload, createContent);
-  router.get(`/${resource}`, authenticate, authorize(...CONTRIBUTOR_ROLES), withType, listContent);
+  router.post(`/${resource}`, authenticate, authorizePermission(CREATE_PERMISSION[type]), withType, withUpload, createContent);
+  router.get(`/${resource}`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT), withType, listContent);
   // Must come before /:id — otherwise Express would match "history" as the
   // :id param and this route would never be reached.
-  router.get(`/${resource}/history`, authenticate, authorize(...HISTORY_VIEW_ROLES), withType, listAllContent);
-  router.get(`/${resource}/:id`, authenticate, authorize(...CONTRIBUTOR_ROLES), withType, getContentById);
-  router.put(`/${resource}/:id`, authenticate, authorize(...CONTRIBUTOR_ROLES), withType, withUpload, updateContent);
-  router.delete(`/${resource}/:id`, authenticate, authorize(...CONTRIBUTOR_ROLES), withType, deleteContent);
-  router.post(`/${resource}/:id/submit`, authenticate, authorize(...CONTRIBUTOR_ROLES), withType, submitContent);
-  router.get(`/${resource}/:id/status`, authenticate, authorize(...CONTRIBUTOR_ROLES), withType, getContentStatus);
-  router.post(`/${resource}/:id/review`, authenticate, authorize(...MODERATOR_ROLES), withType, reviewContent);
+  router.get(`/${resource}/history`, authenticate, authorizeRoleOrPermission(["INVESTOR"], PERMISSIONS.CONTENT_HISTORY, PERMISSIONS.REVIEW_CONTENT), withType, listAllContent);
+  router.get(`/${resource}/:id`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT, PERMISSIONS.REVIEW_CONTENT, PERMISSIONS.CONTENT_HISTORY), withType, getContentById);
+  router.put(`/${resource}/:id`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT), withType, withUpload, updateContent);
+  router.delete(`/${resource}/:id`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT, PERMISSIONS.REVIEW_CONTENT), withType, deleteContent);
+  router.post(`/${resource}/:id/submit`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT), withType, submitContent);
+  router.get(`/${resource}/:id/status`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT, PERMISSIONS.REVIEW_CONTENT), withType, getContentStatus);
+  router.post(`/${resource}/:id/review`, authenticate, authorizePermission(PERMISSIONS.REVIEW_CONTENT), withType, reviewContent);
 
   return router;
 }

@@ -4,8 +4,7 @@ import Footer from "@/components/layout/Footer";
 import RequireContributorRole from "@/components/author/RequireContributorRole";
 import ContentHistoryClient from "@/components/author/ContentHistoryClient";
 import { getBreakingNews } from "@/features/news/news.api";
-
-const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
+import { PERMISSIONS } from "@/lib/permissions";
 
 export const metadata = { title: "Content History" };
 
@@ -17,7 +16,7 @@ export default async function ContentHistoryPage() {
       <BreakingNews text={breakingNews} />
       <Header />
       <main className="w-full bg-background flex-grow">
-        <RequireContributorRole roles={MODERATOR_ROLES} roleLabel="an Editor or Admin">
+        <RequireContributorRole roles={["AUTHOR", "EDITOR", "ADMIN", "INVESTOR"]} permissions={[PERMISSIONS.CONTENT_HISTORY]}>
           <ContentHistoryClient />
         </RequireContributorRole>
       </main>

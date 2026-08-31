@@ -24,7 +24,8 @@ const {
   listApplicationsForJob,
   reviewApplication,
 } = require("../controllers/careers/careers.controller");
-const { authenticate, authorize } = require("../middleware/auth.middleware");
+const { authenticate, authorize, authorizePermission } = require("../middleware/auth.middleware");
+const { PERMISSIONS } = require("../config/permissions");
 const { uploadCareerApplicationDocuments } = require("../middleware/upload.middleware");
 
 const MEMBER_ROLES = ["USER", "AUTHOR", "EDITOR", "ADMIN", "INVESTOR"];
@@ -63,7 +64,7 @@ router.get("/careers", listJobs);
  *       403:
  *         description: Caller is not an admin
  */
-router.get("/careers/manage", authenticate, authorize("ADMIN"), listAllJobsForAdmin);
+router.get("/careers/manage", authenticate, authorizePermission(PERMISSIONS.MANAGE_CAREERS), listAllJobsForAdmin);
 
 /**
  * @openapi
@@ -98,7 +99,7 @@ router.get("/careers/manage", authenticate, authorize("ADMIN"), listAllJobsForAd
  *       403:
  *         description: Caller is not an admin
  */
-router.post("/careers", authenticate, authorize("ADMIN"), createJob);
+router.post("/careers", authenticate, authorizePermission(PERMISSIONS.MANAGE_CAREERS), createJob);
 
 /**
  * @openapi
@@ -159,7 +160,7 @@ router.get("/careers/:slug", getJobBySlug);
  *       404:
  *         description: Job posting not found
  */
-router.patch("/careers/:id", authenticate, authorize("ADMIN"), updateJob);
+router.patch("/careers/:id", authenticate, authorizePermission(PERMISSIONS.MANAGE_CAREERS), updateJob);
 
 /**
  * @openapi
@@ -194,7 +195,7 @@ router.patch("/careers/:id", authenticate, authorize("ADMIN"), updateJob);
  *       404:
  *         description: Job posting not found
  */
-router.patch("/careers/:id/status", authenticate, authorize("ADMIN"), setJobStatus);
+router.patch("/careers/:id/status", authenticate, authorizePermission(PERMISSIONS.MANAGE_CAREERS), setJobStatus);
 
 /**
  * @openapi
@@ -218,7 +219,7 @@ router.patch("/careers/:id/status", authenticate, authorize("ADMIN"), setJobStat
  *       404:
  *         description: Job posting not found
  */
-router.delete("/careers/:id", authenticate, authorize("ADMIN"), deleteJob);
+router.delete("/careers/:id", authenticate, authorizePermission(PERMISSIONS.MANAGE_CAREERS), deleteJob);
 
 /**
  * @openapi
@@ -304,7 +305,7 @@ router.get("/careers/:id/my-application", authenticate, authorize(...MEMBER_ROLE
  *       404:
  *         description: Job posting not found
  */
-router.get("/careers/:id/applications", authenticate, authorize("ADMIN"), listApplicationsForJob);
+router.get("/careers/:id/applications", authenticate, authorizePermission(PERMISSIONS.MANAGE_CAREERS), listApplicationsForJob);
 
 /**
  * @openapi
@@ -344,6 +345,6 @@ router.get("/careers/:id/applications", authenticate, authorize("ADMIN"), listAp
  *       404:
  *         description: Application not found
  */
-router.post("/careers/:id/applications/:appId/review", authenticate, authorize("ADMIN"), reviewApplication);
+router.post("/careers/:id/applications/:appId/review", authenticate, authorizePermission(PERMISSIONS.MANAGE_CAREERS), reviewApplication);
 
 module.exports = router;
