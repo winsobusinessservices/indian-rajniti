@@ -210,7 +210,16 @@ export default function AuthorWorkspaceShell({ children }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const showTools = !loading && (CONTRIBUTOR_ROLES.includes(user?.role) || (user?.role === "INVESTOR" && user?.permissions?.length > 0));
+
+  useEffect(() => {
+    const desktopQuery = window.matchMedia("(min-width: 64rem)");
+    const syncDesktop = () => setIsDesktop(desktopQuery.matches);
+    syncDesktop();
+    desktopQuery.addEventListener("change", syncDesktop);
+    return () => desktopQuery.removeEventListener("change", syncDesktop);
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -228,8 +237,19 @@ export default function AuthorWorkspaceShell({ children }) {
   if (!showTools) return children;
 
   return (
-    <div className="flex min-h-screen flex-col lg:pl-72">
-      <aside className="fixed inset-y-0 left-0 z-[220] hidden w-72 shadow-xl lg:block">
+    <div className="workspace-shell flex min-h-screen flex-col lg:flex-row" style={{ width: "100%" }}>
+      <aside
+        className="workspace-sidebar sticky top-0 z-[220] hidden h-screen w-72 shrink-0 self-start overflow-hidden shadow-xl lg:block"
+        style={isDesktop ? {
+          display: "block",
+          position: "fixed",
+          inset: "0 auto 0 0",
+          zIndex: 220,
+          width: "18rem",
+          height: "100dvh",
+          overflow: "hidden",
+        } : { display: "none" }}
+      >
         <SidebarContent user={user} pathname={pathname} />
       </aside>
 
@@ -250,7 +270,12 @@ export default function AuthorWorkspaceShell({ children }) {
         </div>
       )}
 
-      {children}
+      <div
+        className="workspace-main flex min-h-screen min-w-0 flex-1 flex-col"
+        style={isDesktop ? { width: "calc(100% - 18rem)", marginLeft: "18rem" } : { width: "100%", marginLeft: 0 }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

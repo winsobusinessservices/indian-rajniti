@@ -7,6 +7,38 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Contributor workspace layout. These named rules keep the fixed desktop
+   rail and its content offset together and avoid relying on generated
+   arbitrary-value utilities during production deployment. */
+.workspace-shell {
+  width: 100%;
+}
+
+.workspace-sidebar {
+  display: none;
+}
+
+.workspace-main {
+  width: 100%;
+}
+
+@media (min-width: 64rem) {
+  .workspace-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 220;
+    display: block;
+    width: 18rem;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .workspace-main {
+    width: calc(100% - 18rem);
+    margin-left: 18rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
