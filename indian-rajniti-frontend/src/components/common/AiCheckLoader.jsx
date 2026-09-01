@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+
 // A fan of 9 rotated tracks (0deg to 160deg in 20deg steps) with a ball
 // bouncing down each one, staggered by 0.2s per track — recolored in
 // globals.css to the site's own primary-navy brand color. Shown as a full
@@ -15,7 +17,7 @@
 const ROTATIONS_DEG = [0, 20, 40, 60, 80, 100, 120, 140, 160];
 
 export default function AiCheckLoader({ label = "Checking your content with AI..." }) {
-  return (
+  const loader = (
     <div className="fixed inset-0 z-[300] flex flex-col items-center justify-center gap-6 bg-surface/90 backdrop-blur-sm">
       {/* Every track/rail inside is `position: absolute`, which gives this
           div zero intrinsic size — without an explicit size here, flex-col's
@@ -35,4 +37,10 @@ export default function AiCheckLoader({ label = "Checking your content with AI..
       <p className="font-label-md text-sm text-on-surface-variant animate-pulse">{label}</p>
     </div>
   );
+
+  // The author workspace main panel creates its own stacking context. If the
+  // overlay stays inside it, even a high z-index cannot cover the sidebar,
+  // which is a sibling stacking context. Portaling to body makes the AI check
+  // the only visible UI across the entire viewport.
+  return typeof document === "undefined" ? null : createPortal(loader, document.body);
 }
