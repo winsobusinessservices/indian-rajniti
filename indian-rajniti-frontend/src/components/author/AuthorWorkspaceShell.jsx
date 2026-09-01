@@ -9,7 +9,7 @@ import SearchBox from "@/components/search/SearchBox";
 import { slugify } from "@/lib/slugify";
 import { PERMISSIONS, hasPermission } from "@/lib/permissions";
 
-const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
+const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"];
 
 const NAV_GROUPS = [
   {
@@ -45,7 +45,7 @@ const NAV_GROUPS = [
   },
 ];
 
-const ROLE_LABELS = { AUTHOR: "Author", EDITOR: "Editor", ADMIN: "Admin" };
+const ROLE_LABELS = { USER: "User", AUTHOR: "Author", EDITOR: "Editor", ADMIN: "Admin", SUBADMIN: "Subadmin", INVESTOR: "Investor" };
 
 const WEBSITE_ICONS = {
   "/": "fa-house",
@@ -67,7 +67,27 @@ function isCurrentPath(pathname, href) {
   return pathname === href;
 }
 
+function orderedNavGroups(role) {
+  const [workspace, create, editorial, administration] = NAV_GROUPS;
+  if (!["ADMIN", "SUBADMIN", "EDITOR"].includes(role)) return NAV_GROUPS;
+
+  const dashboard = { ...workspace, items: workspace.items.filter((item) => item.href === "/author/dashboard") };
+  const content = {
+    label: "Content",
+    items: [
+      ...workspace.items.filter((item) => item.href !== "/author/dashboard"),
+      ...create.items,
+    ],
+  };
+
+  return role === "EDITOR"
+    ? [dashboard, editorial, content, administration]
+    : [dashboard, administration, editorial, content];
+}
+
 function SidebarContent({ user, pathname, onNavigate }) {
+  const [openMenus, setOpenMenus] = useState({ website: false, more: false });
+  const toggleMenu = (menu) => setOpenMenus((current) => ({ ...current, [menu]: !current[menu] }));
   const initials = (user?.name || ROLE_LABELS[user?.role] || "User")
     .split(" ")
     .map((part) => part[0])
@@ -97,7 +117,7 @@ function SidebarContent({ user, pathname, onNavigate }) {
           inputClassName="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/50 focus:border-white/50 focus:outline-none"
         />
 
-        {NAV_GROUPS.map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || hasPermission(user, item.permission)) }))
+        {orderedNavGroups(user.role).map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || hasPermission(user, item.permission)) }))
           .filter((group) => group.items.length > 0)
           .map((group) => (
           <div key={group.label} className="mb-5 last:mb-0">
@@ -130,10 +150,16 @@ function SidebarContent({ user, pathname, onNavigate }) {
         ))}
 
         <div className="mb-2 border-t border-white/15 pt-5">
-          <p className="mb-2 px-3 font-label-md text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+          <button
+            type="button"
+            onClick={() => toggleMenu("website")}
+            aria-expanded={openMenus.website}
+            className="mb-2 flex w-full items-center justify-between rounded-md px-3 py-2 font-label-md text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
             Website
-          </p>
-          <div className="space-y-1">
+            <i className={`fa-solid fa-chevron-down text-[9px] transition-transform ${openMenus.website ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+          {openMenus.website && <div className="space-y-1">
             {NAV_LINKS.map((item) => {
               const active = pathname === item.href;
               return (
@@ -154,14 +180,20 @@ function SidebarContent({ user, pathname, onNavigate }) {
                 </Link>
               );
             })}
-          </div>
+          </div>}
         </div>
 
         <div className="mb-2 border-t border-white/15 pt-5">
-          <p className="mb-2 px-3 font-label-md text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">
+          <button
+            type="button"
+            onClick={() => toggleMenu("more")}
+            aria-expanded={openMenus.more}
+            className="mb-2 flex w-full items-center justify-between rounded-md px-3 py-2 font-label-md text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+          >
             More
-          </p>
-          <div className="space-y-1">
+            <i className={`fa-solid fa-chevron-down text-[9px] transition-transform ${openMenus.more ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+          {openMenus.more && <div className="space-y-1">
             {SIDEBAR_CATEGORIES.more.map((item) => {
               const label = typeof item === "string" ? item : item.label;
               const href = typeof item === "string" ? `/${slugify(label)}` : item.href;
@@ -176,7 +208,7 @@ function SidebarContent({ user, pathname, onNavigate }) {
               View all
               <i className="fa-solid fa-arrow-right text-[10px]" aria-hidden="true" />
             </Link>
-          </div>
+          </div>}
         </div>
       </nav>
 
@@ -211,7 +243,7 @@ export default function AuthorWorkspaceShell({ children }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const showTools = !loading && (CONTRIBUTOR_ROLES.includes(user?.role) || (user?.role === "INVESTOR" && user?.permissions?.length > 0));
+  const showTools = !loading && Boolean(user) && (CONTRIBUTOR_ROLES.includes(user.role) || user.permissions?.length > 0);
 
   useEffect(() => {
     const desktopQuery = window.matchMedia("(min-width: 64rem)");

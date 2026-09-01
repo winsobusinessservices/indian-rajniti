@@ -3,6 +3,7 @@ import NewsCard from "@/components/news/NewsCard";
 import NewsAsideLeft from "@/components/news/NewsAsideLeft";
 import NewsAsideRight from "@/components/news/NewsAsideRight";
 import Avatar from "@/components/common/Avatar";
+import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 
 const TYPE_BADGE = {
   state: "State Politics",
@@ -161,7 +162,34 @@ export default function CategoryDetailView({ info }) {
               History &amp; Achievements
             </h2>
 
+            {info.profile.image && (
+              <ImagePlaceholder
+                image={info.profile.image}
+                alt={`${info.label} landscape`}
+                className="mb-6 aspect-[16/7] w-full rounded-lg"
+                sizes="(min-width: 1024px) 60vw, 100vw"
+              />
+            )}
+
             <div className="flex flex-wrap gap-3 mb-6">
+              {info.profile.capital && (
+                <span className="px-3 py-1.5 bg-surface-container-high text-on-surface text-xs font-label-md rounded-sm border border-outline-variant/20">
+                  <i className="fa-solid fa-city text-primary mr-2" />
+                  Capital: {info.profile.capital}
+                </span>
+              )}
+              {info.profile.currentCmName && (
+                <span className="px-3 py-1.5 bg-surface-container-high text-on-surface text-xs font-label-md rounded-sm border border-outline-variant/20">
+                  <i className="fa-solid fa-user-tie text-primary mr-2" />
+                  Current CM: {info.profile.currentCmName}
+                </span>
+              )}
+              {info.profile.oppositionParty && (
+                <span className="px-3 py-1.5 bg-surface-container-high text-on-surface text-xs font-label-md rounded-sm border border-outline-variant/20">
+                  <i className="fa-solid fa-people-group text-primary mr-2" />
+                  Opposition: {info.profile.oppositionParty}
+                </span>
+              )}
               {info.profile.founded && (
                 <span className="px-3 py-1.5 bg-surface-container-high text-on-surface text-xs font-label-md rounded-sm border border-outline-variant/20">
                   <i className="fa-solid fa-flag text-primary mr-2" />

@@ -9,10 +9,12 @@ import { PERMISSIONS, PERMISSION_GROUPS, ROLE_DEFAULT_PERMISSIONS } from "@/lib/
 
 // Only these roles count as "the team" — plain USER accounts (public
 // self-signups/readers) aren't something an admin manages here.
-const TEAM_ROLES = ["ADMIN", "EDITOR", "AUTHOR", "INVESTOR"];
+const TEAM_ROLES = ["ADMIN", "SUBADMIN", "EDITOR", "AUTHOR", "INVESTOR"];
+const SUBADMIN_MANAGEABLE_ROLES = ["EDITOR", "AUTHOR", "INVESTOR"];
 
 const ROLE_BADGE = {
   ADMIN: "bg-primary text-white",
+  SUBADMIN: "bg-secondary text-white",
   EDITOR: "bg-primary text-white",
   AUTHOR: "bg-primary text-white",
   INVESTOR: "bg-primary text-white",
@@ -45,6 +47,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
   const [rowError, setRowError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const editableRoles = user?.role === "ADMIN" ? TEAM_ROLES : SUBADMIN_MANAGEABLE_ROLES;
 
   useEffect(() => {
     // Refetching intentionally enters a loading state when the refresh key changes.
@@ -209,7 +212,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                           title={isSelf ? "You cannot change your own role" : undefined}
                           className={`${fieldClass} disabled:opacity-60`}
                         >
-                          {TEAM_ROLES.map((role) => (
+                          {editableRoles.map((role) => (
                             <option key={role} value={role}>
                               {role}
                             </option>
@@ -285,10 +288,12 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                   {isEditing && (
                     <tr className="bg-surface-container-low/70">
                       <td colSpan={6} className="border-t border-outline-variant/15 px-4 py-4">
-                        {editForm.role === "ADMIN" ? (
+                        {user?.role !== "ADMIN" || editForm.role === "ADMIN" ? (
                           <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary">
                             <i className="fa-solid fa-shield-halved" aria-hidden="true" />
-                            Admin accounts always have every privilege.
+                            {editForm.role === "ADMIN"
+                              ? "Admin accounts always have every privilege."
+                              : "Subadmins can assign only the standard privileges for this role."}
                           </div>
                         ) : (
                           <div>

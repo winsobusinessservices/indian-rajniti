@@ -4,12 +4,14 @@ import { useState } from "react";
 import AuthTextField from "@/components/auth/AuthTextField";
 import { authApi } from "@/lib/api";
 import { PERMISSIONS, PERMISSION_GROUPS, ROLE_DEFAULT_PERMISSIONS } from "@/lib/permissions";
+import { useAuth } from "@/context/AuthContext";
 
 const ROLES = [
   { value: "AUTHOR", label: "Author" },
   { value: "EDITOR", label: "Editor" },
   { value: "INVESTOR", label: "Investor" },
 ];
+const SUBADMIN_ROLE = { value: "SUBADMIN", label: "Subadmin" };
 
 // Mirrors REQUIRED_DOCS_BY_ROLE in the backend's auth.controller.js — kept
 // in sync manually since it's a small, stable list; this only drives which
@@ -19,6 +21,7 @@ const REQUIRED_DOCS_BY_ROLE = {
   AUTHOR: ["panDocument", "aadharDocument"],
   EDITOR: ["panDocument", "aadharDocument", "graduationCertificate"],
   INVESTOR: [],
+  SUBADMIN: [],
 };
 
 const DOCUMENT_FIELDS = [
@@ -91,6 +94,8 @@ function DocumentUploadField({ name, icon, label, required, selectedFile, onChan
 const initialForm = { email: "", role: "AUTHOR", permissions: ROLE_DEFAULT_PERMISSIONS.AUTHOR };
 
 export default function CreateTeamMemberClient({ onCreated }) {
+  const { user } = useAuth();
+  const assignableRoles = user?.role === "ADMIN" ? [...ROLES, SUBADMIN_ROLE] : ROLES;
   const [form, setForm] = useState(initialForm);
   const [files, setFiles] = useState({});
   const [error, setError] = useState("");
@@ -195,7 +200,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
             onChange={handleRoleChange}
             className="w-full rounded-lg border border-outline-variant/30 bg-surface px-3 py-2.5 text-on-surface transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15 font-body-md"
           >
-            {ROLES.map((role) => (
+            {assignableRoles.map((role) => (
               <option key={role.value} value={role.value}>
                 {role.label}
               </option>
@@ -205,6 +210,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
             {form.role === "AUTHOR" && "Authors need a PAN and Aadhar document on file."}
             {form.role === "EDITOR" && "Editors need PAN, Aadhar, and a graduation certificate on file."}
             {form.role === "INVESTOR" && "Investors don't require any documents."}
+            {form.role === "SUBADMIN" && "Subadmins can manage Site Data and Author, Editor, or Investor accounts."}
           </p>
         </div>
 
@@ -239,7 +245,9 @@ export default function CreateTeamMemberClient({ onCreated }) {
             </span>
           </div>
           <p className="mb-4 text-xs font-body-md text-on-surface-variant">
-            Select only the tools this team member should be able to open and use.
+            {user?.role !== "ADMIN"
+              ? "Author, Editor, and Investor accounts receive their standard role privileges."
+              : "Select only the tools this team member should be able to open and use."}
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
             {PERMISSION_GROUPS.map((group) => (
@@ -252,6 +260,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
                         type="checkbox"
                         checked={form.permissions.includes(value)}
                         onChange={() => togglePermission(value)}
+                        disabled={user?.role !== "ADMIN"}
                         className="mt-0.5 h-4 w-4 accent-primary"
                       />
                       <span className="min-w-0 break-words font-body-md text-xs leading-5 text-on-surface-variant">{label}</span>

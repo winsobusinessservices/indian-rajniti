@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { slugify } from "@/lib/slugify";
 import Avatar from "@/components/common/Avatar";
+import { slugify } from "@/lib/slugify";
 
-export default function PartyCard({ name, abbreviation, founded, photo, photoFallback }) {
+export default function PartyCard({ name, abbreviation, founded, photo, photoFallback, href }) {
+  const partyHref = href || `/category/${slugify(abbreviation || name)}`;
+
   return (
     <Link
-      href={`/category/${slugify(abbreviation)}`}
+      href={partyHref}
       className="flex flex-col items-center text-center group cursor-pointer bg-surface p-4 rounded-lg border border-outline-variant/20 hover:shadow-md transition-all"
     >
       <Avatar

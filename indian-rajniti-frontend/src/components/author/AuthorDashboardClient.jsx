@@ -101,7 +101,7 @@ function PointsCard({ points, approvedByType }) {
   );
 }
 
-const ROLE_LABEL = { AUTHOR: "Author", EDITOR: "Editor", ADMIN: "Admin", INVESTOR:"Investor" };
+const ROLE_LABEL = { AUTHOR: "Author", EDITOR: "Editor", ADMIN: "Admin", SUBADMIN: "Subadmin", INVESTOR:"Investor" };
 
 export default function AuthorDashboardClient() {
   const { user } = useAuth();
@@ -111,6 +111,9 @@ export default function AuthorDashboardClient() {
   const canReview = hasPermission(user, PERMISSIONS.REVIEW_CONTENT);
   const canViewHistory = hasPermission(user, PERMISSIONS.CONTENT_HISTORY);
   const canViewOwnContent = hasPermission(user, PERMISSIONS.MY_CONTENT);
+  const canManageSiteData = hasPermission(user, PERMISSIONS.MANAGE_SITE_DATA);
+  const canManageTeam = hasPermission(user, PERMISSIONS.TEAM_MEMBERS);
+  const canManageCategories = hasPermission(user, PERMISSIONS.MANAGE_CATEGORIES);
   const visibleCreateCards = CREATE_CARDS.filter((card) =>
     hasPermission(user, {
       article: PERMISSIONS.CREATE_ARTICLE,
@@ -118,9 +121,11 @@ export default function AuthorDashboardClient() {
       video: PERMISSIONS.CREATE_VIDEO,
     }[card.type])
   );
+  const canAccessContent = canViewOwnContent || canViewHistory || canReview || visibleCreateCards.length > 0 || isAdmin || isInvestor;
   const [posts, setPosts] = useState([]);
-  const [userCounts, setUserCounts] = useState({ total: 0, authors: 0, editors: 0 });
+  const [userCounts, setUserCounts] = useState({ total: 0, authors: 0, editors: 0, subadmins: 0 });
   const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(true);
   const [error, setError] = useState("");
 
   // GET /:resource is always self-scoped now (own content only, regardless
@@ -129,12 +134,16 @@ export default function AuthorDashboardClient() {
   // moderator/investor-only history endpoint (every author, every status)
   // instead of the personal one everyone else gets.
   useEffect(() => {
-    const request = isAdmin || isInvestor ? authorApi.listAllHistory() : authorApi.listAllTypes();
+    const request = !canAccessContent
+      ? Promise.resolve([])
+      : isAdmin || isInvestor || canViewHistory || canReview
+        ? authorApi.listAllHistory()
+        : authorApi.listAllTypes();
     request
       .then(setPosts)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [isAdmin, isInvestor]);
+  }, [canAccessContent, canReview, canViewHistory, isAdmin, isInvestor]);
 
   // Investor-only: the site's user totals (total/authors/editors), read-only.
   useEffect(() => {
@@ -147,9 +156,11 @@ export default function AuthorDashboardClient() {
           total: users.length,
           authors: users.filter((u) => u.role === "AUTHOR").length,
           editors: users.filter((u) => u.role === "EDITOR").length,
+          subadmins: users.filter((u) => u.role === "SUBADMIN").length,
         });
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(err.message))
+      .finally(() => setUsersLoading(false));
   }, [isInvestor]);
 
   const typeCounts = { ARTICLE: 0, BLOG: 0, VIDEO: 0 };
@@ -174,10 +185,12 @@ export default function AuthorDashboardClient() {
       <h1 className="font-display-lg text-3xl text-primary mb-2">{roleLabel} Dashboard</h1>
       <p className="font-body-md text-on-surface-variant mb-8">
         {isInvestor
-          ? "Read-only, site-wide totals across users, content, and review status."
+          ? "A read-only business view of publishing volume, editorial capacity, and content outcomes."
           : isAdmin
             ? "Site-wide overview of every author's articles, blogs, and videos, at every stage."
-            : "Create new content, or manage everything you've already submitted."}
+            : canManageSiteData || canManageTeam
+              ? "Manage the site data and team tools included in your assigned privileges."
+              : "Create new content, or manage everything you've already submitted."}
       </p>
 
       {canReview && !loading && (
@@ -214,13 +227,13 @@ export default function AuthorDashboardClient() {
         </p>
       )}
 
-      {loading ? (
+      {loading || (isInvestor && usersLoading) ? (
         <div aria-hidden="true" className="mb-8">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          {canAccessContent && <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
               <SkeletonBlock key={i} className="h-20" />
             ))}
-          </div>
+          </div>}
           <SkeletonBlock className="h-24 mb-8" />
           <SkeletonBlock className="h-32 mb-10" />
           <SkeletonText className="w-40 h-6 mb-4" />
@@ -229,23 +242,41 @@ export default function AuthorDashboardClient() {
       ) : (
         <>
           {/* Totals */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          {!isInvestor && <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             <StatTile label="Articles" value={typeCounts.ARTICLE} icon="fa-newspaper" />
             <StatTile label="Blogs" value={typeCounts.BLOG} icon="fa-pen-nib" />
             <StatTile label="Videos" value={typeCounts.VIDEO} icon="fa-video" />
-            <StatTile label={isAdmin || isInvestor ? "Total (Site-Wide)" : "Total Posts"} value={posts.length} icon="fa-layer-group" />
-          </div>
+            <StatTile label={isAdmin || isInvestor ? "Total Posts" : "Total Posts"} value={posts.length} icon="fa-layer-group" />
+          </div>}
 
           {/* Investor-only: site-wide user/approval totals — the whole
               reason this role has a dashboard at all. Read-only, no links. */}
           {isInvestor && (
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
-              <StatTile label="Total Users" value={userCounts.total} icon="fa-users" />
-              <StatTile label="Authors" value={userCounts.authors} icon="fa-pen-nib" />
-              <StatTile label="Editors" value={userCounts.editors} icon="fa-user-tie" />
-              <StatTile label="Approved" value={statusCounts.APPROVED} icon="fa-circle-check" />
-              <StatTile label="Rejected" value={statusCounts.REJECTED} icon="fa-circle-xmark" />
-            </div>
+            <>
+            <section className="mb-8">
+              <div className="mb-4">
+                <h2 className="font-headline-lg text-xl text-primary">Platform Overview</h2>
+                <p className="mt-1 text-xs text-on-surface-variant">Audience, publishing activity, and editorial team at a glance.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+                <StatTile label="Total Users" value={userCounts.total} icon="fa-users" />
+                <StatTile label="Total Authors" value={userCounts.authors} icon="fa-pen-nib" />
+                <StatTile label="Total Editors" value={userCounts.editors} icon="fa-user-tie" />
+                <StatTile label="Total Posts" value={posts.length} icon="fa-layer-group" />
+
+              </div>
+            </section>
+            <section className="mb-8">
+              <h2 className="mb-4 font-headline-lg text-xl text-primary">Content Performance</h2>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
+              <StatTile label="Total Articles" value={typeCounts.ARTICLE} icon="fa-newspaper" />
+              <StatTile label="Total Blogs" value={typeCounts.BLOG} icon="fa-pen-nib" />
+              <StatTile label="Total Videos" value={typeCounts.VIDEO} icon="fa-video" />
+              <StatTile label="Total Approved" value={statusCounts.APPROVED} icon="fa-circle-check" />
+              <StatTile label="Total Rejected" value={statusCounts.REJECTED} icon="fa-circle-xmark" />
+              </div>
+            </section>
+            </>
           )}
 
           {/* Collected points — a personal author incentive, so it's not
@@ -258,19 +289,19 @@ export default function AuthorDashboardClient() {
           )}
 
           {/* Status breakdown */}
-          <div className="mb-10 p-5 bg-surface-container-low/60 rounded-lg border border-outline-variant/15">
+          {canAccessContent && <div className="mb-10 p-5 bg-surface-container-low/60 rounded-lg border border-outline-variant/15">
             <h2 className="font-headline-md text-sm text-primary uppercase tracking-wide mb-4">
-              {isAdmin || isInvestor ? "Site-Wide Review Status" : "Review Status"}
+              {isInvestor ? "Editorial Status" : isAdmin ? "Site-Wide Review Status" : "Review Status"}
             </h2>
             <StatusBarChart counts={statusCounts} />
-          </div>
+          </div>}
         </>
       )}
 
       {/* Quick actions and Recent Posts are write-oriented (create, edit,
           review, navigate into individual posts) — Investors get totals
           only, per the role's read-only scope. */}
-      {(visibleCreateCards.length > 0 || canViewOwnContent || canViewHistory) && (
+      {(visibleCreateCards.length > 0 || canViewOwnContent || canViewHistory || canManageSiteData || canManageTeam || canManageCategories) && (
         <>
           <h2 className="font-headline-lg text-primary text-xl mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -324,8 +355,7 @@ export default function AuthorDashboardClient() {
               </Link>
             )}
 
-            {isAdmin && (
-              <>
+            {canManageSiteData && (
                 <Link
                   href="/author/site-data"
                   className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
@@ -338,6 +368,8 @@ export default function AuthorDashboardClient() {
                     <p className="font-body-md text-xs text-on-surface-variant">Politicians, biographies, parties, states, assemblies and Parliament</p>
                   </div>
                 </Link>
+            )}
+            {canManageCategories && (
                 <Link
                   href="/author/categories"
                   className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
@@ -350,6 +382,8 @@ export default function AuthorDashboardClient() {
                     <p className="font-body-md text-xs text-on-surface-variant">Add or remove categories used by author forms and public pages</p>
                   </div>
                 </Link>
+            )}
+            {canManageTeam && (
                 <Link
                   href="/author/team"
                   className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
@@ -364,12 +398,11 @@ export default function AuthorDashboardClient() {
                     </p>
                   </div>
                 </Link>
-              </>
             )}
           </div>
 
           {/* Recent posts */}
-          {!loading && (
+          {!loading && canAccessContent && (
             <>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-headline-lg text-primary text-xl">{isAdmin ? "Recent Activity" : "Recent Posts"}</h2>

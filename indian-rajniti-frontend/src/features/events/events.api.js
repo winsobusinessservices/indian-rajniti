@@ -7,6 +7,7 @@
 import { allTeasers, getSpeeches, getRallies, getPageProfiles } from "@/features/news/news.api";
 import { getKeyFigures, findFigureByName } from "@/features/politicians/politician.api";
 import { DEFAULT_PAGE_PROFILES } from "@/features/events/pageProfiles";
+import { mediaUrl } from "@/lib/api";
 
 function pageProfile(key, profiles) {
   const defaults = DEFAULT_PAGE_PROFILES[key];
@@ -30,8 +31,8 @@ export async function getSpeechesInfo() {
     label: "Speeches",
     type: "speech",
     description: page.description,
-    current: { ...page.current, icon: "fa-solid fa-user-tie", photo: modi?.photo },
-    opposition: { ...page.opposition, icon: "fa-solid fa-user-tie", photo: rahulGandhi?.photo },
+    current: { ...page.current, icon: "fa-solid fa-user-tie", photo: mediaUrl(page.current.photo) || modi?.photo, photoFallback: modi?.photoFallback },
+    opposition: { ...page.opposition, icon: "fa-solid fa-user-tie", photo: mediaUrl(page.opposition.photo) || rahulGandhi?.photo, photoFallback: rahulGandhi?.photoFallback },
     currentLabel: page.currentLabel,
     oppositionLabel: page.oppositionLabel,
     bio: page.bio,
@@ -53,8 +54,8 @@ export async function getRalliesInfo() {
     label: "Rallies",
     type: "rally",
     description: page.description,
-    current: { ...page.current, icon: "fa-solid fa-people-group" },
-    opposition: { ...page.opposition, icon: "fa-solid fa-people-group" },
+    current: { ...page.current, icon: "fa-solid fa-people-group", photo: mediaUrl(page.current.photo) },
+    opposition: { ...page.opposition, icon: "fa-solid fa-people-group", photo: mediaUrl(page.opposition.photo) },
     currentLabel: page.currentLabel,
     oppositionLabel: page.oppositionLabel,
     bio: page.bio,

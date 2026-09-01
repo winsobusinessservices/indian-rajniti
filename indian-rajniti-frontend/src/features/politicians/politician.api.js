@@ -28,8 +28,8 @@ const getPoliticiansData = createJsonResource(`${API_BASE_URL}/politicians`, {
 });
 
 const getPartiesData = createJsonResource(`${API_BASE_URL}/parties`, {
-  ttl: 30_000,
-  fetchOptions: { next: { revalidate: 30 } },
+  ttl: 0,
+  fetchOptions: { cache: "no-store" },
 });
 
 function toPoliticianShape(row) {

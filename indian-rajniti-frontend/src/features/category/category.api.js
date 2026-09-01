@@ -42,21 +42,20 @@ async function buildRegistry() {
     if (!registry.has(slug)) registry.set(slug, { label, type, data });
   };
 
-  // Individuals and specific entities are registered first (with their
-  // specific type) so generic topic labels never shadow a more specific match.
-  chiefMinisters.forEach((cm) => {
-    add(cm.state, "state", { name: cm.state });
-    add(cm.name, "politician", { subtype: "cm", ...cm });
-  });
-  // Every state and union territory gets a page even without a CM profile —
-  // getCategoryInfo() just falls back to its generic description for those.
+  // Register the complete database State/UT record before politician/topic
+  // aliases. Previously a minimal `{ name }` CM-derived entry claimed the
+  // state slug first, which discarded capital, history and achievements.
   statesAndUTs.forEach((place) => {
     add(place.name, "state", place);
     add(`Election in ${place.name}`, "topic");
   });
+  chiefMinisters.forEach((cm) => {
+    add(cm.name, "politician", { subtype: "cm", ...cm });
+  });
   formerPMs.forEach((pm) => add(pm.name, "politician", { subtype: "former-pm", ...pm }));
   keyFigures.forEach((figure) => add(figure.name, "politician", { subtype: "key-figure", ...figure }));
   parties.forEach((party) => {
+    if (party.slug && !registry.has(party.slug)) registry.set(party.slug, { label: party.name, type: "party", data: party });
     add(party.abbreviation, "party", party);
     add(party.name, "party", party);
   });
@@ -79,7 +78,11 @@ export async function getAllCategoryEntries() {
 
 export async function getCategoryInfo(slug) {
   const { registry, chiefMinisters, parties, NATIONAL_RULING, NATIONAL_OPPOSITION } = await buildRegistry();
-  const entry = registry.get(slug);
+  const aliases = {
+    westbangal: "west-bengal",
+    "west-bangal": "west-bengal",
+  };
+  const entry = registry.get(aliases[slug] || slug);
   if (!entry) return null;
 
   const { label, type, data } = entry;
@@ -95,22 +98,43 @@ export async function getCategoryInfo(slug) {
   if (type === "state") {
     const cm = chiefMinisters.find((c) => c.state.toLowerCase() === label.toLowerCase());
     const stateProfile = await getStateProfile(label);
-    if (cm) {
-      current = { name: cm.name, role: `Chief Minister, ${cm.state} — ${cm.party}`, icon: "fa-solid fa-user-tie", photo: cm.photo, photoFallback: cm.photoFallback };
-      opposition = { name: cm.oppositionParty, role: `Principal Opposition, ${cm.state} Assembly`, icon: "fa-solid fa-people-group" };
-      description = `${label} is governed by the ${cm.party}, led by Chief Minister ${cm.name}. Track the latest political developments, policy decisions, and electoral dynamics shaping ${label}.`;
+    const currentCmName = stateProfile?.currentCmName || cm?.name;
+    const currentCmParty = cm?.party;
 
-      const yearsAsRuler = cm.since ? new Date().getFullYear() - cm.since : null;
-      profile = {
-        founded: stateProfile?.formed ?? null,
-        history: stateProfile?.history ?? null,
-        achievements: stateProfile?.achievements ?? null,
-        rulingParty: cm.party,
-        oppositionParty: cm.oppositionParty,
-        yearsAsRuler,
-        rulerSince: cm.since,
+    if (cm || currentCmName) {
+      current = { name: currentCmName, role: `Chief Minister, ${label}${cm?.party ? ` — ${cm.party}` : ""}`, icon: "fa-solid fa-user-tie", photo: stateProfile?.cmImage || cm?.photo, photoFallback: cm?.photoFallback };
+      opposition = {
+        name: stateProfile?.oppositionLeaderName || stateProfile?.oppositionParty || cm?.oppositionParty || "Opposition",
+        role: `${stateProfile?.oppositionLeaderName ? "Opposition Leader" : "Principal Opposition"}${stateProfile?.oppositionParty ? ` — ${stateProfile.oppositionParty}` : ""}, ${label} Assembly`,
+        icon: "fa-solid fa-people-group",
+        photo: stateProfile?.oppositionLeaderImage,
+      };
+      description = `${label}${cm?.party ? ` is governed by the ${cm.party}` : ""}, led by Chief Minister ${currentCmName}. Track the latest political developments, policy decisions, and electoral dynamics shaping ${label}.`;
+    }
+    if (!currentCmName && (stateProfile?.oppositionLeaderName || stateProfile?.oppositionParty)) {
+      opposition = {
+        name: stateProfile.oppositionLeaderName || stateProfile.oppositionParty,
+        role: stateProfile.oppositionParty ? `Opposition Leader — ${stateProfile.oppositionParty}, ${label} Assembly` : `Opposition Leader, ${label} Assembly`,
+        icon: "fa-solid fa-people-group",
+        photo: stateProfile.oppositionLeaderImage,
       };
     }
+
+    const yearsAsRuler = cm?.since ? new Date().getFullYear() - cm.since : null;
+    profile = {
+      image: stateProfile?.image ?? null,
+      capital: stateProfile?.capital ?? null,
+      kind: stateProfile?.kind ?? null,
+      currentCmName: currentCmName ?? null,
+      oppositionLeaderName: stateProfile?.oppositionLeaderName ?? null,
+      founded: stateProfile?.formed ?? null,
+      history: stateProfile?.history ?? null,
+      achievements: stateProfile?.achievements ?? null,
+      rulingParty: currentCmParty ?? null,
+      oppositionParty: stateProfile?.oppositionParty || cm?.oppositionParty || null,
+      yearsAsRuler,
+      rulerSince: cm?.since ?? null,
+    };
   } else if (type === "party") {
     const party = parties.find(
       (p) => p.name.toLowerCase() === label.toLowerCase() || p.abbreviation.toLowerCase() === label.toLowerCase()

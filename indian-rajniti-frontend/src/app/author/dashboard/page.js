@@ -16,7 +16,7 @@ export default async function AuthorDashboardPage() {
       <BreakingNews text={breakingNews} />
       <Header />
       <main className="w-full bg-background flex-grow">
-        <RequireContributorRole roles={["AUTHOR", "EDITOR", "ADMIN", "INVESTOR"]} permissions={[PERMISSIONS.DASHBOARD]}>
+        <RequireContributorRole roles={["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN", "INVESTOR"]} permissions={[PERMISSIONS.DASHBOARD]}>
           <AuthorDashboardClient />
         </RequireContributorRole>
       </main>

@@ -76,6 +76,12 @@ const EMPTY = {
   states: {
     name: "",
     capital: "",
+    image_url: "",
+    current_cm_name: "",
+    cm_image_url: "",
+    opposition_leader_name: "",
+    opposition_party: "",
+    opposition_leader_image_url: "",
     kind: "STATE",
     formed: "",
     history: "",
@@ -136,6 +142,12 @@ const FIELDS = {
     ["name", "State / UT name", "text", true],
     ["kind", "Type", "state-kind", true],
     ["capital", "Capital", "text"],
+    ["image_url", "State image URL or uploaded image path", "text"],
+    ["current_cm_name", "Current Chief Minister name", "text"],
+    ["cm_image_url", "Chief Minister photo URL or uploaded image path", "text"],
+    ["opposition_leader_name", "Opposition Leader name", "text"],
+    ["opposition_party", "Principal opposition party", "text"],
+    ["opposition_leader_image_url", "Opposition Leader photo URL or uploaded image path", "text"],
     ["formed", "Formation", "text"],
     ["history", "Political and assembly history", "textarea"],
     ["achievements", "Achievements", "textarea"],
@@ -1120,6 +1132,11 @@ function PageContentAdmin({ profiles, onReload }) {
           onChange={(_, value) => changePerson("current", "role", value)}
         />
         <Field
+          definition={["currentPhoto", "First highlighted photo URL or uploaded image path", "text"]}
+          value={form.current.photo}
+          onChange={(_, value) => changePerson("current", "photo", value)}
+        />
+        <Field
           definition={[
             "oppositionName",
             "Second highlighted name or group",
@@ -1136,6 +1153,11 @@ function PageContentAdmin({ profiles, onReload }) {
           ]}
           value={form.opposition.role}
           onChange={(_, value) => changePerson("opposition", "role", value)}
+        />
+        <Field
+          definition={["oppositionPhoto", "Second highlighted photo URL or uploaded image path", "text"]}
+          value={form.opposition.photo}
+          onChange={(_, value) => changePerson("opposition", "photo", value)}
         />
         <Field
           definition={[

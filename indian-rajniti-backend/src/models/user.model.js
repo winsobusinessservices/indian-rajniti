@@ -1,7 +1,7 @@
 const pool = require("../config/db");
 const { normalizePermissions } = require("../config/permissions");
 
-const ROLES = ["USER", "ADMIN", "EDITOR", "AUTHOR", "INVESTOR"];
+const ROLES = ["USER", "ADMIN", "SUBADMIN", "EDITOR", "AUTHOR", "INVESTOR"];
 
 const PUBLIC_COLUMNS =
   "id, name, email, role, permissions, status, created_at, terms_accepted, terms_accepted_at, pan_document, aadhar_document, graduation_certificate, created_by";

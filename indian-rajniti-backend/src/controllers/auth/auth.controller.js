@@ -342,7 +342,10 @@ const logout = async (req, res) => {
 
 const listUsers = async (req, res) => {
   try {
-    const users = await User.findAll();
+    const allUsers = await User.findAll();
+    const users = ["ADMIN", "INVESTOR"].includes(req.user.role)
+      ? allUsers
+      : allUsers.filter((user) => MEMBER_ASSIGNABLE_ROLES.includes(user.role));
 
     return res.status(200).json({
       success: true,
@@ -369,11 +372,13 @@ const listUsers = async (req, res) => {
 // which only need to be (re-)uploaded here if not already on file.
 // Investor has no document requirement.
 
-const ADMIN_ASSIGNABLE_ROLES = ["AUTHOR", "EDITOR", "INVESTOR"];
+const MEMBER_ASSIGNABLE_ROLES = ["AUTHOR", "EDITOR", "INVESTOR"];
+const ADMIN_ASSIGNABLE_ROLES = [...MEMBER_ASSIGNABLE_ROLES, "SUBADMIN"];
 const REQUIRED_DOCS_BY_ROLE = {
   AUTHOR: ["panDocument", "aadharDocument"],
   EDITOR: ["panDocument", "aadharDocument", "graduationCertificate"],
   INVESTOR: [],
+  SUBADMIN: [],
 };
 const DOC_LABEL = {
   panDocument: "PAN document",
@@ -397,10 +402,11 @@ const adminAssignRole = async (req, res) => {
       });
     }
 
-    if (!ADMIN_ASSIGNABLE_ROLES.includes(role)) {
+    const assignableRoles = req.user.role === "ADMIN" ? ADMIN_ASSIGNABLE_ROLES : MEMBER_ASSIGNABLE_ROLES;
+    if (!assignableRoles.includes(role)) {
       return res.status(400).json({
         success: false,
-        message: `Role must be one of: ${ADMIN_ASSIGNABLE_ROLES.join(", ")}`,
+        message: `Role must be one of: ${assignableRoles.join(", ")}`,
       });
     }
 
@@ -447,9 +453,15 @@ const adminAssignRole = async (req, res) => {
       return res.status(400).json({ success: false, message: "One or more permissions are invalid" });
     }
 
+    if (req.user.role !== "ADMIN" && ["ADMIN", "SUBADMIN"].includes(existingUser.role)) {
+      return res.status(403).json({ success: false, message: "Only Admin can modify Admin or Subadmin accounts" });
+    }
+    const effectivePermissions = req.user.role !== "ADMIN"
+      ? normalizePermissions(null, role)
+      : normalizePermissions(requestedPermissions, role);
     const user = await User.update(existingUser.id, {
       role,
-      permissions: normalizePermissions(requestedPermissions, role),
+      permissions: effectivePermissions,
       panDocument: files.panDocument ? userDocumentUrl(files.panDocument) : undefined,
       aadharDocument: files.aadharDocument ? userDocumentUrl(files.aadharDocument) : undefined,
       graduationCertificate: files.graduationCertificate ? userDocumentUrl(files.graduationCertificate) : undefined,
@@ -493,8 +505,8 @@ const updateUserRole = async (req, res) => {
         message: `Role must be one of: ${User.ROLES.join(", ")}`,
       });
     }
-    if (req.user.role !== "ADMIN" && role === "ADMIN") {
-      return res.status(403).json({ success: false, message: "Only an Admin can assign the Admin role" });
+    if (req.user.role !== "ADMIN" && !MEMBER_ASSIGNABLE_ROLES.includes(role)) {
+      return res.status(403).json({ success: false, message: "Subadmins can assign only Author, Editor, or Investor roles" });
     }
 
     const existing = await User.findById(id);
@@ -503,6 +515,9 @@ const updateUserRole = async (req, res) => {
         success: false,
         message: "User not found",
       });
+    }
+    if (req.user.role !== "ADMIN" && ["ADMIN", "SUBADMIN"].includes(existing.role)) {
+      return res.status(403).json({ success: false, message: "Only Admin can modify Admin or Subadmin accounts" });
     }
 
     const user = await User.updateRole(id, role);
@@ -556,8 +571,8 @@ const updateUser = async (req, res) => {
           message: `Role must be one of: ${User.ROLES.join(", ")}`,
         });
       }
-      if (req.user.role !== "ADMIN" && role === "ADMIN") {
-        return res.status(403).json({ success: false, message: "Only an Admin can assign the Admin role" });
+      if (req.user.role !== "ADMIN" && !MEMBER_ASSIGNABLE_ROLES.includes(role)) {
+        return res.status(403).json({ success: false, message: "Subadmins can assign only Author, Editor, or Investor roles" });
       }
       // An admin editing the table could otherwise demote/reassign their own
       // row and lock themselves out with no one left to undo it.
@@ -567,6 +582,9 @@ const updateUser = async (req, res) => {
           message: "You cannot change your own role",
         });
       }
+    }
+    if (req.user.role !== "ADMIN" && ["ADMIN", "SUBADMIN"].includes(existing.role)) {
+      return res.status(403).json({ success: false, message: "Only Admin can modify Admin or Subadmin accounts" });
     }
 
     let normalizedEmail;
@@ -600,15 +618,18 @@ const updateUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "One or more permissions are invalid" });
     }
 
+    const effectivePermissions = req.user.role !== "ADMIN" && permissions !== undefined
+      ? normalizePermissions(null, role || existing.role)
+      : permissions !== undefined
+        ? normalizePermissions(permissions, role || existing.role)
+        : role !== undefined && role !== existing.role
+          ? null
+          : undefined;
     const user = await User.update(id, {
       name: name !== undefined ? name.trim() : undefined,
       email: normalizedEmail,
       role,
-      permissions: permissions !== undefined
-        ? normalizePermissions(permissions, role || existing.role)
-        : role !== undefined && role !== existing.role
-          ? null
-          : undefined,
+      permissions: effectivePermissions,
     });
 
     if (role !== undefined && role !== existing.role) {
@@ -648,6 +669,9 @@ const deleteUser = async (req, res) => {
         success: false,
         message: "User not found",
       });
+    }
+    if (req.user.role !== "ADMIN" && ["ADMIN", "SUBADMIN"].includes(existing.role)) {
+      return res.status(403).json({ success: false, message: "Only Admin can delete Admin or Subadmin accounts" });
     }
 
     // Same guard as the self role-change check above — an admin deleting

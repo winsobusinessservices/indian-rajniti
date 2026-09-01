@@ -1,10 +1,11 @@
 import { createJsonResource } from "@/lib/jsonResource";
+import { mediaUrl } from "@/lib/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 const readGeographyResource = createJsonResource(`${API_BASE_URL}/states`, {
-  ttl: 300_000,
-  fetchOptions: { next: { revalidate: 300 } },
+  ttl: 0,
+  fetchOptions: { cache: "no-store" },
 });
 
 async function getGeographyData() {
@@ -18,6 +19,12 @@ function toPlace(row) {
     slug: row.slug,
     name: row.name,
     capital: row.capital,
+    image: mediaUrl(row.image_url),
+    currentCmName: row.current_cm_name,
+    cmImage: mediaUrl(row.cm_image_url),
+    oppositionLeaderName: row.opposition_leader_name,
+    oppositionParty: row.opposition_party,
+    oppositionLeaderImage: mediaUrl(row.opposition_leader_image_url),
     kind: row.kind,
     formed: row.formed,
     history: row.history,

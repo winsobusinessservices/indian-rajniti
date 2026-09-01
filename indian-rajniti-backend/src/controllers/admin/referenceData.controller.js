@@ -87,7 +87,14 @@ function stateInput(body, existing) {
   if (!name || !STATE_KINDS.includes(kind)) throw new Error("State name and a valid kind are required");
   return {
     slug: existing?.slug || slugify(body.slug || name), name,
-    capital: text(body.capital, 150), kind, formed: text(body.formed, 150),
+    capital: text(body.capital, 150),
+    imageUrl: text(body.imageUrl ?? body.image_url, 2000),
+    currentCmName: text(body.currentCmName ?? body.current_cm_name, 200),
+    cmImageUrl: text(body.cmImageUrl ?? body.cm_image_url, 2000),
+    oppositionLeaderName: text(body.oppositionLeaderName ?? body.opposition_leader_name, 200),
+    oppositionParty: text(body.oppositionParty ?? body.opposition_party, 250),
+    oppositionLeaderImageUrl: text(body.oppositionLeaderImageUrl ?? body.opposition_leader_image_url, 2000),
+    kind, formed: text(body.formed, 150),
     history: text(body.history), achievements: text(body.achievements),
     sortOrder: integer(body.sortOrder ?? body.sort_order, existing?.sort_order || 0),
   };
@@ -97,17 +104,22 @@ async function listReferenceData(req, res) {
   const [politicians, parties, states, widgets] = await Promise.all([
     Politician.findAll(), Party.findAll(), State.findAll(), HomeWidget.getAll(),
   ]);
+  const parliament = widgets.parliament_data || null;
+  const pageProfiles = widgets.page_profiles || null;
   return res.json({
     success: true,
     politicians,
     parties,
     states,
-    parliament: widgets.parliament_data || null,
+    parliament,
+    loksabha: parliament?.loksabha || null,
+    rajyasabha: parliament?.rajyasabha || null,
+    elections: pageProfiles?.elections || null,
     events: widgets.political_calendar || [],
     rallies: widgets.political_rallys || [],
     vidhanSabhas: widgets.vidhan_sabhas || [],
     homeWidgets: widgets,
-    pageProfiles: widgets.page_profiles || null,
+    pageProfiles,
   });
 }
 
@@ -239,8 +251,16 @@ async function updatePageProfiles(req, res) {
       description: text(profile.description, 3000),
       currentLabel: text(profile.currentLabel, 150),
       oppositionLabel: text(profile.oppositionLabel, 150),
-      current: { name: text(profile.current?.name, 200), role: text(profile.current?.role, 500) },
-      opposition: { name: text(profile.opposition?.name, 200), role: text(profile.opposition?.role, 500) },
+      current: {
+        name: text(profile.current?.name, 200),
+        role: text(profile.current?.role, 500),
+        photo: text(profile.current?.photo, 2000),
+      },
+      opposition: {
+        name: text(profile.opposition?.name, 200),
+        role: text(profile.opposition?.role, 500),
+        photo: text(profile.opposition?.photo, 2000),
+      },
       bio: array(profile.bio).slice(0, 10),
       facts: array(profile.facts).slice(0, 12).map((fact) => typeof fact === "string" ? fact : text(fact?.label, 500)).filter(Boolean),
     };

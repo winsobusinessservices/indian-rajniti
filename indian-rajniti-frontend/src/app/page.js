@@ -402,7 +402,7 @@ export default async function Home() {
               <SectionHeader title="Indian Political Parties" viewAllHref="/parties" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {parties.slice(0, 5).map((party) => (
-                  <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} photoFallback={party.photoFallback} />
+                  <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} photoFallback={party.photoFallback} href={`/category/${party.slug}`} />
                 ))}
               </div>
             </section>

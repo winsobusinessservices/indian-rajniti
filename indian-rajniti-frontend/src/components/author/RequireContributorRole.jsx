@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { hasAnyPermission } from "@/lib/permissions";
 
-const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
+const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"];
 
 /**
  * `roles`/`roleLabel` let a page narrow this to a subset (e.g. moderators
@@ -31,7 +31,11 @@ export default function RequireContributorRole({ children, roles = CONTRIBUTOR_R
     );
   }
 
-  if (!roles.includes(user.role) || (permissions?.length && !hasAnyPermission(user, permissions))) {
+  const authorized = permissions?.length
+    ? hasAnyPermission(user, permissions)
+    : roles.includes(user.role);
+
+  if (!authorized) {
     return (
       <div className="max-w-lg mx-auto px-4 py-24 text-center">
         <i className="fa-solid fa-ban text-4xl text-error mb-4" />

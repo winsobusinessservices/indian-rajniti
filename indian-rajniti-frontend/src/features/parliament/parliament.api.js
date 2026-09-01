@@ -9,11 +9,12 @@ import { allTeasers, getElectionResults, getPageProfiles } from "@/features/news
 import { getKeyFigures, findFigureByName } from "@/features/politicians/politician.api";
 import { createJsonResource } from "@/lib/jsonResource";
 import { DEFAULT_PAGE_PROFILES } from "@/features/events/pageProfiles";
+import { mediaUrl } from "@/lib/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 const readParliamentResource = createJsonResource(`${API_BASE_URL}/parliament`, {
-  ttl: 30_000,
-  fetchOptions: { next: { revalidate: 30 } },
+  ttl: 0,
+  fetchOptions: { cache: "no-store" },
 });
 
 const LOK_SABHA = {
@@ -146,6 +147,8 @@ export async function getHouseInfo(house) {
   const keyFigures = await getKeyFigures();
   const leaderOfHouseMatch = findFigureByName(keyFigures, data.leaderOfHouse.name);
   const leaderOfOppositionMatch = findFigureByName(keyFigures, data.leaderOfOpposition.name);
+  const savedLeaderPhoto = mediaUrl(data.leaderOfHouse.photo);
+  const savedOppositionPhoto = mediaUrl(data.leaderOfOpposition.photo);
 
   return {
     label: data.label,
@@ -155,15 +158,15 @@ export async function getHouseInfo(house) {
       name: data.leaderOfHouse.name,
       role: data.leaderOfHouse.role,
       icon: "fa-solid fa-user-tie",
-      photo: leaderOfHouseMatch?.photo || data.leaderOfHouse.photo,
-      photoFallback: leaderOfHouseMatch?.photoFallback,
+      photo: savedLeaderPhoto || leaderOfHouseMatch?.photo,
+      photoFallback: savedLeaderPhoto ? (leaderOfHouseMatch?.photo || leaderOfHouseMatch?.photoFallback) : leaderOfHouseMatch?.photoFallback,
     },
     opposition: {
       name: data.leaderOfOpposition.name,
       role: data.leaderOfOpposition.role,
       icon: "fa-solid fa-user-tie",
-      photo: leaderOfOppositionMatch?.photo || data.leaderOfOpposition.photo,
-      photoFallback: leaderOfOppositionMatch?.photoFallback,
+      photo: savedOppositionPhoto || leaderOfOppositionMatch?.photo,
+      photoFallback: savedOppositionPhoto ? (leaderOfOppositionMatch?.photo || leaderOfOppositionMatch?.photoFallback) : leaderOfOppositionMatch?.photoFallback,
     },
     currentLabel: "Leader of the House",
     oppositionLabel: "Leader of Opposition",
@@ -194,8 +197,8 @@ export async function getElectionInfo() {
     label: GENERAL_ELECTION.label,
     type: "election",
     description: page.description,
-    current: { ...page.current, icon: "fa-solid fa-people-group" },
-    opposition: { ...page.opposition, icon: "fa-solid fa-people-group" },
+    current: { ...page.current, icon: "fa-solid fa-people-group", photo: mediaUrl(page.current.photo) },
+    opposition: { ...page.opposition, icon: "fa-solid fa-people-group", photo: mediaUrl(page.opposition.photo) },
     currentLabel: page.currentLabel,
     oppositionLabel: page.oppositionLabel,
     bio: page.bio,

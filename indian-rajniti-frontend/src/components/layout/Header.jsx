@@ -92,7 +92,7 @@ export default function Header() {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const profileButtonRef = useRef(null);
-  const hasWorkspaceSidebar = ["AUTHOR", "EDITOR", "ADMIN"].includes(user?.role) || (user?.role === "INVESTOR" && user?.permissions?.length > 0);
+  const hasWorkspaceSidebar = Boolean(user) && (["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"].includes(user.role) || user.permissions?.length > 0);
 
   const openProfileMenu = () => {
     setAnchorRect(profileButtonRef.current.getBoundingClientRect());
