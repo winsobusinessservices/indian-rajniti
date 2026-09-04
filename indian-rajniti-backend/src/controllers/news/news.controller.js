@@ -68,15 +68,11 @@ function readTimeOf(content) {
   return `${Math.max(1, Math.round(words / 200))} min read`;
 }
 
-// Authors write plain text in a single textarea (see PostForm.jsx), not an
-// array of paragraphs — split on blank lines so the detail page can render
-// it the same way a structured paragraph array would be rendered.
+// Keep author-entered plain text intact. The detail page uses `white-space:
+// pre-wrap`, so pasted line breaks, blank lines, and repeated spaces remain
+// visible instead of being lost while shaping the API response.
 function paragraphsOf(content) {
-  const parts = (content || "")
-    .split(/\n\s*\n|\r\n\r\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return parts.length ? parts : [content || ""];
+  return [content || ""];
 }
 
 // WordPress post_content is HTML, while the current detail page renders an

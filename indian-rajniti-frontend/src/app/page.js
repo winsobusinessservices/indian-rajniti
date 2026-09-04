@@ -900,7 +900,7 @@ export default async function Home() {
                   <Link href="/blogs" className="text-[10px] font-label-md text-secondary hover:underline">VIEW ALL</Link>
                 </div>
                 <div className="space-y-3">
-                  {blogs.slice(3, 9).map((blog) => (
+                  {blogs.slice(3, 6).map((blog) => (
                     <Link key={blog.id} href={`/news/${blog.slug}`} className="group block rounded-md bg-surface-container-low p-3">
                       <span className="text-[9px] font-bold uppercase tracking-wider text-secondary">{blog.category || "Blog"}</span>
                       <h4 className="mt-1 line-clamp-2 font-headline-md text-sm text-on-surface transition-colors group-hover:text-primary">{blog.title}</h4>

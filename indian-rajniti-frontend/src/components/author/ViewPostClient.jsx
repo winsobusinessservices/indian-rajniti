@@ -155,7 +155,7 @@ export default function ViewPostClient({ type, id }) {
         </span>
       </div>
 
-      <h1 className="font-display-lg text-3xl md:text-4xl text-on-surface tracking-tight leading-tight mb-4">
+      <h1 className="font-display-lg font-bold text-3xl md:text-4xl text-on-surface tracking-tight leading-tight mb-4">
         {post.title}
       </h1>
 
@@ -226,17 +226,13 @@ export default function ViewPostClient({ type, id }) {
       {/* Body */}
       <div className="space-y-4 mb-8">
         {(post.excerpt || post.description) && (
-          <p className="font-body-lg text-on-surface leading-relaxed italic">{post.excerpt || post.description}</p>
+          <p className="font-body-lg text-on-surface leading-relaxed italic whitespace-pre-wrap break-words">{post.excerpt || post.description}</p>
         )}
-        {contentMedia.text &&
-          contentMedia.text
-            .split("\n")
-            .filter((paragraph) => paragraph.trim())
-            .map((paragraph, index) => (
-              <p key={index} className="font-body-md text-on-surface-variant leading-relaxed">
-                <LinkedText>{paragraph}</LinkedText>
-              </p>
-            ))}
+        {contentMedia.text && (
+          <p className="font-body-md text-on-surface-variant leading-relaxed whitespace-pre-wrap break-words">
+            <LinkedText>{contentMedia.text}</LinkedText>
+          </p>
+        )}
         {contentMedia.images.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
             {contentMedia.images.map((url, index) => (

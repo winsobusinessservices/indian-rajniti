@@ -61,11 +61,11 @@ export default function CategoryDetailView({ info }) {
         <span className="inline-block px-3 py-1 bg-primary text-on-primary text-xs font-label-md uppercase tracking-widest rounded-sm mb-4">
           {TYPE_BADGE[info.type]}
         </span>
-        <h1 className="font-display-lg text-3xl md:text-4xl text-on-surface tracking-tight leading-tight mb-4">
+        <h1 className="font-display-lg font-bold text-3xl md:text-4xl text-on-surface tracking-tight leading-tight mb-4">
           {info.label}
           {info.type === "state" && " Politics"}
         </h1>
-        <p className="font-body-lg text-on-surface-variant leading-relaxed mb-10">{info.description}</p>
+        <p className="font-body-lg text-on-surface-variant leading-relaxed mb-10 whitespace-pre-wrap break-words">{info.description}</p>
 
         <h2 className="font-headline-lg text-primary text-xl mb-6">
           {info.type === "politician" ? "Profile" : "Current vs. Opposition"}
@@ -82,7 +82,7 @@ export default function CategoryDetailView({ info }) {
             </h2>
             <div className="space-y-4">
               {info.bio.map((paragraph, index) => (
-                <p key={index} className="font-body-md text-on-surface-variant leading-relaxed">
+                <p key={index} className="font-body-md text-on-surface-variant leading-relaxed whitespace-pre-wrap break-words">
                   {paragraph}
                 </p>
               ))}
@@ -165,9 +165,9 @@ export default function CategoryDetailView({ info }) {
             {info.profile.image && (
               <ImagePlaceholder
                 image={info.profile.image}
-                alt={`${info.label} landscape`}
-                className="mb-6 aspect-[16/7] w-full rounded-lg"
-                sizes="(min-width: 1024px) 60vw, 100vw"
+                alt={`${info.label} landscape`}                
+                className="mb-6 aspect-[12/10] w-full rounded-lg object-cover object-center"
+                sizes="(min-width: 1024px) 60vw, 100vw" 
               />
             )}
 
@@ -225,15 +225,15 @@ export default function CategoryDetailView({ info }) {
 
             {info.profile.history && (
               <div className="mb-4">
-                <h3 className="font-label-md text-primary text-xs uppercase tracking-widest mb-2">History</h3>
-                <p className="font-body-md text-on-surface-variant leading-relaxed">{info.profile.history}</p>
+                <h3 className="font-label-md font-bold text-primary text-xs uppercase tracking-widest mb-2">History</h3>
+                <p className="font-body-md text-on-surface-variant leading-relaxed whitespace-pre-wrap break-words">{info.profile.history}</p>
               </div>
             )}
 
             {info.profile.achievements && (
               <div>
-                <h3 className="font-label-md text-primary text-xs uppercase tracking-widest mb-2">Achievements</h3>
-                <p className="font-body-md text-on-surface-variant leading-relaxed">{info.profile.achievements}</p>
+                <h3 className="font-label-md font-bold text-primary text-xs uppercase tracking-widest mb-2">Achievements</h3>
+                <p className="font-body-md text-on-surface-variant leading-relaxed whitespace-pre-wrap break-words">{info.profile.achievements}</p>
               </div>
             )}
           </div>
