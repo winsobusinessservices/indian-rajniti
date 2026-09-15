@@ -29,31 +29,31 @@ if (process.env.NODE_ENV === "production" && missingProductionEnv.length) {
   throw new Error(`Missing required production environment variables: ${missingProductionEnv.join(", ")}`);
 }
 
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "http://localhost:3000")
+const allowedOrigins = (process.env.CLIENT_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
-const localDevelopmentOrigin = /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i;
-const localClientConfigured = allowedOrigins.some((origin) => localDevelopmentOrigin.test(origin));
 
-app.disable("x-powered-by");
-// cPanel/Passenger terminates HTTPS before forwarding to Node. Trust only
-// that first proxy so secure cookies and req.protocol work correctly.
-app.set("trust proxy", 1);
-
-// credentials: true + explicit origins (never "*") lets auth cookies cross
-// between the separately hosted frontend and API applications.
 app.use(
   cors({
-    origin(origin, callback) {
-      const normalizedOrigin = origin?.replace(/\/$/, "");
-      const allowedLocalOrigin = localClientConfigured && localDevelopmentOrigin.test(normalizedOrigin || "");
-      if (!origin || allowedOrigins.includes(normalizedOrigin) || allowedLocalOrigin) return callback(null, true);
-      const error = new Error("Origin is not allowed by CORS");
-      error.status = 403;
-      return callback(error);
+    origin: (origin, callback) => {
+      // Allow server-to-server requests / health checks
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const normalizedOrigin = origin.replace(/\/$/, "");
+
+      if (allowedOrigins.includes(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      console.error(`CORS blocked origin: ${origin}`);
+      return callback(new Error("Origin is not allowed by CORS"));
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 app.use(express.json());
