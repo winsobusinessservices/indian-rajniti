@@ -10,7 +10,12 @@ const STATUS_BADGE = {
   PENDING: "bg-yellow-500 text-black",
   APPROVED: "bg-green-600 text-white",
   REJECTED: "bg-error text-on-error",
+  SCHEDULED: "bg-blue-600 text-white",
 };
+
+function displayStatus(post) {
+  return post.status === "PENDING" && post.scheduled_publish_at ? "SCHEDULED" : post.status;
+}
 
 const TYPE_ICON = {
   ARTICLE: "fa-newspaper",
@@ -141,8 +146,8 @@ export default function ContentHistoryClient() {
               </div>
               <div className="flex-grow min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${STATUS_BADGE[post.status]}`}>
-                    {post.status}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${STATUS_BADGE[displayStatus(post)]}`}>
+                    {displayStatus(post)}
                   </span>
                   <span className="text-[10px] font-label-md text-on-surface-variant uppercase">{post.type}</span>
                   {post.author_name && (
@@ -154,6 +159,11 @@ export default function ContentHistoryClient() {
                   {post.created_at && (
                     <span className="text-[10px] font-body-md text-on-surface-variant">
                       {new Date(post.created_at).toLocaleDateString()}
+                    </span>
+                  )}
+                  {post.scheduled_publish_at && (
+                    <span className="text-[10px] font-body-md text-blue-700">
+                      <i className="fa-solid fa-calendar-clock mr-1" />Publishes {new Date(post.scheduled_publish_at).toLocaleString()}
                     </span>
                   )}
                 </div>

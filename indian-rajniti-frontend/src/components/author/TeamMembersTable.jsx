@@ -43,11 +43,12 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
   const [error, setError] = useState("");
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", permissions: [] });
+  const [editForm, setEditForm] = useState({ name: "", email: "", role: "", permissions: [], assignedEditorId: "" });
   const [rowError, setRowError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const editableRoles = user?.role === "ADMIN" ? TEAM_ROLES : SUBADMIN_MANAGEABLE_ROLES;
+  const editors = members.filter((member) => member.role === "EDITOR" && member.status === "ACTIVE");
 
   useEffect(() => {
     // Refetching intentionally enters a loading state when the refresh key changes.
@@ -62,7 +63,13 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
 
   const startEdit = (member) => {
     setEditingId(member.id);
-    setEditForm({ name: member.name, email: member.email, role: member.role, permissions: member.permissions || [] });
+    setEditForm({
+      name: member.name,
+      email: member.email,
+      role: member.role,
+      permissions: member.permissions || [],
+      assignedEditorId: member.assigned_editor_id ? String(member.assigned_editor_id) : "",
+    });
     setRowError("");
   };
 
@@ -76,7 +83,9 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
     setEditForm((prev) => ({
       ...prev,
       [name]: value,
-      ...(name === "role" && value !== prev.role ? { permissions: ROLE_DEFAULT_PERMISSIONS[value] || [] } : {}),
+      ...(name === "role" && value !== prev.role
+        ? { permissions: ROLE_DEFAULT_PERMISSIONS[value] || [], assignedEditorId: value === "AUTHOR" ? prev.assignedEditorId : "" }
+        : {}),
     }));
   };
 
@@ -118,16 +127,35 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
     if (JSON.stringify([...editForm.permissions].sort()) !== JSON.stringify([...(member.permissions || [])].sort())) {
       payload.permissions = editForm.permissions;
     }
+    const assignedEditorId = editForm.role === "AUTHOR" && editForm.assignedEditorId
+      ? Number(editForm.assignedEditorId)
+      : null;
+    const currentEditorId = member.assigned_editor_id ? Number(member.assigned_editor_id) : null;
+    const assignmentChanged = editForm.role === "AUTHOR" && assignedEditorId !== currentEditorId;
 
-    if (!Object.keys(payload).length) {
+    if (!Object.keys(payload).length && !assignmentChanged) {
       setEditingId(null);
       return;
     }
 
     setSaving(true);
     try {
-      const data = await authApi.updateUser(member.id, payload);
-      setMembers((prev) => prev.map((m) => (m.id === member.id ? data.user : m)));
+      let updatedMember = member;
+      if (Object.keys(payload).length) {
+        const data = await authApi.updateUser(member.id, payload);
+        updatedMember = data.user;
+      }
+      if (assignmentChanged) {
+        const data = await authApi.assignAuthorEditor(member.id, assignedEditorId);
+        updatedMember = {
+          ...updatedMember,
+          assigned_editor_id: data.assignment?.editorId || null,
+          assigned_editor_name: data.assignment?.editorName || null,
+        };
+      } else if (editForm.role !== "AUTHOR") {
+        updatedMember = { ...updatedMember, assigned_editor_id: null, assigned_editor_name: null };
+      }
+      setMembers((prev) => prev.map((m) => (m.id === member.id ? updatedMember : m)));
       setEditingId(null);
     } catch (err) {
       setRowError(err.message);
@@ -166,6 +194,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Assigned editor</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Joined</th>
                 <th className="px-4 py-3">Actions</th>
@@ -228,6 +257,27 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3 min-w-[12rem]">
+                      {isEditing && editForm.role === "AUTHOR" ? (
+                        <select
+                          name="assignedEditorId"
+                          value={editForm.assignedEditorId}
+                          onChange={handleFieldChange}
+                          className={fieldClass}
+                        >
+                          <option value="">Unassigned</option>
+                          {editors.map((editor) => (
+                            <option key={editor.id} value={editor.id}>{editor.name}</option>
+                          ))}
+                        </select>
+                      ) : member.role === "AUTHOR" ? (
+                        <span className="font-body-md text-xs text-on-surface-variant">
+                          {member.assigned_editor_name || "Unassigned"}
+                        </span>
+                      ) : (
+                        <span className="text-on-surface-variant">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={`text-[10px] font-bold px-2.5 py-1 rounded-sm uppercase ${
@@ -287,7 +337,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                   </tr>
                   {isEditing && (
                     <tr className="bg-surface-container-low/70">
-                      <td colSpan={6} className="border-t border-outline-variant/15 px-4 py-4">
+                      <td colSpan={7} className="border-t border-outline-variant/15 px-4 py-4">
                         {user?.role !== "ADMIN" || editForm.role === "ADMIN" ? (
                           <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary">
                             <i className="fa-solid fa-shield-halved" aria-hidden="true" />

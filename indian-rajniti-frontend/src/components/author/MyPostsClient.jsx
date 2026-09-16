@@ -151,8 +151,13 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
               <div className="flex-grow min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${STATUS_BADGE[post.status]}`}>
-                    {post.status}
+                    {post.status === "PENDING" && post.scheduled_publish_at && new Date(post.scheduled_publish_at) > new Date() ? "SCHEDULED" : post.status}
                   </span>
+                  {post.scheduled_publish_at && (
+                    <span className="text-[10px] font-body-md text-on-surface-variant">
+                      <i className="fa-solid fa-clock mr-1" />{new Date(post.scheduled_publish_at).toLocaleString()}
+                    </span>
+                  )}
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-sm uppercase ${AI_BADGE[post.ai_status]}`}>
                     AI: {post.ai_status.replace("_", " ")}
                   </span>

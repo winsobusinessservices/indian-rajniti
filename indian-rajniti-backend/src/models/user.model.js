@@ -19,6 +19,16 @@ const User = {
     return parseUser(rows[0]);
   },
 
+  async findByGoogleSub(googleSub) {
+    const [rows] = await pool.query("SELECT * FROM users WHERE google_sub = ?", [googleSub]);
+    return parseUser(rows[0]);
+  },
+
+  async linkGoogleAccount(id, googleSub) {
+    await pool.query("UPDATE users SET google_sub = ? WHERE id = ?", [googleSub, id]);
+    return User.findById(id);
+  },
+
   async findById(id) {
     const [rows] = await pool.query(
       `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = ?`,
@@ -44,6 +54,52 @@ const User = {
       `SELECT ${PUBLIC_COLUMNS} FROM users ORDER BY created_at DESC`
     );
     return rows.map(parseUser);
+  },
+
+  async getEditorAssignments() {
+    const [rows] = await pool.query(
+      `SELECT assignment.author_id, assignment.editor_id, editor.name AS editor_name
+       FROM editor_author_assignments assignment
+       INNER JOIN users editor ON editor.id = assignment.editor_id`
+    );
+    return rows;
+  },
+
+  async getAssignedAuthorIds(editorId) {
+    const [rows] = await pool.query(
+      "SELECT author_id FROM editor_author_assignments WHERE editor_id = ?",
+      [editorId]
+    );
+    return rows.map((row) => Number(row.author_id));
+  },
+
+  async isAuthorAssignedToEditor(authorId, editorId) {
+    const [rows] = await pool.query(
+      "SELECT 1 FROM editor_author_assignments WHERE author_id = ? AND editor_id = ? LIMIT 1",
+      [authorId, editorId]
+    );
+    return rows.length > 0;
+  },
+
+  async setAssignedEditor({ authorId, editorId, assignedBy }) {
+    if (editorId === null) {
+      await pool.query("DELETE FROM editor_author_assignments WHERE author_id = ?", [authorId]);
+      return null;
+    }
+    await pool.query(
+      `INSERT INTO editor_author_assignments (author_id, editor_id, assigned_by)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE editor_id = VALUES(editor_id), assigned_by = VALUES(assigned_by)`,
+      [authorId, editorId, assignedBy]
+    );
+    return { authorId: Number(authorId), editorId: Number(editorId) };
+  },
+
+  async clearEditorAssignmentsForUser(userId) {
+    await pool.query(
+      "DELETE FROM editor_author_assignments WHERE author_id = ? OR editor_id = ?",
+      [userId, userId]
+    );
   },
 
   async updateRole(id, role) {
@@ -100,6 +156,7 @@ const User = {
     name,
     email,
     passwordHash,
+    googleSub = null,
     role = "USER",
     termsAccepted = false,
     panDocument = null,
@@ -110,12 +167,13 @@ const User = {
   }) {
     const [result] = await pool.query(
       `INSERT INTO users
-        (name, email, password_hash, role, permissions, status, terms_accepted, terms_accepted_at, pan_document, aadhar_document, graduation_certificate, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, email, password_hash, google_sub, role, permissions, status, terms_accepted, terms_accepted_at, pan_document, aadhar_document, graduation_certificate, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         email,
         passwordHash,
+        googleSub,
         role,
         permissions === null ? null : JSON.stringify(normalizePermissions(permissions, role)),
         "ACTIVE",

@@ -23,6 +23,7 @@ const categoriesRoutes = require("./src/routes/categories.routes.js")
 const contactRoutes = require("./src/routes/contact.routes.js")
 const referenceDataRoutes = require("./src/routes/referenceData.routes.js")
 const walletRoutes = require("./src/routes/wallet.routes.js")
+const { publishDueScheduledContent } = require("./src/services/scheduledPublishing.service.js");
 
 const REQUIRED_PRODUCTION_ENV = ["CLIENT_ORIGIN", "JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"];
 const missingProductionEnv = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
@@ -125,9 +126,15 @@ async function startServer() {
   const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
+  publishDueScheduledContent().catch((error) => console.error("Scheduled publishing error:", error));
+  const scheduledPublishingTimer = setInterval(() => {
+    publishDueScheduledContent().catch((error) => console.error("Scheduled publishing error:", error));
+  }, 30_000);
+  scheduledPublishingTimer.unref();
 
   const shutdown = (signal) => {
     console.log(`${signal} received; shutting down gracefully.`);
+    clearInterval(scheduledPublishingTimer);
     server.close(async () => {
       await pool.end();
       process.exit(0);

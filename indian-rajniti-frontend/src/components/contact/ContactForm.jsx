@@ -30,7 +30,7 @@ export default function ContactForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} inert={submitting ? "" : undefined} aria-busy={submitting} className="rounded-xl border border-outline-variant/25 bg-surface p-6 shadow-sm md:p-8">
+    <form onSubmit={handleSubmit} inert={submitting} aria-busy={submitting} className="rounded-xl border border-outline-variant/25 bg-surface p-6 shadow-sm md:p-8">
       <div className="mb-7">
         <span className="font-label-sm text-xs font-bold uppercase tracking-[0.18em] text-secondary">Send a message</span>
         <h2 className="mt-2 font-display-lg text-3xl text-on-surface">Get in Touch</h2>

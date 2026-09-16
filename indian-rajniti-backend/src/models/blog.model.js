@@ -65,14 +65,14 @@ const Blog = {
     return rows.map((row) => row.category);
   },
 
-  async create({ authorId, title, excerpt, content, featuredImage, category, tags, relatedArticleId }) {
+  async create({ authorId, title, excerpt, content, featuredImage, category, tags, relatedArticleId, scheduledPublishAt }) {
     const slug = await uniqueSlug(title, async (candidate) => Boolean(await Blog.findBySlug(candidate)));
 
     const [result] = await pool.query(
       `INSERT INTO ${TABLE}
-        (author_id, title, slug, excerpt, content, featured_image, category, tags, related_article_id, status, ai_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
-      [authorId, title, slug, excerpt ?? null, content, featuredImage, category, tags ? JSON.stringify(tags) : null, relatedArticleId ?? null]
+        (author_id, title, slug, excerpt, content, featured_image, category, tags, related_article_id, scheduled_publish_at, status, ai_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
+      [authorId, title, slug, excerpt ?? null, content, featuredImage, category, tags ? JSON.stringify(tags) : null, relatedArticleId ?? null, scheduledPublishAt ?? null]
     );
     return Blog.findById(result.insertId);
   },
@@ -95,7 +95,7 @@ const Blog = {
   // Public reads — no auth, APPROVED only. See article.model.js's
   // findPublished for the category-substring-match rationale.
   async findPublished({ category, orderBy = "recent", limit = 20 } = {}) {
-    const conditions = ["b.status = 'APPROVED'"];
+    const conditions = ["b.status = 'APPROVED'", "COALESCE(b.published_at, b.created_at) <= NOW()"];
     const params = [];
     if (category) {
       conditions.push("b.category LIKE ?");
@@ -125,7 +125,7 @@ const Blog = {
     const params = topics.flatMap((topic) => [topic, topic, `%${topic}%`]);
     const [rows] = await pool.query(
       `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id
-       WHERE b.status = 'APPROVED' AND (${topicCondition})
+       WHERE b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW() AND (${topicCondition})
        ORDER BY b.published_at DESC, b.views DESC LIMIT ?`,
       [...params, limit]
     );
@@ -134,7 +134,7 @@ const Blog = {
 
   async findPublishedBySlug(slug) {
     const [rows] = await pool.query(
-      `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id WHERE b.slug = ? AND b.status = 'APPROVED'`,
+      `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id WHERE b.slug = ? AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()`,
       [slug]
     );
     return parseRow(rows[0]);
@@ -181,15 +181,15 @@ const Blog = {
     return rows.map(parseRow);
   },
 
-  async update(id, { title, excerpt, content, featuredImage, category, tags, relatedArticleId }) {
+  async update(id, { title, excerpt, content, featuredImage, category, tags, relatedArticleId, scheduledPublishAt }) {
     await pool.query(
       `UPDATE ${TABLE}
-       SET title = ?, excerpt = ?, content = ?, featured_image = ?, category = ?, tags = ?, related_article_id = ?,
+       SET title = ?, excerpt = ?, content = ?, featured_image = ?, category = ?, tags = ?, related_article_id = ?, scheduled_publish_at = ?,
            status = 'DRAFT', ai_status = 'NOT_CHECKED', ai_notes = NULL, ai_language = NULL, ai_language_confidence = NULL,
            ai_summary = NULL, ai_grammar_issues = NULL, ai_spelling_issues = NULL, ai_corrected_content = NULL, ai_quality_score = NULL, ai_recommendation = NULL,
            reviewer_id = NULL, review_notes = NULL, submitted_at = NULL, reviewed_at = NULL, published_at = NULL
        WHERE id = ?`,
-      [title, excerpt ?? null, content, featuredImage, category, tags ? JSON.stringify(tags) : null, relatedArticleId ?? null, id]
+      [title, excerpt ?? null, content, featuredImage, category, tags ? JSON.stringify(tags) : null, relatedArticleId ?? null, scheduledPublishAt ?? null, id]
     );
     return Blog.findById(id);
   },
@@ -257,12 +257,20 @@ const Blog = {
           id,
         ]
       );
+    } else if (action === "SCHEDULE") {
+      await pool.query(
+        `UPDATE ${TABLE} SET status = 'PENDING', reviewer_id = ?, review_notes = ?, scheduled_publish_at = ?, reviewed_at = NULL, published_at = NULL WHERE id = ?`,
+        [reviewerId, notes ?? null, fields.scheduledPublishAt, id]
+      );
     } else {
       const status = action === "APPROVE" ? "APPROVED" : "REJECTED";
       const publishedAt = action === "APPROVE" ? new Date() : null;
       await pool.query(
-        `UPDATE ${TABLE} SET status = ?, reviewer_id = ?, review_notes = ?, reviewed_at = NOW(), published_at = COALESCE(published_at, ?) WHERE id = ?`,
-        [status, reviewerId, notes ?? null, publishedAt, id]
+        `UPDATE ${TABLE} SET status = ?, reviewer_id = ?, review_notes = ?, reviewed_at = NOW(),
+         scheduled_publish_at = NULL,
+         published_at = CASE WHEN ? = 'APPROVED' THEN ? ELSE NULL END
+         WHERE id = ?`,
+        [status, reviewerId, notes ?? null, status, publishedAt, id]
       );
     }
     return Blog.findById(id);

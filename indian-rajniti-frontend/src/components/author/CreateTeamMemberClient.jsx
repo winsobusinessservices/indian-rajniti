@@ -166,7 +166,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
   return (
     <form
       onSubmit={handleSubmit}
-      inert={loading ? "" : undefined}
+      inert={loading}
       aria-busy={loading}
       className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12"
     >

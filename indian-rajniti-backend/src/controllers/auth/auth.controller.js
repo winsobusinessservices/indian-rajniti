@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 const User = require("../../models/user.model");
 const {
   sendPasswordResetEmail,
@@ -118,6 +119,24 @@ const AUTH_COOKIE_OPTIONS = {
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
 };
 const AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // keep in sync with JWT_EXPIRES_IN
+
+function setAuthCookie(res, user) {
+  res.cookie(AUTH_COOKIE_NAME, signToken(user), {
+    ...AUTH_COOKIE_OPTIONS,
+    maxAge: AUTH_COOKIE_MAX_AGE,
+  });
+}
+
+function authUserResponse(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    permissions: user.permissions,
+    status: user.status,
+  };
+}
 
 // =========================
 // REGISTER
@@ -250,24 +269,12 @@ const login = async (req, res) => {
       });
     }
 
-    const token = signToken(user);
-
-    res.cookie(AUTH_COOKIE_NAME, token, {
-      ...AUTH_COOKIE_OPTIONS,
-      maxAge: AUTH_COOKIE_MAX_AGE,
-    });
+    setAuthCookie(res, user);
 
     return res.status(200).json({
       success: true,
       message: "Login successful",
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        permissions: user.permissions,
-        status: user.status,
-      },
+      user: authUserResponse(user),
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -277,6 +284,100 @@ const login = async (req, res) => {
       message: "Internal server error",
     });
   }
+};
+
+// =========================
+// GOOGLE AUTH
+// =========================
+
+const googleAuth = async (req, res) => {
+  try {
+    const clientId = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+    if (!clientId) {
+      return res.status(503).json({ success: false, message: "Google authentication is not configured" });
+    }
+
+    const credential = String(req.body?.credential || "");
+    const intent = req.body?.intent === "register" ? "register" : "login";
+    if (!credential) {
+      return res.status(400).json({ success: false, message: "Google credential is required" });
+    }
+    if (intent === "register" && !req.body?.agreeToTerms) {
+      return res.status(400).json({
+        success: false,
+        message: "You must agree to the Terms of Service and Privacy Policy",
+      });
+    }
+
+    let ticket;
+    try {
+      ticket = await new OAuth2Client(clientId).verifyIdToken({
+        idToken: credential,
+        audience: clientId,
+      });
+    } catch {
+      return res.status(401).json({
+        success: false,
+        message: "Google sign-in expired or is invalid. Please try again.",
+      });
+    }
+    const profile = ticket.getPayload();
+    const googleSub = String(profile?.sub || "");
+    const email = normalizedEmailOf(profile?.email);
+    if (!googleSub || !EMAIL_REGEX.test(email) || profile?.email_verified !== true) {
+      return res.status(401).json({ success: false, message: "Google could not verify this email address" });
+    }
+
+    let created = false;
+    let user = await User.findByGoogleSub(googleSub);
+    if (!user) {
+      const emailUser = await User.findByEmail(email);
+      if (emailUser) {
+        user = await User.linkGoogleAccount(emailUser.id, googleSub);
+      } else if (intent === "register") {
+        // Keep password_hash non-null for compatibility. This random value is
+        // never disclosed and cannot be used to sign in; password reset can
+        // still establish a normal password later.
+        const passwordHash = await bcrypt.hash(crypto.randomBytes(48).toString("base64url"), 10);
+        const name = String(profile?.name || email.split("@")[0]).trim().slice(0, 120);
+        user = await User.create({
+          name,
+          email,
+          passwordHash,
+          googleSub,
+          termsAccepted: true,
+        });
+        created = true;
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: "No account uses this Google email. Create an account first.",
+        });
+      }
+    }
+
+    if (user.status !== "ACTIVE") {
+      return res.status(403).json({ success: false, message: "Your account is not active" });
+    }
+
+    setAuthCookie(res, user);
+    return res.status(created ? 201 : 200).json({
+      success: true,
+      message: created ? "Account created successfully" : "Login successful",
+      user: authUserResponse(user),
+    });
+  } catch (error) {
+    if (error?.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ success: false, message: "This Google account is already linked" });
+    }
+    console.error("Google auth error:", error);
+    return res.status(500).json({ success: false, message: "Unable to authenticate with Google" });
+  }
+};
+
+const getGoogleAuthConfig = (req, res) => {
+  const clientId = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+  return res.status(200).json({ success: true, clientId });
 };
 
 // =========================
@@ -343,9 +444,19 @@ const logout = async (req, res) => {
 const listUsers = async (req, res) => {
   try {
     const allUsers = await User.findAll();
-    const users = ["ADMIN", "INVESTOR"].includes(req.user.role)
+    const assignments = await User.getEditorAssignments();
+    const assignmentByAuthor = new Map(assignments.map((assignment) => [Number(assignment.author_id), assignment]));
+    const visibleUsers = ["ADMIN", "INVESTOR"].includes(req.user.role)
       ? allUsers
       : allUsers.filter((user) => MEMBER_ASSIGNABLE_ROLES.includes(user.role));
+    const users = visibleUsers.map((user) => {
+      const assignment = assignmentByAuthor.get(Number(user.id));
+      return {
+        ...user,
+        assigned_editor_id: assignment ? Number(assignment.editor_id) : null,
+        assigned_editor_name: assignment?.editor_name || null,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -523,6 +634,10 @@ const updateUserRole = async (req, res) => {
     const user = await User.updateRole(id, role);
 
     if (role !== existing.role) {
+      await User.clearEditorAssignmentsForUser(id);
+    }
+
+    if (role !== existing.role) {
       try {
         await sendRoleChangedEmail(user.email, user.name, existing.role, role);
       } catch (emailError) {
@@ -633,6 +748,10 @@ const updateUser = async (req, res) => {
     });
 
     if (role !== undefined && role !== existing.role) {
+      await User.clearEditorAssignmentsForUser(id);
+    }
+
+    if (role !== undefined && role !== existing.role) {
       try {
         await sendRoleChangedEmail(user.email, user.name, existing.role, role);
       } catch (emailError) {
@@ -652,6 +771,41 @@ const updateUser = async (req, res) => {
       success: false,
       message: "Internal server error",
     });
+  }
+};
+
+const assignAuthorEditor = async (req, res) => {
+  try {
+    const authorId = Number(req.params.id);
+    const rawEditorId = req.body?.editorId;
+    const editorId = rawEditorId === null || rawEditorId === "" ? null : Number(rawEditorId);
+
+    if (!Number.isInteger(authorId) || authorId <= 0 || (editorId !== null && (!Number.isInteger(editorId) || editorId <= 0))) {
+      return res.status(400).json({ success: false, message: "Author and editor IDs must be valid" });
+    }
+
+    const author = await User.findById(authorId);
+    if (!author || author.role !== "AUTHOR") {
+      return res.status(400).json({ success: false, message: "The selected team member must be an author" });
+    }
+
+    let editor = null;
+    if (editorId !== null) {
+      editor = await User.findById(editorId);
+      if (!editor || editor.role !== "EDITOR" || editor.status !== "ACTIVE") {
+        return res.status(400).json({ success: false, message: "Select an active editor" });
+      }
+    }
+
+    await User.setAssignedEditor({ authorId, editorId, assignedBy: req.user.userId });
+    return res.status(200).json({
+      success: true,
+      message: editor ? `${author.name} assigned to ${editor.name}` : `${author.name} is now unassigned`,
+      assignment: editor ? { authorId, editorId, editorName: editor.name } : null,
+    });
+  } catch (error) {
+    console.error("Assign author editor error:", error);
+    return res.status(500).json({ success: false, message: "Unable to update editor assignment" });
   }
 };
 
@@ -683,6 +837,7 @@ const deleteUser = async (req, res) => {
       });
     }
 
+    await User.clearEditorAssignmentsForUser(id);
     await User.delete(id);
 
     return res.status(200).json({
@@ -879,11 +1034,14 @@ module.exports = {
   verifyRegistrationOtp,
   register,
   login,
+  googleAuth,
+  getGoogleAuthConfig,
   getCurrentUser,
   listUsers,
   adminAssignRole,
   updateUserRole,
   updateUser,
+  assignAuthorEditor,
   deleteUser,
   logout,
   forgotPassword,

@@ -742,7 +742,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
             )}
           </div>
         </div>
-                <div className={`{sectionClass}`}>
+        <div className={sectionClass}>
           <SectionTitle icon="fa-cloud-arrow-up">Publish</SectionTitle>
 
           {error && (

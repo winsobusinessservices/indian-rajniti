@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import AuthTextField from "@/components/auth/AuthTextField";
 import AuthPasswordField from "@/components/auth/AuthPasswordField";
+import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import { authApi } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export default function RegisterForm() {
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -100,6 +103,26 @@ export default function RegisterForm() {
     setSuccess("");
   };
 
+  const handleGoogleCredential = useCallback(async (credential) => {
+    setError("");
+    setSuccess("");
+    if (!agreedToTerms) {
+      setError("Please agree to the Terms of Service and Privacy Policy.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authApi.googleAuth({ credential, intent: "register", agreeToTerms: true });
+      await refreshUser();
+      router.push("/");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [agreedToTerms, refreshUser, router]);
+
   return (
     <AuthShell
       title="Create Account"
@@ -120,7 +143,24 @@ export default function RegisterForm() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="mt-8 space-y-6">
+      <form onSubmit={handleSubmit} inert={loading} aria-busy={loading} className="mt-8 space-y-6">
+        {step === "details" && (
+          <>
+            <GoogleAuthButton
+              intent="register"
+              disabled={loading || !agreedToTerms}
+              onCredential={handleGoogleCredential}
+              onError={setError}
+            />
+
+            <div className="flex items-center gap-4" aria-hidden="true">
+              <span className="h-px flex-1 bg-outline-variant/30" />
+              <span className="font-label-sm text-xs uppercase tracking-widest text-on-surface-variant">or</span>
+              <span className="h-px flex-1 bg-outline-variant/30" />
+            </div>
+          </>
+        )}
+
         {step === "details" ? (
         <div className="space-y-5 rounded-md">
           <AuthTextField

@@ -23,6 +23,32 @@ pool.verifyConnection = async () => {
     if (!permissionColumns.length) {
       await connection.query("ALTER TABLE users ADD COLUMN permissions JSON NULL AFTER role");
     }
+    const [googleSubColumns] = await connection.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'google_sub'`
+    );
+    if (!googleSubColumns.length) {
+      await connection.query("ALTER TABLE users ADD COLUMN google_sub VARCHAR(255) NULL UNIQUE AFTER password_hash");
+    }
+    await connection.query(
+      `CREATE TABLE IF NOT EXISTS editor_author_assignments (
+        author_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+        editor_id BIGINT UNSIGNED NOT NULL,
+        assigned_by BIGINT UNSIGNED NULL,
+        assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_editor_author_editor (editor_id)
+      ) ENGINE=InnoDB`
+    );
+    for (const tableName of ["articles", "blogs"]) {
+      const [scheduleColumns] = await connection.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'scheduled_publish_at'`,
+        [tableName]
+      );
+      if (!scheduleColumns.length) {
+        await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN scheduled_publish_at DATETIME NULL AFTER published_at`);
+      }
+    }
     const [roleColumns] = await connection.query(
       `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'`

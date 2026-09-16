@@ -73,7 +73,7 @@ export default function ChangePasswordModal({ open, onClose }) {
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="space-y-5">
+          <form onSubmit={handleSubmit} inert={loading} aria-busy={loading} className="space-y-5">
             <AuthPasswordField
               id="current-password"
               name="currentPassword"

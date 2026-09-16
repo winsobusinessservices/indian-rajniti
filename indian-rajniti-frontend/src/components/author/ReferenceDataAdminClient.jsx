@@ -929,7 +929,7 @@ function HomeWidgetsAdmin({ widgets, onReload, user }) {
     );
   return (
     <section
-      inert={saving ? "" : undefined}
+      inert={saving}
       aria-busy={saving}
       className="rounded-lg border border-outline-variant/30 bg-surface p-4 sm:p-6"
     >
@@ -1093,7 +1093,7 @@ function PageContentAdmin({ profiles, onReload }) {
       </div>
       <form
         onSubmit={save}
-        inert={saving ? "" : undefined}
+        inert={saving}
         aria-busy={saving}
         className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2"
       >
@@ -1497,7 +1497,7 @@ export default function ReferenceDataAdminClient() {
         <>
           <form
             onSubmit={saveHouse}
-            inert={saving ? "" : undefined}
+            inert={saving}
             aria-busy={saving}
             className="rounded-lg border border-outline-variant/30 bg-surface p-4 sm:p-6"
           >
@@ -1548,7 +1548,7 @@ export default function ReferenceDataAdminClient() {
         <>
           <form
             onSubmit={save}
-            inert={saving ? "" : undefined}
+            inert={saving}
             aria-busy={saving}
             className="rounded-lg border border-outline-variant/30 bg-surface p-4 sm:p-6"
           >

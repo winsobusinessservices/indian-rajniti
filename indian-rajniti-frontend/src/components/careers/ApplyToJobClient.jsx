@@ -256,7 +256,7 @@ export default function ApplyToJobClient({ job }) {
   return (
     <form
       onSubmit={handleSubmit}
-      inert={submitting ? "" : undefined}
+      inert={submitting}
       aria-busy={submitting}
       className="bg-surface-container-low rounded-lg p-6 space-y-4"
     >

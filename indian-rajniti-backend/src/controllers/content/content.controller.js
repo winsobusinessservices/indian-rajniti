@@ -5,6 +5,7 @@
 const Article = require("../../models/article.model");
 const Blog = require("../../models/blog.model");
 const Video = require("../../models/video.model");
+const User = require("../../models/user.model");
 const { fileUrl } = require("../../middleware/upload.middleware");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { joinContentMedia } = require("../../utils/contentMedia");
@@ -15,6 +16,11 @@ const isModerator = (user) => user.role === "ADMIN" || user.permissions?.include
 
 const MODEL = { ARTICLE: Article, BLOG: Blog, VIDEO: Video };
 const TYPE_LABEL = { ARTICLE: "Article", BLOG: "Blog", VIDEO: "Video" };
+
+async function canAccessAuthor(user, authorId) {
+  if (user.role !== "EDITOR") return true;
+  return User.isAuthorAssignedToEditor(authorId, user.userId);
+}
 
 // Each type has different required fields and a different subset of the
 // request body maps onto its model's create/update payload.
@@ -148,6 +154,10 @@ async function loadOwnedContent(req, res) {
     res.status(403).json({ success: false, message: "You do not have permission to access this content" });
     return null;
   }
+  if (item.author_id !== req.user.userId && !(await canAccessAuthor(req.user, item.author_id))) {
+    res.status(403).json({ success: false, message: "This author is assigned to another editor" });
+    return null;
+  }
   return item;
 }
 
@@ -192,8 +202,13 @@ const listAllContent = async (req, res) => {
     const Model = MODEL[req.contentType];
     const { status } = req.query;
     const posts = await Model.findAll({ status });
-    console.log(`List all ${req.contentType} for ${req.user.role}:`, posts.length, "items");
-    return res.status(200).json({ success: true, posts: tagType(req.contentType, posts) });
+    let visiblePosts = posts;
+    if (req.user.role === "EDITOR") {
+      const assignedAuthorIds = new Set(await User.getAssignedAuthorIds(req.user.userId));
+      visiblePosts = posts.filter((post) => assignedAuthorIds.has(Number(post.author_id)));
+    }
+    console.log(`List all ${req.contentType} for ${req.user.role}:`, visiblePosts.length, "items");
+    return res.status(200).json({ success: true, posts: tagType(req.contentType, visiblePosts) });
   } catch (error) {
     console.error(`List all ${req.contentType} error:`, error);
     return res.status(500).json({ success: false, message: "Internal server error" });
@@ -279,7 +294,6 @@ const submitContent = async (req, res) => {
         message: `Only drafts or rejected ${TYPE_LABEL[req.contentType].toLowerCase()}s can be submitted (current status: ${item.status})`,
       });
     }
-
     const updated = await MODEL[req.contentType].submit(item.id);
     return res.status(200).json({
       success: true,
@@ -313,6 +327,7 @@ const getContentStatus = async (req, res) => {
         submittedAt: item.submitted_at,
         reviewedAt: item.reviewed_at,
         publishedAt: item.published_at,
+        scheduledPublishAt: item.scheduled_publish_at,
       },
     });
   } catch (error) {
@@ -343,10 +358,20 @@ const reviewContent = async (req, res) => {
         message: "Editors can only review content submitted by authors — content from an editor or admin requires admin review.",
       });
     }
+    if (!(await canAccessAuthor(req.user, item.author_id))) {
+      return res.status(403).json({ success: false, message: "This author is assigned to another editor" });
+    }
 
     const { action, notes } = req.body;
-    if (!["APPROVE", "REJECT", "UPDATE"].includes(action)) {
-      return res.status(400).json({ success: false, message: "action must be one of APPROVE, REJECT, or UPDATE" });
+    if (!["APPROVE", "REJECT", "UPDATE", "SCHEDULE"].includes(action)) {
+      return res.status(400).json({ success: false, message: "action must be one of APPROVE, REJECT, UPDATE, or SCHEDULE" });
+    }
+    let scheduledPublishAt = null;
+    if (action === "SCHEDULE") {
+      scheduledPublishAt = new Date(req.body?.scheduledPublishAt);
+      if (Number.isNaN(scheduledPublishAt.getTime()) || scheduledPublishAt.getTime() <= Date.now()) {
+        return res.status(400).json({ success: false, message: "Choose a future publication date and time" });
+      }
     }
 
     const fields = action === "UPDATE" ? extractFields(req.contentType, req.body) : {};
@@ -357,9 +382,10 @@ const reviewContent = async (req, res) => {
       }
     }
 
-    const updated = await Model.review(item.id, { reviewerId: req.user.userId, action, notes, ...fields });
+    const updated = await Model.review(item.id, { reviewerId: req.user.userId, action, notes, scheduledPublishAt, ...fields });
     let awardedPoints = 0;
-    if (action === "APPROVE" && ["AUTHOR", "EDITOR"].includes(updated.author_role)) {
+    const isPublishedNow = !updated.published_at || new Date(updated.published_at).getTime() <= Date.now();
+    if (action === "APPROVE" && isPublishedNow && ["AUTHOR", "EDITOR"].includes(updated.author_role)) {
       const reward = await creditContentReward({
         userId: updated.author_id,
         contributorRole: updated.author_role,
@@ -373,7 +399,9 @@ const reviewContent = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `${TYPE_LABEL[req.contentType]} ${action.toLowerCase()}d${awardedPoints ? ` and ${awardedPoints} wallet points awarded` : ""}`,
+      message: action === "SCHEDULE"
+        ? `${TYPE_LABEL[req.contentType]} scheduled for automatic approval and publication`
+        : `${TYPE_LABEL[req.contentType]} ${action.toLowerCase()}d${awardedPoints ? ` and ${awardedPoints} wallet points awarded` : ""}`,
       post: tagType(req.contentType, updated),
       awardedPoints,
     });
@@ -422,6 +450,12 @@ const bulkModerateContent = async (req, res) => {
       if (!item.post) {
         return res.status(404).json({ success: false, message: `${TYPE_LABEL[item.type]} ${item.id} not found` });
       }
+      if (!(await canAccessAuthor(req.user, item.post.author_id))) {
+        return res.status(403).json({
+          success: false,
+          message: "One or more selected items belong to an author assigned to another editor.",
+        });
+      }
       if (action !== "DELETE" && !canReview(req.user.role, item.post.author_role)) {
         return res.status(403).json({
           success: false,
@@ -445,7 +479,8 @@ const bulkModerateContent = async (req, res) => {
         action,
         notes: notes || undefined,
       });
-      if (action === "APPROVE" && ["AUTHOR", "EDITOR"].includes(updated.author_role)) {
+      const isPublishedNow = !updated.published_at || new Date(updated.published_at).getTime() <= Date.now();
+      if (action === "APPROVE" && isPublishedNow && ["AUTHOR", "EDITOR"].includes(updated.author_role)) {
         const reward = await creditContentReward({
           userId: updated.author_id,
           contributorRole: updated.author_role,

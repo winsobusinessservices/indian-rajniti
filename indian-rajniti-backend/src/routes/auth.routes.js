@@ -2,12 +2,15 @@ const express = require("express");
 const routes = express.Router();
 const {
   login,
+  googleAuth,
+  getGoogleAuthConfig,
   register,
   getCurrentUser,
   listUsers,
   adminAssignRole,
   updateUserRole,
   updateUser,
+  assignAuthorEditor,
   deleteUser,
   logout,
   forgotPassword,
@@ -120,6 +123,20 @@ routes.post("/auth/register", register);
  *         description: Account is not active
  */
 routes.post("/auth/login", login);
+
+/**
+ * @openapi
+ * /api/auth/google:
+ *   post:
+ *     summary: Sign in or register with a Google ID token
+ *     tags: [Auth]
+ *     responses:
+ *       200: { description: Google login successful }
+ *       201: { description: Google registration successful }
+ *       401: { description: Invalid Google credential }
+ */
+routes.get("/auth/google/config", getGoogleAuthConfig);
+routes.post("/auth/google", googleAuth);
 
 /**
  * @openapi
@@ -265,6 +282,7 @@ routes.patch("/auth/users/:id/role", authenticate, authorizePermission(PERMISSIO
  *         description: Email already in use
  */
 routes.patch("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), updateUser);
+routes.patch("/auth/users/:id/editor", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), assignAuthorEditor);
 
 /**
  * @openapi

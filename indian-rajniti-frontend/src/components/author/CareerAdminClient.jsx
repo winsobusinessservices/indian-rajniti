@@ -371,7 +371,7 @@ export default function CareerAdminClient() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} inert={submitting ? "" : undefined} aria-busy={submitting} className={sectionClass}>
+      <form onSubmit={handleSubmit} inert={submitting} aria-busy={submitting} className={sectionClass}>
         <h2 className="font-headline-md text-sm text-primary uppercase tracking-wide mb-4 flex items-center gap-2">
           <i className={`fa-solid ${editingJobId ? "fa-pen" : "fa-plus"}`} /> {editingJobId ? "Edit Job Posting" : "New Job Posting"}
         </h2>

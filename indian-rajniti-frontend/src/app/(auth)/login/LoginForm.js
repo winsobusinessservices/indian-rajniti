@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import AuthTextField from "@/components/auth/AuthTextField";
 import AuthPasswordField from "@/components/auth/AuthPasswordField";
+import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import { authApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -35,6 +36,20 @@ export default function LoginForm() {
     }
   };
 
+  const handleGoogleCredential = useCallback(async (credential) => {
+    setError("");
+    setLoading(true);
+    try {
+      await authApi.googleAuth({ credential, intent: "login" });
+      await refreshUser();
+      router.push("/");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshUser, router]);
+
   return (
     <AuthShell
       title="Welcome Back"
@@ -53,7 +68,20 @@ export default function LoginForm() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="mt-8 space-y-6">
+      <form onSubmit={handleSubmit} inert={loading} aria-busy={loading} className="mt-8 space-y-6">
+        <GoogleAuthButton
+          intent="login"
+          disabled={loading}
+          onCredential={handleGoogleCredential}
+          onError={setError}
+        />
+
+        <div className="flex items-center gap-4" aria-hidden="true">
+          <span className="h-px flex-1 bg-outline-variant/30" />
+          <span className="font-label-sm text-xs uppercase tracking-widest text-on-surface-variant">or</span>
+          <span className="h-px flex-1 bg-outline-variant/30" />
+        </div>
+
         <div className="space-y-5 rounded-md">
           <AuthTextField
             id="email-address"

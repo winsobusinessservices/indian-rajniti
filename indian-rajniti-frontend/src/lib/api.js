@@ -109,6 +109,8 @@ export const authApi = {
   verifyRegistrationOtp: (payload) => request("/auth/register/verify-otp", { method: "POST", body: payload }),
   register: (payload) => request("/auth/register", { method: "POST", body: payload }),
   login: (payload) => request("/auth/login", { method: "POST", body: payload }),
+  googleAuth: (payload) => request("/auth/google", { method: "POST", body: payload }),
+  getGoogleAuthConfig: () => request("/auth/google/config", { notifyError: false }),
   logout: () => request("/auth/logout", { method: "POST" }),
   me: () => request("/auth/me", { notifyError: false }),
   changePassword: (payload) => request("/auth/change-password", { method: "POST", body: payload }),
@@ -120,6 +122,10 @@ export const authApi = {
   listUsers: () => request("/auth/users"),
   // Admin only — combined name/email/role editor for the Team Members table.
   updateUser: (id, payload) => request(`/auth/users/${id}`, { method: "PATCH", body: payload }),
+  assignAuthorEditor: (authorId, editorId) => request(`/auth/users/${authorId}/editor`, {
+    method: "PATCH",
+    body: { editorId },
+  }),
   // Admin only — removes a team member's account entirely.
   deleteUser: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
   // Admin assigning an Author/Editor/Investor role (with KYC documents) to an

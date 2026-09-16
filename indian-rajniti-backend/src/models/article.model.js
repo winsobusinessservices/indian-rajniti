@@ -133,6 +133,7 @@ const Article = {
     tags,
     relatedPolitician,
     relatedElection,
+    scheduledPublishAt,
   }) {
     const slug = await uniqueSlug(
       title,
@@ -154,10 +155,11 @@ const Article = {
           tags,
           related_politician,
           related_election,
+          scheduled_publish_at,
           status,
           ai_status
         )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
       [
         authorId,
         title,
@@ -170,6 +172,7 @@ const Article = {
         tags ? JSON.stringify(tags) : null,
         relatedPolitician ?? null,
         relatedElection ?? null,
+        scheduledPublishAt ?? null,
       ]
     );
 
@@ -216,7 +219,7 @@ const Article = {
   // substring match since authors free-type both fields in PostForm.jsx —
   // there's no fixed taxonomy to match exactly against.
   async findPublished({ category, state, sinceDays, orderBy = "recent", limit = 20 } = {}) {
-    const conditions = ["a.status = 'APPROVED'"];
+    const conditions = ["a.status = 'APPROVED'", "COALESCE(a.published_at, a.created_at) <= NOW()"];
     const params = [];
 
     if (category) {
@@ -259,7 +262,7 @@ const Article = {
     const params = topics.flatMap((topic) => [topic, topic, topic, topic, topic, `%${topic}%`]);
     const [rows] = await pool.query(
       `SELECT a.*, u.name AS author_name FROM ${TABLE} a JOIN users u ON u.id = a.author_id
-       WHERE a.status = 'APPROVED' AND (${topicCondition})
+       WHERE a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW() AND (${topicCondition})
        ORDER BY a.published_at DESC, a.views DESC LIMIT ?`,
       [...params, limit]
     );
@@ -271,7 +274,7 @@ const Article = {
       `SELECT a.*, u.name AS author_name
        FROM ${TABLE} a
        JOIN users u ON u.id = a.author_id
-       WHERE a.slug = ? AND a.status = 'APPROVED'`,
+       WHERE a.slug = ? AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()`,
       [slug]
     );
     return parseRow(rows[0]);
@@ -369,6 +372,7 @@ const Article = {
       tags,
       relatedPolitician,
       relatedElection,
+      scheduledPublishAt,
     }
   ) {
     await pool.query(
@@ -383,6 +387,7 @@ const Article = {
          tags = ?,
          related_politician = ?,
          related_election = ?,
+         scheduled_publish_at = ?,
 
          status = 'DRAFT',
          ai_status = 'NOT_CHECKED',
@@ -413,6 +418,7 @@ const Article = {
         tags ? JSON.stringify(tags) : null,
         relatedPolitician ?? null,
         relatedElection ?? null,
+        scheduledPublishAt ?? null,
         id,
       ]
     );
@@ -611,6 +617,13 @@ const Article = {
         ]
       );
 
+    } else if (action === "SCHEDULE") {
+      await pool.query(
+        `UPDATE ${TABLE}
+         SET status = 'PENDING', reviewer_id = ?, review_notes = ?, scheduled_publish_at = ?, reviewed_at = NULL, published_at = NULL
+         WHERE id = ?`,
+        [reviewerId, notes ?? null, fields.scheduledPublishAt, id]
+      );
     } else {
       /*
        * APPROVE / REJECT
@@ -620,10 +633,7 @@ const Article = {
           ? "APPROVED"
           : "REJECTED";
 
-      const publishedAt =
-        action === "APPROVE"
-          ? new Date()
-          : null;
+      const publishedAt = action === "APPROVE" ? new Date() : null;
 
       await pool.query(
         `UPDATE ${TABLE}
@@ -632,15 +642,14 @@ const Article = {
            reviewer_id = ?,
            review_notes = ?,
            reviewed_at = NOW(),
-           published_at = COALESCE(
-             published_at,
-             ?
-           )
+           scheduled_publish_at = NULL,
+           published_at = CASE WHEN ? = 'APPROVED' THEN ? ELSE NULL END
          WHERE id = ?`,
         [
           status,
           reviewerId,
           notes ?? null,
+          status,
           publishedAt,
           id,
         ]

@@ -23,6 +23,11 @@ const TYPE_ICON = {
 
 const postKey = (post) => `${post.type}:${post.id}`;
 
+function localDateTimeValue(date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 /**
  * The editor-facing counterpart to MyPostsClient — instead of one author's
  * content across every status, this is every PENDING submission across every
@@ -39,11 +44,13 @@ export default function ReviewQueueClient() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selected, setSelected] = useState(() => new Set());
   const [bulkAction, setBulkAction] = useState(null);
+  const [scheduleTarget, setScheduleTarget] = useState(null);
+  const [scheduleAt, setScheduleAt] = useState("");
 
   useEffect(() => {
     authorApi
       .listAllHistory({ status: "PENDING" })
-      .then(setPosts)
+      .then((items) => setPosts(items.filter((post) => !post.scheduled_publish_at)))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
@@ -96,6 +103,30 @@ export default function ReviewQueueClient() {
     setDeleteTarget(null);
   };
 
+  const openSchedule = (post) => {
+    setScheduleTarget(post);
+    setScheduleAt(post.scheduled_publish_at
+      ? localDateTimeValue(new Date(post.scheduled_publish_at))
+      : localDateTimeValue(new Date(Date.now() + 30 * 60 * 1000)));
+    setActionError("");
+  };
+
+  const handleSchedule = async () => {
+    if (!scheduleTarget || !scheduleAt) return;
+    setActionError("");
+    try {
+      await authorApi.reviewPost(scheduleTarget.type, scheduleTarget.id, {
+        action: "SCHEDULE",
+        scheduledPublishAt: new Date(scheduleAt).toISOString(),
+      });
+      setPosts((current) => current.filter((post) => postKey(post) !== postKey(scheduleTarget)));
+      setScheduleTarget(null);
+      setScheduleAt("");
+    } catch (err) {
+      setActionError(err.message);
+    }
+  };
+
   const selectedPosts = posts.filter((post) => selected.has(postKey(post)));
   const hasRestrictedSelection = user?.role !== "ADMIN" && selectedPosts.some((post) => post.author_role !== "AUTHOR");
 
@@ -136,7 +167,9 @@ export default function ReviewQueueClient() {
         )}
       </div>
       <p className="font-body-md text-on-surface-variant mb-8">
-        Every article, blog, and video submitted for review, from every author, waiting on you.
+        {user?.role === "EDITOR"
+          ? "Pending content from the authors assigned to you."
+          : "Every article, blog, and video submitted for review, waiting on you."}
       </p>
 
       {actionError && (
@@ -230,6 +263,11 @@ export default function ReviewQueueClient() {
                     </span>
                   )}
                   <span className="text-[10px] font-label-md text-on-surface-variant uppercase">{post.type}</span>
+                  {post.scheduled_publish_at && (
+                    <span className="text-[10px] font-body-md text-on-surface-variant">
+                      <i className="fa-solid fa-clock mr-1" />Scheduled {new Date(post.scheduled_publish_at).toLocaleString()}
+                    </span>
+                  )}
                   {post.author_name && (
                     <span className="text-[10px] font-body-md text-on-surface-variant">
                       by {post.author_name}
@@ -282,6 +320,14 @@ export default function ReviewQueueClient() {
                     >
                       <i className="fa-solid fa-check" /> Approve &amp; Publish
                     </button>
+                    {(post.type === "ARTICLE" || post.type === "BLOG") && (
+                      <button
+                        onClick={() => openSchedule(post)}
+                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-label-md border border-primary/40 text-primary rounded hover:bg-primary/10 transition-colors"
+                      >
+                        <i className="fa-solid fa-calendar-clock" /> {post.scheduled_publish_at ? "Reschedule" : "Schedule"}
+                      </button>
+                    )}
                     <button
                       onClick={() => setRejectTarget(post)}
                       className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-label-md bg-yellow-500 text-black rounded hover:bg-yellow-600 transition-colors"
@@ -317,6 +363,35 @@ export default function ReviewQueueClient() {
         placeholder="What needs to change?"
         required="true"
       />
+
+      {scheduleTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal="true" aria-labelledby="schedule-title">
+          <div className="w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
+            <h2 id="schedule-title" className="font-headline-lg text-xl text-primary">Schedule approval &amp; publication</h2>
+            <p className="mt-2 font-body-md text-sm text-on-surface-variant">
+              This content will remain pending and private until the selected time, then approve and publish automatically.
+            </p>
+            <label htmlFor="scheduled-publication-time" className="mt-5 block font-label-md text-xs text-on-surface-variant">
+              Publication date and time
+            </label>
+            <input
+              id="scheduled-publication-time"
+              type="datetime-local"
+              value={scheduleAt}
+              onChange={(event) => setScheduleAt(event.target.value)}
+              className="mt-1.5 w-full rounded border border-outline-variant/40 bg-surface-container-low px-3 py-2.5 text-on-surface outline-none focus:border-primary"
+            />
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setScheduleTarget(null)} className="rounded border border-outline-variant/40 px-4 py-2 font-label-md text-sm">
+                Cancel
+              </button>
+              <button type="button" onClick={handleSchedule} disabled={!scheduleAt} className="rounded bg-primary px-4 py-2 font-label-md text-sm text-on-primary disabled:opacity-50">
+                Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ReasonModal
         open={!!bulkAction}

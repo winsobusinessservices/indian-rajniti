@@ -35,11 +35,11 @@ async function syncApprovedContentRewards(userId) {
             u.role AS contributor_role,
             COALESCE(a.published_at, a.created_at) AS published_at
      FROM articles a JOIN users u ON u.id = a.author_id
-     WHERE a.author_id = ? AND a.status = 'APPROVED'
+     WHERE a.author_id = ? AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()
      UNION ALL
      SELECT b.id, b.author_id, b.title, 'BLOG', u.role, COALESCE(b.published_at, b.created_at)
      FROM blogs b JOIN users u ON u.id = b.author_id
-     WHERE b.author_id = ? AND b.status = 'APPROVED'
+     WHERE b.author_id = ? AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()
      UNION ALL
      SELECT v.id, v.author_id, v.title, 'VIDEO', u.role, COALESCE(v.published_at, v.created_at)
      FROM videos v JOIN users u ON u.id = v.author_id

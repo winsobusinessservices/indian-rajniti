@@ -36,7 +36,7 @@ export default async function AboutPage() {
       <BreakingNews text={breakingNews} />
       <Header />
 
-      <main className="flex-grow bg-background">
+      <main className="w-full bg-background flex-grow">
         <section className="border-b border-outline-variant/20 bg-surface px-4 py-14 md:px-16 md:py-20">
           <div className="mx-auto max-w-4xl text-center">
             <span className="font-label-sm text-xs font-bold uppercase tracking-[0.22em] text-secondary">About Indian Rajneeti</span>

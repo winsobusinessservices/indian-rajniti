@@ -50,7 +50,7 @@ export default function ForgotPasswordForm() {
         </>
       }
     >
-      <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="mt-8 space-y-6">
+      <form onSubmit={handleSubmit} inert={loading} aria-busy={loading} className="mt-8 space-y-6">
         <AuthTextField
           id="email-address"
           name="email"
