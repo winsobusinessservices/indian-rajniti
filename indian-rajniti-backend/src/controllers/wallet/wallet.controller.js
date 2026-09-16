@@ -1,6 +1,6 @@
 const Wallet = require("../../models/wallet.model");
 const User = require("../../models/user.model");
-const { syncApprovedContentRewards } = require("../../services/walletRewards.service");
+const { syncApprovedContentRewards, syncEditorReviewRewards } = require("../../services/walletRewards.service");
 const RazorpayPayout = require("../../services/razorpayPayout.service");
 const { getWithdrawalWindow } = require("../../utils/withdrawalWindow");
 
@@ -67,10 +67,14 @@ async function reconcileRazorpayWithdrawals(userId) {
 const getWallet = async (req, res) => {
   try {
     await syncApprovedContentRewards(req.user.userId);
+    if (req.user.role === "EDITOR") await syncEditorReviewRewards(req.user.userId);
     await reconcileRazorpayWithdrawals(req.user.userId);
     const settings = await Wallet.getWithdrawalSettings();
     const wallet = withWithdrawalEligibility(await Wallet.getForUser(req.user.userId), settings);
     wallet.rewardPoints = await Wallet.getRewardPoints(req.user.role);
+    if (req.user.role === "EDITOR") {
+      wallet.editorReviewRewardPoints = await Wallet.getEditorReviewRewardPoints();
+    }
     return res.status(200).json({ success: true, wallet });
   } catch (error) {
     console.error("Get wallet error:", error);
@@ -83,6 +87,7 @@ const requestWithdrawal = async (req, res) => {
   try {
     RazorpayPayout.assertConfigured();
     await syncApprovedContentRewards(req.user.userId);
+    if (req.user.role === "EDITOR") await syncEditorReviewRewards(req.user.userId);
     const points = Number(req.body?.points);
     const contributor = await User.findById(req.user.userId);
     if (!contributor?.email) {
@@ -336,8 +341,12 @@ const updateWithdrawalSettings = async (req, res) => {
 
 const getPointRates = async (req, res) => {
   try {
-    const [rates, rewardPoints] = await Promise.all([Wallet.getPointRates(), Wallet.getRewardPoints()]);
-    return res.status(200).json({ success: true, rates, rewardPoints });
+    const [rates, rewardPoints, editorReviewRewardPoints] = await Promise.all([
+      Wallet.getPointRates(),
+      Wallet.getRewardPoints(),
+      Wallet.getEditorReviewRewardPoints(),
+    ]);
+    return res.status(200).json({ success: true, rates, rewardPoints, editorReviewRewardPoints });
   } catch (error) {
     console.error("Get point rates error:", error);
     return res.status(500).json({ success: false, message: "Unable to load point rates" });
@@ -368,6 +377,11 @@ const updatePointRates = async (req, res) => {
         VIDEO: Number(req.body?.editorVideoPoints),
       },
     };
+    const requestedEditorReviewRewardPoints = {
+      ARTICLE: Number(req.body?.editorReviewArticlePoints),
+      BLOG: Number(req.body?.editorReviewBlogPoints),
+      VIDEO: Number(req.body?.editorReviewVideoPoints),
+    };
     if (!validPointRate(authorRate) || !validPointRate(editorRate)) {
       return res.status(400).json({
         success: false,
@@ -380,11 +394,24 @@ const updatePointRates = async (req, res) => {
         message: "All Author and Editor content rewards must be positive whole numbers",
       });
     }
-    const [rates, rewardPoints] = await Promise.all([
+    if (!Object.values(requestedEditorReviewRewardPoints).every(validRewardPoints)) {
+      return res.status(400).json({
+        success: false,
+        message: "All Editor approval rewards must be positive whole numbers",
+      });
+    }
+    const [rates, rewardPoints, editorReviewRewardPoints] = await Promise.all([
       Wallet.setPointRates({ authorRate, editorRate, updatedBy: req.user.userId }),
       Wallet.setRewardPoints({ rewardPoints: requestedRewardPoints, updatedBy: req.user.userId }),
+      Wallet.setEditorReviewRewardPoints({ rewardPoints: requestedEditorReviewRewardPoints, updatedBy: req.user.userId }),
     ]);
-    return res.status(200).json({ success: true, message: "Point values and content rewards updated", rates, rewardPoints });
+    return res.status(200).json({
+      success: true,
+      message: "Point values, content rewards, and Editor approval rewards updated",
+      rates,
+      rewardPoints,
+      editorReviewRewardPoints,
+    });
   } catch (error) {
     console.error("Update point rates error:", error);
     return res.status(500).json({ success: false, message: "Unable to update point rates" });

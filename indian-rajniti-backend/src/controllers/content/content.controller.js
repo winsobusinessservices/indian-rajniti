@@ -9,7 +9,7 @@ const User = require("../../models/user.model");
 const { fileUrl } = require("../../middleware/upload.middleware");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { joinContentMedia } = require("../../utils/contentMedia");
-const { creditContentReward } = require("../../services/walletRewards.service");
+const { creditContentReward, creditEditorReviewReward } = require("../../services/walletRewards.service");
 
 const { PERMISSIONS } = require("../../config/permissions");
 const isModerator = (user) => user.role === "ADMIN" || user.permissions?.includes(PERMISSIONS.REVIEW_CONTENT);
@@ -384,6 +384,7 @@ const reviewContent = async (req, res) => {
 
     const updated = await Model.review(item.id, { reviewerId: req.user.userId, action, notes, scheduledPublishAt, ...fields });
     let awardedPoints = 0;
+    let editorAwardedPoints = 0;
     const isPublishedNow = !updated.published_at || new Date(updated.published_at).getTime() <= Date.now();
     if (action === "APPROVE" && isPublishedNow && ["AUTHOR", "EDITOR"].includes(updated.author_role)) {
       const reward = await creditContentReward({
@@ -396,14 +397,25 @@ const reviewContent = async (req, res) => {
       });
       if (reward.credited) awardedPoints = reward.points;
     }
+    if (action === "APPROVE" && isPublishedNow && req.user.role === "EDITOR") {
+      const reward = await creditEditorReviewReward({
+        editorId: req.user.userId,
+        contentType: req.contentType,
+        contentId: updated.id,
+        title: updated.title,
+        publishedAt: updated.published_at,
+      });
+      if (reward.credited) editorAwardedPoints = reward.points;
+    }
 
     return res.status(200).json({
       success: true,
       message: action === "SCHEDULE"
         ? `${TYPE_LABEL[req.contentType]} scheduled for automatic approval and publication`
-        : `${TYPE_LABEL[req.contentType]} ${action.toLowerCase()}d${awardedPoints ? ` and ${awardedPoints} wallet points awarded` : ""}`,
+        : `${TYPE_LABEL[req.contentType]} ${action.toLowerCase()}d${awardedPoints ? ` and ${awardedPoints} creator points awarded` : ""}${editorAwardedPoints ? `; you earned ${editorAwardedPoints} approval points` : ""}`,
       post: tagType(req.contentType, updated),
       awardedPoints,
+      editorAwardedPoints,
     });
   } catch (error) {
     console.error(`Review ${req.contentType} error:`, error);
@@ -465,6 +477,7 @@ const bulkModerateContent = async (req, res) => {
     }
 
     let awardedPoints = 0;
+    let editorAwardedPoints = 0;
     for (const item of items) {
       if (action === "DELETE") {
         if (notes) {
@@ -491,6 +504,16 @@ const bulkModerateContent = async (req, res) => {
         });
         if (reward.credited) awardedPoints += reward.points;
       }
+      if (action === "APPROVE" && isPublishedNow && req.user.role === "EDITOR") {
+        const reward = await creditEditorReviewReward({
+          editorId: req.user.userId,
+          contentType: item.type,
+          contentId: updated.id,
+          title: updated.title,
+          publishedAt: updated.published_at,
+        });
+        if (reward.credited) editorAwardedPoints += reward.points;
+      }
     }
 
     return res.status(200).json({
@@ -498,6 +521,7 @@ const bulkModerateContent = async (req, res) => {
       message: `${items.length} item${items.length === 1 ? "" : "s"} ${action.toLowerCase()}d`,
       processed: items.map(({ type, id }) => ({ type, id })),
       awardedPoints,
+      editorAwardedPoints,
     });
   } catch (error) {
     console.error("Bulk content moderation error:", error);

@@ -288,6 +288,18 @@ pool.verifyConnection = async () => {
          ('EDITOR', 'ARTICLE', 10), ('EDITOR', 'BLOG', 10), ('EDITOR', 'VIDEO', 5)`
     );
     await connection.query(
+      `CREATE TABLE IF NOT EXISTS editor_review_reward_settings (
+        content_type ENUM('ARTICLE', 'BLOG', 'VIDEO') NOT NULL PRIMARY KEY,
+        points INT UNSIGNED NOT NULL,
+        updated_by BIGINT UNSIGNED NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB`
+    );
+    await connection.query(
+      `INSERT IGNORE INTO editor_review_reward_settings (content_type, points)
+       VALUES ('ARTICLE', 1), ('BLOG', 1), ('VIDEO', 1)`
+    );
+    await connection.query(
       `CREATE TABLE IF NOT EXISTS wallet_withdrawals (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         user_id BIGINT UNSIGNED NOT NULL,

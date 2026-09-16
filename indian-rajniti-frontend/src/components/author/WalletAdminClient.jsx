@@ -27,6 +27,9 @@ export default function WalletAdminClient() {
     editorArticlePoints: "",
     editorBlogPoints: "",
     editorVideoPoints: "",
+    editorReviewArticlePoints: "",
+    editorReviewBlogPoints: "",
+    editorReviewVideoPoints: "",
   });
   const [loading, setLoading] = useState(true);
   const [authorMinimumRemainingInr, setAuthorMinimumRemainingInr] = useState("");
@@ -53,6 +56,9 @@ export default function WalletAdminClient() {
         editorArticlePoints: String(data.rewardPoints.EDITOR.ARTICLE),
         editorBlogPoints: String(data.rewardPoints.EDITOR.BLOG),
         editorVideoPoints: String(data.rewardPoints.EDITOR.VIDEO),
+        editorReviewArticlePoints: String(data.editorReviewRewardPoints?.ARTICLE ?? 1),
+        editorReviewBlogPoints: String(data.editorReviewRewardPoints?.BLOG ?? 1),
+        editorReviewVideoPoints: String(data.editorReviewRewardPoints?.VIDEO ?? 1),
       })));
     }
     if (isAdmin) {
@@ -102,6 +108,9 @@ export default function WalletAdminClient() {
         editorArticlePoints: String(data.rewardPoints.EDITOR.ARTICLE),
         editorBlogPoints: String(data.rewardPoints.EDITOR.BLOG),
         editorVideoPoints: String(data.rewardPoints.EDITOR.VIDEO),
+        editorReviewArticlePoints: String(data.editorReviewRewardPoints?.ARTICLE ?? 1),
+        editorReviewBlogPoints: String(data.editorReviewRewardPoints?.BLOG ?? 1),
+        editorReviewVideoPoints: String(data.editorReviewRewardPoints?.VIDEO ?? 1),
       });
       setSuccess(data.message);
     } catch (err) {
@@ -200,6 +209,32 @@ export default function WalletAdminClient() {
                   </section>
                 ))}
               </div>
+              <section className="mt-5 rounded-xl border border-outline-variant/25 bg-surface p-5">
+                <h3 className="font-display-lg text-xl text-primary">Editor approval rewards</h3>
+                <p className="mb-4 mt-1 font-body-md text-xs text-on-surface-variant">
+                  Points earned by an Editor for approving an Author&apos;s post. Each post can reward that Editor only once.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {[["Article", "Article"], ["Blog", "Blog"], ["Video", "Video"]].map(([suffix, label]) => {
+                    const key = `editorReview${suffix}Points`;
+                    return (
+                      <label key={key} className="block">
+                        <span className="mb-1.5 block font-label-md text-xs font-semibold text-on-surface">Approve {label} (points)</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="1000000"
+                          step="1"
+                          required
+                          value={rates[key]}
+                          onChange={(event) => setRates((current) => ({ ...current, [key]: event.target.value }))}
+                          className="min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 py-2 font-body-md text-on-surface outline-none focus:border-primary"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </section>
               <button type="submit" disabled={savingRates} className="mt-5 min-h-11 rounded-lg bg-primary px-5 font-label-md text-sm font-semibold text-on-primary disabled:opacity-60">
                 {savingRates ? "Saving..." : "Save point settings"}
               </button>

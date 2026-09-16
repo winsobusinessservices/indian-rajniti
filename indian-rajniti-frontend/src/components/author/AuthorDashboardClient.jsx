@@ -84,7 +84,7 @@ function StatusBarChart({ counts }) {
   );
 }
 
-function PointsCard({ points, approvedByType, rewardPoints }) {
+function PointsCard({ points, approvedByType, rewardPoints, role }) {
   return (
     <div className="p-6 bg-gradient-to-br from-primary to-primary-container rounded-lg text-on-primary flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
       <div>
@@ -93,9 +93,18 @@ function PointsCard({ points, approvedByType, rewardPoints }) {
         <p className="font-body-lg text-5xl font-bold">{points.toLocaleString()}</p>
       </div>
       <div className="flex flex-col gap-1 text-sm font-body-md text-on-primary/90 sm:border-l sm:border-white/20 sm:pl-8">
-        <span>{approvedByType.ARTICLE} approved article{approvedByType.ARTICLE === 1 ? "" : "s"} × {rewardPoints.ARTICLE} pts</span>
-        <span>{approvedByType.BLOG} approved blog{approvedByType.BLOG === 1 ? "" : "s"} × {rewardPoints.BLOG} pts</span>
-        <span>{approvedByType.VIDEO} approved video{approvedByType.VIDEO === 1 ? "" : "s"} × {rewardPoints.VIDEO} pts</span>
+        {role === "EDITOR" ? (
+          <>
+            <span>Includes points earned for approving Author posts.</span>
+            <span>Open Wallet to see every approval reward.</span>
+          </>
+        ) : (
+          <>
+            <span>{approvedByType.ARTICLE} approved article{approvedByType.ARTICLE === 1 ? "" : "s"} × {rewardPoints.ARTICLE} pts</span>
+            <span>{approvedByType.BLOG} approved blog{approvedByType.BLOG === 1 ? "" : "s"} × {rewardPoints.BLOG} pts</span>
+            <span>{approvedByType.VIDEO} approved video{approvedByType.VIDEO === 1 ? "" : "s"} × {rewardPoints.VIDEO} pts</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -297,7 +306,7 @@ export default function AuthorDashboardClient() {
               added up," not a meaningful number for anyone. */}
           {["AUTHOR", "EDITOR"].includes(user?.role) && (
             <div className="mb-8">
-              <PointsCard points={totalPoints} approvedByType={approvedByType} rewardPoints={rewardPoints} />
+              <PointsCard points={totalPoints} approvedByType={approvedByType} rewardPoints={rewardPoints} role={user.role} />
             </div>
           )}
 

@@ -538,6 +538,39 @@ const Wallet = {
     return this.getRewardPoints();
   },
 
+  async getEditorReviewRewardPoints() {
+    const [rows] = await pool.query(
+      `SELECT content_type, points, updated_by, updated_at
+       FROM editor_review_reward_settings
+       WHERE content_type IN ('ARTICLE', 'BLOG', 'VIDEO')`
+    );
+    const rewards = { ARTICLE: 1, BLOG: 1, VIDEO: 1 };
+    for (const row of rows) rewards[row.content_type] = Number(row.points);
+    return rewards;
+  },
+
+  async setEditorReviewRewardPoints({ rewardPoints, updatedBy }) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      for (const contentType of ["ARTICLE", "BLOG", "VIDEO"]) {
+        await connection.query(
+          `INSERT INTO editor_review_reward_settings (content_type, points, updated_by)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE points = VALUES(points), updated_by = VALUES(updated_by)`,
+          [contentType, rewardPoints[contentType], updatedBy]
+        );
+      }
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+    return this.getEditorReviewRewardPoints();
+  },
+
   async listForAdmin() {
     const [rows] = await pool.query(
       `SELECT u.id, u.name, u.email, u.role,

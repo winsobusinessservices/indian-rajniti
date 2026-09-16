@@ -1,5 +1,5 @@
 const pool = require("../config/db");
-const { creditContentReward } = require("./walletRewards.service");
+const { creditContentReward, creditEditorReviewReward } = require("./walletRewards.service");
 
 const SOURCES = [
   { table: "articles", type: "ARTICLE" },
@@ -15,9 +15,11 @@ async function publishDueScheduledContent() {
   try {
     for (const source of SOURCES) {
       const [items] = await pool.query(
-        `SELECT content.id, content.author_id, content.title, contributor.role
+        `SELECT content.id, content.author_id, content.title, contributor.role,
+                content.reviewer_id, reviewer.role AS reviewer_role
          FROM \`${source.table}\` content
          JOIN users contributor ON contributor.id = content.author_id
+         LEFT JOIN users reviewer ON reviewer.id = content.reviewer_id
          WHERE content.status = 'PENDING'
            AND content.scheduled_publish_at IS NOT NULL
            AND content.scheduled_publish_at <= NOW()`
@@ -36,6 +38,15 @@ async function publishDueScheduledContent() {
           await creditContentReward({
             userId: item.author_id,
             contributorRole: item.role,
+            contentType: source.type,
+            contentId: item.id,
+            title: item.title,
+            publishedAt: new Date(),
+          });
+        }
+        if (item.reviewer_role === "EDITOR") {
+          await creditEditorReviewReward({
+            editorId: item.reviewer_id,
             contentType: source.type,
             contentId: item.id,
             title: item.title,
