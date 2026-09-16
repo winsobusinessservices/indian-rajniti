@@ -9,6 +9,8 @@ const WpPost = require("../../models/wordpress/wpPost.model");
 const Blog = require("../../models/blog.model");
 const Video = require("../../models/video.model");
 const HomeWidget = require("../../models/homeWidget.model");
+const Category = require("../../models/category.model");
+const UiSection = require("../../models/uiSection.model");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { splitContentMedia } = require("../../utils/contentMedia");
 
@@ -17,12 +19,15 @@ const TRENDING_WINDOW_DAYS = 14;
 
 const getCategories = async (req, res) => {
   try {
-    const [articleCategories, blogCategories, videoCategories, widgets] = await Promise.all([
+    const [articleCategories, blogCategories, videoCategories, widgets, hiddenCategoryNames] = await Promise.all([
       Article.findCategories(),
       Blog.findCategories(),
       Video.findCategories(),
       HomeWidget.getAll(),
+      Category.findHiddenNames(),
     ]);
+
+    const hiddenCategories = new Set(hiddenCategoryNames.map((name) => name.trim().toLowerCase()));
 
     const configuredCategories = widgets.political_keywords?.categories || [];
     const categories = [...new Set([
@@ -30,7 +35,7 @@ const getCategories = async (req, res) => {
       ...articleCategories,
       ...blogCategories,
       ...videoCategories,
-    ].map((category) => category.trim()).filter(Boolean))]
+    ].map((category) => category.trim()).filter((category) => category && !hiddenCategories.has(category.toLowerCase())))]
       .sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
 
     return res.status(200).json({ success: true, categories });
@@ -46,11 +51,17 @@ const getTopicPosts = async (req, res) => {
     const terms = [...new Set(rawTerms.map((term) => String(term || "").trim()).filter(Boolean))].slice(0, 10);
     if (!terms.length) return res.status(400).json({ success: false, message: "At least one topic term is required" });
 
-    const [articles, blogs] = await Promise.all([
+    const [articles, blogs, hiddenCategoryNames] = await Promise.all([
       Article.findPublishedForTopics(terms),
       Blog.findPublishedForTopics(terms),
+      Category.findHiddenNames(),
     ]);
-    const posts = [...articles.map(toArticleTeaser), ...blogs.map(toBlogTeaser)]
+    const hiddenCategories = new Set(hiddenCategoryNames.map((name) => name.trim().toLowerCase()));
+    const categoryIsVisible = (row) => !hiddenCategories.has(String(row.category || "").trim().toLowerCase());
+    const posts = [
+      ...articles.filter(categoryIsVisible).map(toArticleTeaser),
+      ...blogs.filter(categoryIsVisible).map(toBlogTeaser),
+    ]
       .sort((a, b) => new Date(b.time) - new Date(a.time));
     return res.status(200).json({ success: true, posts });
   } catch (error) {
@@ -178,17 +189,25 @@ function distinctStates(articles) {
 
 const getHome = async (req, res) => {
   try {
-    const [nativeArticles, wordpressArticles, blogsPool, videosPool, widgets] = await Promise.all([
+    const [nativeArticles, wordpressArticles, rawBlogsPool, rawVideosPool, widgets, hiddenCategoryNames, sectionVisibility] = await Promise.all([
       Article.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
       WpPost.findPublished({ limit: POOL_LIMIT }),
       Blog.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
       Video.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
       HomeWidget.getAll(),
+      Category.findHiddenNames(),
+      UiSection.visibilityMap(),
     ]);
+
+    const hiddenCategories = new Set(hiddenCategoryNames.map((name) => name.trim().toLowerCase()));
+    const categoryIsVisible = (row) => !hiddenCategories.has(String(row.category || "").trim().toLowerCase());
+    const blogsPool = rawBlogsPool.filter(categoryIsVisible);
+    const videosPool = rawVideosPool.filter(categoryIsVisible);
 
     // WordPress IDs are prefixed with `wp-`, so they cannot collide with
     // native numeric article IDs in section de-duplication or React keys.
     const articlesPool = [...nativeArticles, ...wordpressArticles]
+      .filter(categoryIsVisible)
       .sort((a, b) => publishedTime(b) - publishedTime(a))
       .slice(0, POOL_LIMIT);
 
@@ -272,7 +291,20 @@ const getHome = async (req, res) => {
     const posts = [...articlesPool.map(toArticleTeaser), ...blogsPool.map(toBlogTeaser)]
       .sort((a, b) => new Date(b.time || 0) - new Date(a.time || 0));
 
-    return res.status(200).json({ success: true, news, posts, widgets });
+    const visibleLabels = (items) => Array.isArray(items)
+      ? items.filter((item) => !hiddenCategories.has(String(item || "").trim().toLowerCase()))
+      : items;
+    const publicWidgets = {
+      ...widgets,
+      popular_tags: visibleLabels(widgets.popular_tags),
+      extra_keywords: visibleLabels(widgets.extra_keywords),
+      political_keywords: widgets.political_keywords ? {
+        ...widgets.political_keywords,
+        categories: visibleLabels(widgets.political_keywords.categories),
+      } : widgets.political_keywords,
+    };
+
+    return res.status(200).json({ success: true, news, posts, widgets: publicWidgets, sectionVisibility });
   } catch (error) {
     console.error("Get home content error:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });

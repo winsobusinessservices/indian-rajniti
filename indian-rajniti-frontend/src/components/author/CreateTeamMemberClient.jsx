@@ -152,7 +152,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
       let permissions = selected
         ? prev.permissions.filter((item) => item !== permission)
         : [...prev.permissions, permission];
-      const siteDataChildren = PERMISSION_GROUPS[2].permissions.map(([value]) => value);
+      const siteDataChildren = PERMISSION_GROUPS.find((group) => group.label === "Site Data").permissions.map(([value]) => value);
       if (!selected && siteDataChildren.includes(permission) && !permissions.includes(PERMISSIONS.MANAGE_SITE_DATA)) {
         permissions.push(PERMISSIONS.MANAGE_SITE_DATA);
       }
@@ -210,7 +210,7 @@ export default function CreateTeamMemberClient({ onCreated }) {
             {form.role === "AUTHOR" && "Authors need a PAN and Aadhar document on file."}
             {form.role === "EDITOR" && "Editors need PAN, Aadhar, and a graduation certificate on file."}
             {form.role === "INVESTOR" && "Investors don't require any documents."}
-            {form.role === "SUBADMIN" && "Subadmins can manage Site Data and Author, Editor, or Investor accounts."}
+            {form.role === "SUBADMIN" && "Choose exactly which administration, wallet, points, and Site Data tools this subadmin can use."}
           </p>
         </div>
 

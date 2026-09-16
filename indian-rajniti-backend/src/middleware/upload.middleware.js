@@ -45,17 +45,29 @@ async function optimizeUploadedImages(req, res, next) {
         .filter((file) => IMAGE_TYPES.test(file.mimetype))
         .map(async (file) => {
           const parsed = path.parse(file.path);
-          const outputPath = path.join(parsed.dir, `${parsed.name}.optimized.webp`);
-          const finalPath = path.join(parsed.dir, `${parsed.name}.webp`);
+          // Always use a distinct destination. When the incoming image was
+          // already WebP, the old final path was identical to file.path;
+          // replacing that path after sharp processed it intermittently
+          // failed on Windows and turned an otherwise valid POST into a 500.
+          const finalPath = path.join(parsed.dir, `${parsed.name}-optimized.webp`);
+          const inputBuffer = await fs.promises.readFile(file.path);
 
-          await sharp(file.path, { animated: true })
+          // Passing a buffer prevents libvips/Sharp from retaining a Windows
+          // file handle for the source path after optimization completes.
+          await sharp(inputBuffer, { animated: true })
             .rotate()
             .resize({ width: 1920, height: 1920, fit: "inside", withoutEnlargement: true })
             .webp({ quality: 80, effort: 4 })
-            .toFile(outputPath);
+            .toFile(finalPath);
 
-          await fs.promises.unlink(file.path);
-          await fs.promises.rename(outputPath, finalPath);
+          // The optimized asset is already complete. Failure to remove the
+          // source file should not discard the user's post; log it for later
+          // cleanup and continue with the optimized path.
+          await fs.promises.unlink(file.path).catch((error) => {
+            if (error.code !== "ENOENT") {
+              console.warn(`Could not remove source upload ${file.path}:`, error.message);
+            }
+          });
 
           file.path = finalPath;
           file.filename = path.basename(finalPath);

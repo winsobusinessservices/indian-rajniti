@@ -9,6 +9,8 @@ export const PERMISSIONS = Object.freeze({
   TEAM_MEMBERS: "team_members",
   MANAGE_CATEGORIES: "manage_categories",
   MANAGE_CAREERS: "manage_careers",
+  MANAGE_WALLETS: "manage_wallets",
+  MANAGE_POINT_RATES: "manage_point_rates",
   MANAGE_SITE_DATA: "manage_site_data",
   SITE_POLITICIANS: "site_politicians",
   SITE_PARTIES: "site_parties",
@@ -47,6 +49,13 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    label: "Wallet & Points",
+    permissions: [
+      [PERMISSIONS.MANAGE_WALLETS, "Enable or block withdrawals"],
+      [PERMISSIONS.MANAGE_POINT_RATES, "Set content rewards and point values"],
+    ],
+  },
+  {
     label: "Site Data",
     permissions: [
       [PERMISSIONS.SITE_POLITICIANS, "Politicians"],
@@ -72,8 +81,10 @@ export const ROLE_DEFAULT_PERMISSIONS = {
   SUBADMIN: [
     PERMISSIONS.DASHBOARD,
     PERMISSIONS.TEAM_MEMBERS,
+    PERMISSIONS.MANAGE_WALLETS,
+    PERMISSIONS.MANAGE_POINT_RATES,
     PERMISSIONS.MANAGE_SITE_DATA,
-    ...PERMISSION_GROUPS[2].permissions.map(([permission]) => permission),
+    ...PERMISSION_GROUPS.find((group) => group.label === "Site Data").permissions.map(([permission]) => permission),
   ],
 };
 

@@ -15,6 +15,11 @@ const TYPE_LABEL = {
 const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 
 const VIDEO_SOURCES = ["YOUTUBE", "VIMEO", "UPLOAD", "EXTERNAL"];
+const LOCAL_DRAFT_VERSION = 1;
+
+function localDraftKey(userId, type) {
+  return userId ? `indian-rajneeti:content-draft:${userId}:${type}` : null;
+}
 
 function initialForm(post, initialCategory = "") {
   const contentMedia = splitContentMedia(post?.content);
@@ -216,7 +221,83 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   const [loading, setLoading] = useState(false);
   const [linkText, setLinkText] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  const [draftNotice, setDraftNotice] = useState("");
+  const [readyDraftKey, setReadyDraftKey] = useState(null);
   const contentRef = useRef(null);
+  const restoredDraftKeyRef = useRef(null);
+  const createSucceededRef = useRef(false);
+  const draftKey = isEdit ? null : localDraftKey(user?.id || user?.userId, type);
+
+  // Restore once per signed-in user/content type. File objects cannot be put
+  // into localStorage, but every serializable field (including long-form
+  // content and relationships) is preserved.
+  useEffect(() => {
+    if (!draftKey || restoredDraftKeyRef.current === draftKey) return;
+    restoredDraftKeyRef.current = draftKey;
+    createSucceededRef.current = false;
+
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(draftKey) || "null");
+      const savedForm = saved?.version === LOCAL_DRAFT_VERSION ? saved.form : null;
+
+      // Restoring browser state after mount is intentional: localStorage is
+      // unavailable during the server render of this Client Component.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setForm({
+        ...initialForm(null, initialCategory),
+        ...(savedForm || {}),
+        additionalImages: Array.isArray(savedForm?.additionalImages) ? savedForm.additionalImages : [],
+      });
+      setFiles({});
+      setDraftNotice(savedForm
+        ? saved.hadSelectedFiles
+          ? "Local draft restored. Please select your image or video files again."
+          : "Local draft restored."
+        : ""
+      );
+      setReadyDraftKey(draftKey);
+    } catch {
+      window.localStorage.removeItem(draftKey);
+      setForm(initialForm(null, initialCategory));
+      setFiles({});
+      setDraftNotice("");
+      setReadyDraftKey(draftKey);
+    }
+  }, [draftKey, initialCategory]);
+
+  // Save shortly after changes. Cleanup also writes the latest value, so an
+  // immediate navigation cannot discard the final keystrokes.
+  useEffect(() => {
+    if (!draftKey || readyDraftKey !== draftKey) return undefined;
+
+    const saveDraft = (showStatus = true) => {
+      if (createSucceededRef.current) return;
+      try {
+        window.localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            version: LOCAL_DRAFT_VERSION,
+            form,
+            hadSelectedFiles: Object.values(files).some((value) =>
+              Array.isArray(value) ? value.length > 0 : Boolean(value)
+            ),
+            savedAt: new Date().toISOString(),
+          })
+        );
+        if (showStatus) {
+          setDraftNotice((current) => current.startsWith("Local draft restored") ? current : "Draft saved on this device.");
+        }
+      } catch {
+        if (showStatus) setDraftNotice("This draft is too large to save in the browser.");
+      }
+    };
+
+    const timer = window.setTimeout(saveDraft, 350);
+    return () => {
+      window.clearTimeout(timer);
+      saveDraft(false);
+    };
+  }, [draftKey, files, form, readyDraftKey]);
 
   // Blogs and videos can reference an article — pull the picker options from
   // whatever articles this user is permitted to see. GET /articles is always
@@ -336,6 +417,11 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
         data = await authorApi.createVideo(formData);
       }
 
+      if (!isEdit && draftKey) {
+        createSucceededRef.current = true;
+        window.localStorage.removeItem(draftKey);
+        setDraftNotice("");
+      }
       setSuccess(data.message);
       setTimeout(() => router.push(redirectTo), 900);
     } catch (err) {
@@ -348,7 +434,13 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   const label = TYPE_LABEL[type];
 
   return (
-    <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+    <form onSubmit={handleSubmit} inert={loading} aria-busy={loading} className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      {!isEdit && draftNotice && (
+        <div className="lg:col-span-3 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 font-body-md text-xs text-on-surface-variant" role="status">
+          <i className="fa-solid fa-cloud-arrow-up mt-0.5 text-primary" aria-hidden="true" />
+          <span>{draftNotice}</span>
+        </div>
+      )}
       {/* Main column: the actual writing */}
       <div className="lg:col-span-2 space-y-5">
         <div className={sectionClass}>

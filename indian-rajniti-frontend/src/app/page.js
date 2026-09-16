@@ -16,6 +16,7 @@ import { formatViews } from "@/lib/formatViews";
 
 import {
   getBreakingNews,
+  getSectionVisibility,
   getHeroSlides,
   getTopStories,
   getEditorialOpinion,
@@ -118,6 +119,7 @@ function SocialPostCard({ post, children }) {
 
 export default async function Home() {
   const [
+    sectionVisibility,
     breakingNews,
     heroSlides,
     topStories,
@@ -159,6 +161,7 @@ export default async function Home() {
     latestPosts,
     allVideos,
   ] = await Promise.all([
+    getSectionVisibility(),
     getBreakingNews(),
     getHeroSlides(),
     getTopStories(),
@@ -201,13 +204,15 @@ export default async function Home() {
     getAllVideos(),
   ]);
 
+  const sectionClass = (key, base = "") => `${base}${sectionVisibility[key] === false ? " hidden" : ""}`.trim();
+
   return (
     <>
-      <BreakingNews text={breakingNews} />
+      {sectionVisibility.breaking_news !== false && <BreakingNews text={breakingNews} />}
       <Header />
 
       <main className="w-full bg-background flex-grow">
-        <div className="max-w-full mx-auto px-4 md:px-16 flex flex-col lg:flex-row gap-6 py-6">
+        <div className={sectionClass("hero_news", "max-w-full mx-auto px-4 md:px-16 flex flex-col lg:flex-row gap-6 py-6")}>
           <HeroNews slides={heroSlides} />
         </div>
 
@@ -216,7 +221,7 @@ export default async function Home() {
           <div className="flex-grow flex flex-col gap-6 lg:w-2/3">
 
             {/* Top Stories */}
-            <section>
+            <section className={sectionClass("top_stories")}>
               <SectionHeader title="Top Stories" viewAllHref="/top-news" />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {topStories.map((story) => (
@@ -226,7 +231,7 @@ export default async function Home() {
             </section>
 
             {/* Editorial Opinion */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("editorial_opinion", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Editorial Opinion" viewAllHref="#" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {editorialOpinion.map((story) => (
@@ -236,7 +241,7 @@ export default async function Home() {
             </section>
 
             {/* Latest Blogs */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("latest_blogs", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Latest Blogs" viewAllHref="/blogs" />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {blogs.slice(0, 3).map((blog) => (
@@ -246,7 +251,7 @@ export default async function Home() {
             </section>
 
             {/* Regional Focus */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("regional_focus", "border-t border-outline-variant/30 pt-6")}>
               <div className="flex items-center justify-between mb-6 border-b border-outline-variant/30 pb-2 flex-wrap gap-3">
                 <h2 className="font-display-lg text-2xl md:text-3xl text-primary tracking-tight w-full sm:w-auto">Regional Focus</h2>
                 <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -274,7 +279,7 @@ export default async function Home() {
 
             {/* In-Depth Analysis */}
             {inDepthAnalysis && (
-              <section className="border-t border-outline-variant/30 pt-6">
+              <section className={sectionClass("in_depth_analysis", "border-t border-outline-variant/30 pt-6")}>
                 <SectionHeader title="In-Depth Analysis" />
                 <article className="group flex flex-col md:flex-row gap-6 cursor-pointer">
                   <ImagePlaceholder
@@ -302,7 +307,7 @@ export default async function Home() {
             )}
 
             {/* Multimedia Hub */}
-            <section className="bg-inverse-surface text-inverse-on-surface py-6 rounded-xl px-6">
+            <section className={sectionClass("multimedia_hub", "bg-inverse-surface text-inverse-on-surface py-6 rounded-xl px-6")}>
               <div className="flex items-center justify-between mb-6 border-b border-white/20 pb-2">
                 <h2 className="font-display-lg text-2xl md:text-3xl tracking-tight text-white">Multimedia Hub</h2>
                 <Link href="/videos" className="font-label-md text-inverse-primary hover:underline flex items-center gap-1 text-sm">
@@ -347,7 +352,7 @@ export default async function Home() {
             </div>
 
             {/* Key Political Figures */}
-            <section>
+            <section className={sectionClass("key_figures")}>
               <SectionHeader title="Key Political Figures" viewAllHref="/key-political-figures" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {keyFigures.map((figure) => (
@@ -357,7 +362,7 @@ export default async function Home() {
             </section>
 
             {/* Former Prime Ministers */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("former_prime_ministers", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Former Prime Ministers" viewAllHref="/former-prime-ministers" />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {formerPMs.map((pm) => (
@@ -367,7 +372,7 @@ export default async function Home() {
             </section>
 
             {/* Voices of the Nation */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("voices_of_nation", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Voices of the Nation" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {voicesOfNation.map((voice) => (
@@ -388,7 +393,7 @@ export default async function Home() {
             </section>
 
             {/* State Leadership */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("state_leadership", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="State Leadership" viewAllHref="/cm" />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {chiefMinisters.map((cm) => (
@@ -398,7 +403,7 @@ export default async function Home() {
             </section>
 
             {/* Indian Political Parties */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("political_parties", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Indian Political Parties" viewAllHref="/parties" />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {parties.slice(0, 5).map((party) => (
@@ -408,7 +413,7 @@ export default async function Home() {
             </section>
 
             {/* Parliament */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("parliament", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Parliament" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {parliamentSummary.map((house) => (
@@ -453,7 +458,7 @@ export default async function Home() {
             </section>
 
             {/* Digital Dispatches */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("digital_dispatches", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Digital Dispatches" />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Video Highlights */}
@@ -559,7 +564,7 @@ export default async function Home() {
             </section>
 
             {/* Prime Minister's Corner */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("pm_corner", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Prime Minister's Corner" />
               <article className="group flex flex-col md:flex-row gap-8">
                 <ImagePlaceholder
@@ -592,7 +597,7 @@ export default async function Home() {
             </section>
 
             {/* Press Conference Archive */}
-            <section className="border-t border-outline-variant/30 pt-6">
+            <section className={sectionClass("press_conferences", "border-t border-outline-variant/30 pt-6")}>
               <SectionHeader title="Press Conference Archive" viewAllHref="/press-conferences" />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {pressConference.map((item) => (
@@ -620,7 +625,7 @@ export default async function Home() {
           </div>
 
           {/* Sidebar */}
-          <aside className="self-stretch lg:w-1/4 flex flex-col bg-surface-container rounded-xl p-4 border border-outline-variant/30 gap-6">
+          <aside className={sectionClass("home_sidebar", "self-stretch lg:w-1/4 flex flex-col bg-surface-container rounded-xl p-4 border border-outline-variant/30 gap-6")}>
             <TrendingNews items={trending} viewAllHref="/trending" />
 
             <PollOfTheDay initialPoll={pollOfTheDay} />
@@ -917,7 +922,7 @@ export default async function Home() {
       </main>
 
       {/* Popular Tags */}
-      <section className="w-full bg-surface py-6 border-t border-outline-variant/30">
+      <section className={sectionClass("popular_tags", "w-full bg-surface py-6 border-t border-outline-variant/30")}>
         <div className="max-w-[1280px] mx-auto px-4 md:px-16">
           <div className="flex items-center gap-4 mb-4">
             <h2 className="font-label-md text-primary tracking-widest uppercase text-xs">Popular Tags</h2>

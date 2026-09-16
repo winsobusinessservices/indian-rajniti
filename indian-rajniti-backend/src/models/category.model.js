@@ -4,11 +4,17 @@ const { uniqueSlug } = require("../utils/slugify");
 const TABLE = "categories";
 
 const Category = {
-  async findAll() {
+  async findAll({ includeHidden = false } = {}) {
     const [rows] = await pool.query(
-      `SELECT id, name, slug, created_by, created_at FROM ${TABLE} ORDER BY name ASC`
+      `SELECT id, name, slug, is_visible, created_by, created_at FROM ${TABLE}
+       ${includeHidden ? "" : "WHERE is_visible = 1"} ORDER BY name ASC`
     );
     return rows;
+  },
+
+  async findHiddenNames() {
+    const [rows] = await pool.query(`SELECT name FROM ${TABLE} WHERE is_visible = 0`);
+    return rows.map((row) => row.name);
   },
 
   async findById(id) {
@@ -36,6 +42,11 @@ const Category = {
   async remove(id) {
     const [result] = await pool.query(`DELETE FROM ${TABLE} WHERE id = ?`, [id]);
     return result.affectedRows > 0;
+  },
+
+  async setVisibility(id, isVisible) {
+    const [result] = await pool.query(`UPDATE ${TABLE} SET is_visible = ? WHERE id = ?`, [isVisible ? 1 : 0, id]);
+    return result.affectedRows > 0 ? Category.findById(id) : null;
   },
 };
 

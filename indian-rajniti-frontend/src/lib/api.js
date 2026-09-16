@@ -132,6 +132,27 @@ export const contactApi = {
   submit: (payload) => request("/contact", { method: "POST", body: payload }),
 };
 
+export const walletApi = {
+  getWallet: () => request("/wallet"),
+  requestWithdrawal: (points) => request("/wallet/withdrawals", { method: "POST", body: { points } }),
+  generatePayoutLink: (withdrawalId) => request(`/wallet/withdrawals/${withdrawalId}/payout-link`, { method: "POST" }),
+  listForAdmin: () => request("/admin/wallets"),
+  setWithdrawalAccess: (userId, enabled) => request(`/admin/wallets/${userId}/withdrawal-access`, {
+    method: "PATCH",
+    body: { enabled },
+  }),
+  getWithdrawalSettings: () => request("/admin/wallets/withdrawal-settings"),
+  updateWithdrawalSettings: (minimumWithdrawalInr, authorMinimumRemainingInr, editorMinimumRemainingInr) => request("/admin/wallets/withdrawal-settings", {
+    method: "PUT",
+    body: { minimumWithdrawalInr, authorMinimumRemainingInr, editorMinimumRemainingInr },
+  }),
+  getPointRates: () => request("/admin/wallets/point-rates"),
+  updatePointRates: (settings) => request("/admin/wallets/point-rates", {
+    method: "PUT",
+    body: settings,
+  }),
+};
+
 function toQueryString(params = {}) {
   const entries = Object.entries(params).filter(([, value]) => value);
   if (!entries.length) return "";
@@ -182,11 +203,18 @@ export const authorApi = {
   submitPost: (type, id) => request(`/${RESOURCE_PATH[type]}/${id}/submit`, { method: "POST" }),
   getPostStatus: (type, id) => request(`/${RESOURCE_PATH[type]}/${id}/status`),
   reviewPost: (type, id, payload) => request(`/${RESOURCE_PATH[type]}/${id}/review`, { method: "POST", body: payload }),
+  bulkModerate: (action, items, notes) => request("/content/bulk", {
+    method: "POST",
+    body: { action, items, notes },
+  }),
 };
 
 export const categoriesApi = {
   list: () => request("/categories"),
+  listVisibilitySettings: () => request("/admin/ui-visibility"),
   create: (name) => request("/categories", { method: "POST", body: { name } }),
+  setVisibility: (id, isVisible) => request(`/categories/${id}/visibility`, { method: "PATCH", body: { isVisible } }),
+  setSectionVisibility: (key, isVisible) => request(`/admin/ui-sections/${encodeURIComponent(key)}/visibility`, { method: "PATCH", body: { isVisible } }),
   remove: (id) => request(`/categories/${id}`, { method: "DELETE" }),
 };
 

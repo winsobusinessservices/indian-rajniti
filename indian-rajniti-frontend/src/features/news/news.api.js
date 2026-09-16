@@ -71,6 +71,10 @@ export async function getBreakingNews() {
   const { widgets } = await getHomeData();
   return widgets.breaking_news;
 }
+export async function getSectionVisibility() {
+  const { sectionVisibility } = await getHomeData();
+  return sectionVisibility || {};
+}
 export async function getHeroSlides() {
   const { news } = await getHomeData();
   return news.heroSlides.map(withDisplayFields);

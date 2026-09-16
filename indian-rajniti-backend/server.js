@@ -22,6 +22,7 @@ const careersRoutes = require("./src/routes/careers.routes.js")
 const categoriesRoutes = require("./src/routes/categories.routes.js")
 const contactRoutes = require("./src/routes/contact.routes.js")
 const referenceDataRoutes = require("./src/routes/referenceData.routes.js")
+const walletRoutes = require("./src/routes/wallet.routes.js")
 
 const REQUIRED_PRODUCTION_ENV = ["CLIENT_ORIGIN", "JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"];
 const missingProductionEnv = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
@@ -56,7 +57,13 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-app.use(express.json());
+app.use(express.json({
+  verify(req, res, buffer) {
+    if (req.originalUrl === "/api/wallet/razorpay/webhook") {
+      req.rawBody = Buffer.from(buffer);
+    }
+  },
+}));
 app.use(cookieParser());
 app.use(
   "/uploads",
@@ -82,6 +89,7 @@ app.use("/api", careersRoutes)
 app.use("/api", categoriesRoutes)
 app.use("/api", contactRoutes)
 app.use("/api", referenceDataRoutes)
+app.use("/api", walletRoutes)
 
 app.get("/", (req, res) => {
   res.send("API is running...");

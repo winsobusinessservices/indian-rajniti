@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
-import { authorApi, authApi } from "@/lib/api";
+import { authorApi, authApi, walletApi } from "@/lib/api";
 import { SkeletonBlock, SkeletonText } from "@/components/common/Skeleton";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import { PERMISSIONS, hasPermission } from "@/lib/permissions";
@@ -39,7 +39,7 @@ const STATUS_ROWS = [
 
 // Only approved (published) work earns points — draft/pending/rejected count
 // toward the totals above but not here, so points track published output.
-const POINTS_PER_TYPE = { ARTICLE: 10, BLOG: 5, VIDEO: 15 };
+const DEFAULT_POINTS_PER_TYPE = { ARTICLE: 10, BLOG: 10, VIDEO: 5 };
 
 function StatTile({ label, value, icon }) {
   return (
@@ -84,7 +84,7 @@ function StatusBarChart({ counts }) {
   );
 }
 
-function PointsCard({ points, approvedByType }) {
+function PointsCard({ points, approvedByType, rewardPoints }) {
   return (
     <div className="p-6 bg-gradient-to-br from-primary to-primary-container rounded-lg text-on-primary flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
       <div>
@@ -93,9 +93,9 @@ function PointsCard({ points, approvedByType }) {
         <p className="font-body-lg text-5xl font-bold">{points.toLocaleString()}</p>
       </div>
       <div className="flex flex-col gap-1 text-sm font-body-md text-on-primary/90 sm:border-l sm:border-white/20 sm:pl-8">
-        <span>{approvedByType.ARTICLE} approved article{approvedByType.ARTICLE === 1 ? "" : "s"} × {POINTS_PER_TYPE.ARTICLE} pts</span>
-        <span>{approvedByType.BLOG} approved blog{approvedByType.BLOG === 1 ? "" : "s"} × {POINTS_PER_TYPE.BLOG} pts</span>
-        <span>{approvedByType.VIDEO} approved video{approvedByType.VIDEO === 1 ? "" : "s"} × {POINTS_PER_TYPE.VIDEO} pts</span>
+        <span>{approvedByType.ARTICLE} approved article{approvedByType.ARTICLE === 1 ? "" : "s"} × {rewardPoints.ARTICLE} pts</span>
+        <span>{approvedByType.BLOG} approved blog{approvedByType.BLOG === 1 ? "" : "s"} × {rewardPoints.BLOG} pts</span>
+        <span>{approvedByType.VIDEO} approved video{approvedByType.VIDEO === 1 ? "" : "s"} × {rewardPoints.VIDEO} pts</span>
       </div>
     </div>
   );
@@ -126,6 +126,8 @@ export default function AuthorDashboardClient() {
   const [userCounts, setUserCounts] = useState({ total: 0, authors: 0, editors: 0, subadmins: 0 });
   const [loading, setLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(true);
+  const [walletPoints, setWalletPoints] = useState(null);
+  const [rewardPoints, setRewardPoints] = useState(DEFAULT_POINTS_PER_TYPE);
   const [error, setError] = useState("");
 
   // GET /:resource is always self-scoped now (own content only, regardless
@@ -163,6 +165,16 @@ export default function AuthorDashboardClient() {
       .finally(() => setUsersLoading(false));
   }, [isInvestor]);
 
+  useEffect(() => {
+    if (!["AUTHOR", "EDITOR"].includes(user?.role)) return;
+    walletApi.getWallet()
+      .then((data) => {
+        setWalletPoints(data.wallet.summary.lifetimeEarnedPoints);
+        setRewardPoints(data.wallet.rewardPoints || DEFAULT_POINTS_PER_TYPE);
+      })
+      .catch((err) => setError(err.message));
+  }, [user?.role]);
+
   const typeCounts = { ARTICLE: 0, BLOG: 0, VIDEO: 0 };
   const statusCounts = { DRAFT: 0, PENDING: 0, APPROVED: 0, REJECTED: 0 };
   const approvedByType = { ARTICLE: 0, BLOG: 0, VIDEO: 0 };
@@ -173,10 +185,11 @@ export default function AuthorDashboardClient() {
     if (post.status === "APPROVED") approvedByType[post.type] = (approvedByType[post.type] || 0) + 1;
   });
 
-  const totalPoints = Object.entries(approvedByType).reduce(
-    (sum, [type, count]) => sum + count * POINTS_PER_TYPE[type],
+  const calculatedPoints = Object.entries(approvedByType).reduce(
+    (sum, [type, count]) => sum + count * rewardPoints[type],
     0
   );
+  const totalPoints = walletPoints ?? calculatedPoints;
 
   const recentPosts = posts.slice(0, 6);
 
@@ -282,9 +295,9 @@ export default function AuthorDashboardClient() {
           {/* Collected points — a personal author incentive, so it's not
               shown for admin/investor, where it'd just be "everyone's points
               added up," not a meaningful number for anyone. */}
-          {!isAdmin && !isInvestor && (
+          {["AUTHOR", "EDITOR"].includes(user?.role) && (
             <div className="mb-8">
-              <PointsCard points={totalPoints} approvedByType={approvedByType} />
+              <PointsCard points={totalPoints} approvedByType={approvedByType} rewardPoints={rewardPoints} />
             </div>
           )}
 
@@ -378,8 +391,8 @@ export default function AuthorDashboardClient() {
                     <i className="fa-solid fa-folder-tree" />
                   </span>
                   <div>
-                    <h3 className="font-headline-md text-base text-on-surface">Manage Categories</h3>
-                    <p className="font-body-md text-xs text-on-surface-variant">Add or remove categories used by author forms and public pages</p>
+                    <h3 className="font-headline-md text-base text-on-surface">UI Visibility &amp; Categories</h3>
+                    <p className="font-body-md text-xs text-on-surface-variant">Show or hide homepage sections and categories without deleting data</p>
                   </div>
                 </Link>
             )}

@@ -7,7 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { NAV_LINKS, SIDEBAR_CATEGORIES } from "@/lib/constants";
 import SearchBox from "@/components/search/SearchBox";
 import { slugify } from "@/lib/slugify";
-import { PERMISSIONS, hasPermission } from "@/lib/permissions";
+import { PERMISSIONS, hasAnyPermission, hasPermission } from "@/lib/permissions";
 
 const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"];
 
@@ -17,6 +17,7 @@ const NAV_GROUPS = [
     items: [
       { label: "Dashboard", href: "/author/dashboard", icon: "fa-gauge-high", permission: PERMISSIONS.DASHBOARD },
       { label: "My Content", href: "/author/content", icon: "fa-folder-open", permission: PERMISSIONS.MY_CONTENT },
+      { label: "Wallet", href: "/author/wallet", icon: "fa-wallet", roles: ["AUTHOR", "EDITOR"] },
     ],
   },
   {
@@ -38,9 +39,10 @@ const NAV_GROUPS = [
     label: "Administration",
     items: [
       { label: "Team Members", href: "/author/team", icon: "fa-users-gear", permission: PERMISSIONS.TEAM_MEMBERS },
-      { label: "Categories", href: "/author/categories", icon: "fa-tags", permission: PERMISSIONS.MANAGE_CATEGORIES },
+      { label: "UI Visibility", href: "/author/categories", icon: "fa-eye", permission: PERMISSIONS.MANAGE_CATEGORIES },
       { label: "Site Data", href: "/author/site-data", icon: "fa-database", permission: PERMISSIONS.MANAGE_SITE_DATA },
       { label: "Careers", href: "/author/career", icon: "fa-briefcase", permission: PERMISSIONS.MANAGE_CAREERS },
+      { label: "Wallet & Points", href: "/author/wallet-admin", icon: "fa-money-check-dollar", permissions: [PERMISSIONS.MANAGE_WALLETS, PERMISSIONS.MANAGE_POINT_RATES] },
     ],
   },
 ];
@@ -71,11 +73,11 @@ function orderedNavGroups(role) {
   const [workspace, create, editorial, administration] = NAV_GROUPS;
   if (!["ADMIN", "SUBADMIN", "EDITOR"].includes(role)) return NAV_GROUPS;
 
-  const dashboard = { ...workspace, items: workspace.items.filter((item) => item.href === "/author/dashboard") };
+  const dashboard = { ...workspace, items: workspace.items.filter((item) => ["/author/dashboard", "/author/wallet"].includes(item.href)) };
   const content = {
     label: "Content",
     items: [
-      ...workspace.items.filter((item) => item.href !== "/author/dashboard"),
+      ...workspace.items.filter((item) => !["/author/dashboard", "/author/wallet"].includes(item.href)),
       ...create.items,
     ],
   };
@@ -117,7 +119,14 @@ function SidebarContent({ user, pathname, onNavigate }) {
           inputClassName="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2.5 text-sm text-white placeholder:text-white/50 focus:border-white/50 focus:outline-none"
         />
 
-        {orderedNavGroups(user.role).map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || hasPermission(user, item.permission)) }))
+        {orderedNavGroups(user.role).map((group) => ({
+          ...group,
+          items: group.items.filter((item) =>
+            (!item.roles || item.roles.includes(user.role)) &&
+            (!item.permission || hasPermission(user, item.permission)) &&
+            (!item.permissions || hasAnyPermission(user, item.permissions))
+          ),
+        }))
           .filter((group) => group.items.length > 0)
           .map((group) => (
           <div key={group.label} className="mb-5 last:mb-0">

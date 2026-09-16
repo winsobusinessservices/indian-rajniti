@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useIsClient } from "@/hooks/useIsClient";
 
 /**
  * A styled confirmation modal with a reason textarea — the same visual
@@ -24,17 +25,16 @@ export default function ReasonModal({
   required = false,
   danger = false,
 }) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useIsClient();
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
     if (open) {
+      // Resetting controlled modal fields when a new modal session opens is
+      // intentional; the state belongs to the previous session.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReason("");
       setError("");
     }
@@ -89,7 +89,7 @@ export default function ReasonModal({
 
           {description && <p className="font-body-md text-sm text-on-surface-variant mb-5">{description}</p>}
 
-          <form onSubmit={handleSubmit} inert={loading ? "" : undefined} aria-busy={loading} className="space-y-5">
+          <form onSubmit={handleSubmit} inert={loading} aria-busy={loading} className="space-y-5">
             <div>
               <label htmlFor="reason-modal-textarea" className="block font-label-md text-xs text-on-surface-variant mb-1.5">
                 Reason {required ? <span className="text-error">*</span> : <span className="opacity-60">(optional)</span>}

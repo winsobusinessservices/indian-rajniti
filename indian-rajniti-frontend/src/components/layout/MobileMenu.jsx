@@ -98,7 +98,7 @@ function InvestorLink({ onClose }) {
   );
 }
 
-function AuthorTools({ onClose, isModerator, isAdmin, roleLabel }) {
+function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel }) {
   return (
     <section className="mb-8 bg-surface-container-low p-4 rounded-lg ">
       <h3 className="font-headline-md text-primary text-lg mb-4 border-b border-outline-variant/30 pb-2 tracking-wide">
@@ -141,6 +141,17 @@ function AuthorTools({ onClose, isModerator, isAdmin, roleLabel }) {
             <i className="fa-solid fa-list w-4" /> My Content
           </Link>
         </li>
+        {canUseWallet && (
+          <li>
+            <Link
+              href="/author/wallet"
+              onClick={onClose}
+              className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
+            >
+              <i className="fa-solid fa-wallet w-4" /> Wallet
+            </Link>
+          </li>
+        )}
         {isModerator && (
           <>
             <li>
@@ -193,6 +204,11 @@ function AuthorTools({ onClose, isModerator, isAdmin, roleLabel }) {
               <i className="fa-solid fa-briefcase"></i> Create Job/ View Applicants
             </Link>
           </li>
+            <li>
+              <Link href="/author/wallet-admin" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+                <i className="fa-solid fa-money-check-dollar w-4" /> Wallet Access
+              </Link>
+            </li>
           </>
 
         )}
@@ -219,6 +235,7 @@ export default function MobileMenu({ open, onClose }) {
   const isModerator = user && MODERATOR_ROLES.includes(user.role);
   const isAdmin = user?.role === "ADMIN";
   const isInvestor = user?.role === "INVESTOR";
+  const canUseWallet = ["AUTHOR", "EDITOR"].includes(user?.role);
   const roleLabel = ROLE_LABEL[user?.role] || "Author";
 
   if (!mounted) return null;
@@ -260,7 +277,7 @@ export default function MobileMenu({ open, onClose }) {
           <NavLinks pathname={pathname} onClose={onClose} />
 
           {canManageContent && (
-            <AuthorTools onClose={onClose} isModerator={isModerator} isAdmin={isAdmin} roleLabel={roleLabel} />
+            <AuthorTools onClose={onClose} isModerator={isModerator} isAdmin={isAdmin} canUseWallet={canUseWallet} roleLabel={roleLabel} />
           )}
 
           {isInvestor && <InvestorLink onClose={onClose} />}

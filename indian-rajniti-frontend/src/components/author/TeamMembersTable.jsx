@@ -86,7 +86,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
       let permissions = selected
         ? prev.permissions.filter((item) => item !== permission)
         : [...prev.permissions, permission];
-      const siteDataChildren = PERMISSION_GROUPS[2].permissions.map(([value]) => value);
+      const siteDataChildren = PERMISSION_GROUPS.find((group) => group.label === "Site Data").permissions.map(([value]) => value);
       if (!selected && siteDataChildren.includes(permission) && !permissions.includes(PERMISSIONS.MANAGE_SITE_DATA)) {
         permissions.push(PERMISSIONS.MANAGE_SITE_DATA);
       }

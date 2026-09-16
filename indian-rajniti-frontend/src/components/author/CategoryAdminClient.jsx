@@ -8,6 +8,7 @@ const ROWS_PER_PAGE = 6;
 
 export default function CategoryAdminClient() {
   const [categories, setCategories] = useState([]);
+  const [sections, setSections] = useState([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -15,6 +16,7 @@ export default function CategoryAdminClient() {
   const [success, setSuccess] = useState("");
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(1);
+  const [updating, setUpdating] = useState(new Set());
 
   const normalizedFilter = filter.trim().toLowerCase();
   const filteredCategories = categories.filter((category) =>
@@ -27,8 +29,9 @@ export default function CategoryAdminClient() {
 
   const loadCategories = async () => {
     try {
-      const data = await categoriesApi.list();
+      const data = await categoriesApi.listVisibilitySettings();
       setCategories(data.categories || []);
+      setSections(data.sections || []);
     } catch (err) {
       setError(err.message);
     }
@@ -36,9 +39,12 @@ export default function CategoryAdminClient() {
 
   useEffect(() => {
     let active = true;
-    categoriesApi.list()
+    categoriesApi.listVisibilitySettings()
       .then((data) => {
-        if (active) setCategories(data.categories || []);
+        if (active) {
+          setCategories(data.categories || []);
+          setSections(data.sections || []);
+        }
       })
       .catch((err) => {
         if (active) setError(err.message);
@@ -81,9 +87,31 @@ export default function CategoryAdminClient() {
     }
   };
 
+  const toggleVisibility = async (kind, item) => {
+    const key = `${kind}:${item.id || item.section_key}`;
+    const nextVisible = !Boolean(item.is_visible);
+    setError("");
+    setSuccess("");
+    setUpdating((current) => new Set(current).add(key));
+    try {
+      if (kind === "category") await categoriesApi.setVisibility(item.id, nextVisible);
+      else await categoriesApi.setSectionVisibility(item.section_key, nextVisible);
+      setSuccess(`${kind === "category" ? "Category" : "Section"} ${nextVisible ? "is now displayed" : "is now hidden"} in the public UI.`);
+      await loadCategories();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUpdating((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-      <form onSubmit={addCategory} inert={submitting ? "" : undefined} aria-busy={submitting} className="bg-surface-container-low/60 rounded-lg border border-primary/30 p-5">
+      <form onSubmit={addCategory} inert={submitting} aria-busy={submitting} className="bg-surface-container-low/60 rounded-lg border border-primary/30 p-5">
         <h2 className="font-headline-lg text-xl text-primary mb-4">Add Category</h2>
         <label htmlFor="category-name" className="block font-label-md text-xs text-on-surface-variant mb-1.5">
           Category name <span className="text-error">*</span>
@@ -163,6 +191,7 @@ export default function CategoryAdminClient() {
                     <th className="px-4 py-3 font-label-md text-xs uppercase tracking-wider w-14">#</th>
                     <th className="px-4 py-3 font-label-md text-xs uppercase tracking-wider">Category</th>
                     <th className="px-4 py-3 font-label-md text-xs uppercase tracking-wider hidden sm:table-cell">Slug</th>
+                    <th className="px-4 py-3 font-label-md text-xs uppercase tracking-wider">Display</th>
                     <th className="px-4 py-3 font-label-md text-xs uppercase tracking-wider text-right">Actions</th>
                   </tr>
                 </thead>
@@ -174,6 +203,19 @@ export default function CategoryAdminClient() {
                         <span className="font-label-md text-sm text-on-surface">{category.name}</span>
                       </td>
                       <td className="px-4 py-3 text-xs text-on-surface-variant hidden sm:table-cell">/{category.slug}</td>
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={Boolean(category.is_visible)}
+                          disabled={updating.has(`category:${category.id}`)}
+                          onClick={() => toggleVisibility("category", category)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${category.is_visible ? "bg-primary" : "bg-outline-variant"}`}
+                          title={`${category.is_visible ? "Hide" : "Show"} ${category.name}`}
+                        >
+                          <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${category.is_visible ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <Link
@@ -231,6 +273,39 @@ export default function CategoryAdminClient() {
             </div>
           </>
         )}
+      </section>
+
+      <section className="lg:col-span-3 bg-surface-container-low/60 rounded-lg border border-primary/30 p-5">
+        <div className="mb-5">
+          <h2 className="font-headline-lg text-xl text-primary">Homepage Sections</h2>
+          <p className="font-body-md text-xs text-on-surface-variant mt-1">Choose which major sections visitors can see on the homepage.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {sections.map((section) => {
+            const key = `section:${section.section_key}`;
+            return (
+              <div key={section.section_key} className="flex items-center justify-between gap-4 rounded-lg border border-outline-variant/25 bg-surface px-4 py-3">
+                <div>
+                  <p className="font-label-md text-sm text-on-surface">{section.label}</p>
+                  <p className={`text-xs mt-0.5 ${section.is_visible ? "text-primary" : "text-on-surface-variant"}`}>
+                    {section.is_visible ? "Displayed" : "Hidden"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label={`${section.is_visible ? "Hide" : "Show"} ${section.label}`}
+                  aria-checked={Boolean(section.is_visible)}
+                  disabled={updating.has(key)}
+                  onClick={() => toggleVisibility("section", section)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${section.is_visible ? "bg-primary" : "bg-outline-variant"}`}
+                >
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${section.is_visible ? "translate-x-6" : "translate-x-1"}`} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </section>
     </div>
   );

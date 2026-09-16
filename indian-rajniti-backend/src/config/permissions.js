@@ -9,6 +9,8 @@ const PERMISSIONS = Object.freeze({
   TEAM_MEMBERS: "team_members",
   MANAGE_CATEGORIES: "manage_categories",
   MANAGE_CAREERS: "manage_careers",
+  MANAGE_WALLETS: "manage_wallets",
+  MANAGE_POINT_RATES: "manage_point_rates",
   MANAGE_SITE_DATA: "manage_site_data",
   SITE_POLITICIANS: "site_politicians",
   SITE_PARTIES: "site_parties",
@@ -48,6 +50,8 @@ const ROLE_DEFAULT_PERMISSIONS = Object.freeze({
   SUBADMIN: [
     PERMISSIONS.DASHBOARD,
     PERMISSIONS.TEAM_MEMBERS,
+    PERMISSIONS.MANAGE_WALLETS,
+    PERMISSIONS.MANAGE_POINT_RATES,
     PERMISSIONS.MANAGE_SITE_DATA,
     PERMISSIONS.SITE_POLITICIANS,
     PERMISSIONS.SITE_PARTIES,

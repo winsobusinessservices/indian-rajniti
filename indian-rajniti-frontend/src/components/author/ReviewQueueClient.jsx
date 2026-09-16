@@ -21,6 +21,8 @@ const TYPE_ICON = {
   VIDEO: "fa-video",
 };
 
+const postKey = (post) => `${post.type}:${post.id}`;
+
 /**
  * The editor-facing counterpart to MyPostsClient — instead of one author's
  * content across every status, this is every PENDING submission across every
@@ -35,6 +37,8 @@ export default function ReviewQueueClient() {
   const [actionError, setActionError] = useState("");
   const [rejectTarget, setRejectTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkAction, setBulkAction] = useState(null);
 
   useEffect(() => {
     authorApi
@@ -51,6 +55,11 @@ export default function ReviewQueueClient() {
     try {
       await authorApi.reviewPost(post.type, post.id, { action: "APPROVE" });
       setPosts((prev) => prev.filter((p) => !(p.type === post.type && p.id === post.id)));
+      setSelected((current) => {
+        const next = new Set(current);
+        next.delete(postKey(post));
+        return next;
+      });
     } catch (err) {
       setActionError(err.message);
     }
@@ -66,6 +75,11 @@ export default function ReviewQueueClient() {
     const { type, id } = rejectTarget;
     await authorApi.reviewPost(type, id, { action: "REJECT", notes });
     setPosts((prev) => prev.filter((p) => !(p.type === type && p.id === id)));
+    setSelected((current) => {
+      const next = new Set(current);
+      next.delete(`${type}:${id}`);
+      return next;
+    });
     setRejectTarget(null);
   };
 
@@ -74,7 +88,43 @@ export default function ReviewQueueClient() {
     const { type, id } = deleteTarget;
     await authorApi.deletePost(type, id, reason);
     setPosts((prev) => prev.filter((p) => !(p.type === type && p.id === id)));
+    setSelected((current) => {
+      const next = new Set(current);
+      next.delete(`${type}:${id}`);
+      return next;
+    });
     setDeleteTarget(null);
+  };
+
+  const selectedPosts = posts.filter((post) => selected.has(postKey(post)));
+  const hasRestrictedSelection = user?.role !== "ADMIN" && selectedPosts.some((post) => post.author_role !== "AUTHOR");
+
+  const toggleSelected = (post) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      const key = postKey(post);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected(selectedPosts.length === posts.length ? new Set() : new Set(posts.map(postKey)));
+  };
+
+  const handleBulkAction = async (notes) => {
+    if (!bulkAction || selectedPosts.length === 0) return;
+    setActionError("");
+    const data = await authorApi.bulkModerate(
+      bulkAction,
+      selectedPosts.map((post) => ({ type: post.type, id: post.id })),
+      notes
+    );
+    const processed = new Set(data.processed.map((item) => `${item.type}:${item.id}`));
+    setPosts((current) => current.filter((post) => !processed.has(postKey(post))));
+    setSelected(new Set());
+    setBulkAction(null);
   };
 
   return (
@@ -93,6 +143,43 @@ export default function ReviewQueueClient() {
         <p className="text-sm text-error font-body-md mb-4" role="alert">
           {actionError}
         </p>
+      )}
+
+      {!loading && posts.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-outline-variant/25 bg-surface-container-low p-3">
+          <label className="flex min-h-9 cursor-pointer items-center gap-2 px-2 font-label-md text-sm text-on-surface">
+            <input type="checkbox" checked={selectedPosts.length === posts.length} onChange={toggleAll} className="h-4 w-4 accent-primary" />
+            Select all
+          </label>
+          <span className="font-body-md text-xs text-on-surface-variant">{selectedPosts.length} selected</span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!selectedPosts.length || hasRestrictedSelection}
+              onClick={() => setBulkAction("APPROVE")}
+              title={hasRestrictedSelection ? "Editors cannot approve content submitted by Editors or Admins" : undefined}
+              className="min-h-9 rounded bg-green-600 px-3 font-label-md text-xs text-white disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <i className="fa-solid fa-check mr-1.5" />Approve
+            </button>
+            <button
+              type="button"
+              disabled={!selectedPosts.length || hasRestrictedSelection}
+              onClick={() => setBulkAction("REJECT")}
+              className="min-h-9 rounded bg-yellow-500 px-3 font-label-md text-xs text-black disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <i className="fa-solid fa-rotate-left mr-1.5" />Reject
+            </button>
+            <button
+              type="button"
+              disabled={!selectedPosts.length}
+              onClick={() => setBulkAction("DELETE")}
+              className="min-h-9 rounded border border-error/40 px-3 font-label-md text-xs text-error hover:bg-error hover:text-on-error disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <i className="fa-solid fa-trash mr-1.5" />Delete
+            </button>
+          </div>
+        </div>
       )}
 
       {loading ? (
@@ -116,6 +203,13 @@ export default function ReviewQueueClient() {
               key={`${post.type}-${post.id}`}
               className="flex items-start gap-4 p-4 bg-surface-container rounded-lg border border-outline-variant/20"
             >
+              <input
+                type="checkbox"
+                checked={selected.has(postKey(post))}
+                onChange={() => toggleSelected(post)}
+                aria-label={`Select ${post.title}`}
+                className="mt-3 h-4 w-4 shrink-0 accent-primary"
+              />
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <i className={`fa-solid ${TYPE_ICON[post.type]} text-primary`} />
               </div>
@@ -222,6 +316,18 @@ export default function ReviewQueueClient() {
         confirmLabel="Send for Changes"
         placeholder="What needs to change?"
         required="true"
+      />
+
+      <ReasonModal
+        open={!!bulkAction}
+        onClose={() => setBulkAction(null)}
+        onConfirm={handleBulkAction}
+        title={`${bulkAction === "APPROVE" ? "Approve" : bulkAction === "REJECT" ? "Reject" : "Delete"} ${selectedPosts.length} selected item${selectedPosts.length === 1 ? "" : "s"}?`}
+        description={bulkAction === "DELETE" ? "Selected content will be permanently deleted. This cannot be undone." : "This action will be applied to every selected item."}
+        confirmLabel={bulkAction === "APPROVE" ? "Approve All" : bulkAction === "REJECT" ? "Reject All" : "Delete All"}
+        placeholder={bulkAction === "REJECT" ? "Explain what the authors need to change..." : "Why is this content being deleted?"}
+        required={bulkAction !== "APPROVE"}
+        danger={bulkAction === "DELETE"}
       />
 
       <ReasonModal

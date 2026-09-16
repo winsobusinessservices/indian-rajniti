@@ -8,6 +8,7 @@ const Video = require("../../models/video.model");
 const { fileUrl } = require("../../middleware/upload.middleware");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { joinContentMedia } = require("../../utils/contentMedia");
+const { creditContentReward } = require("../../services/walletRewards.service");
 
 const { PERMISSIONS } = require("../../config/permissions");
 const isModerator = (user) => user.role === "ADMIN" || user.permissions?.includes(PERMISSIONS.REVIEW_CONTENT);
@@ -357,14 +358,115 @@ const reviewContent = async (req, res) => {
     }
 
     const updated = await Model.review(item.id, { reviewerId: req.user.userId, action, notes, ...fields });
+    let awardedPoints = 0;
+    if (action === "APPROVE" && ["AUTHOR", "EDITOR"].includes(updated.author_role)) {
+      const reward = await creditContentReward({
+        userId: updated.author_id,
+        contributorRole: updated.author_role,
+        contentType: req.contentType,
+        contentId: updated.id,
+        title: updated.title,
+        publishedAt: updated.published_at,
+      });
+      if (reward.credited) awardedPoints = reward.points;
+    }
+
     return res.status(200).json({
       success: true,
-      message: `${TYPE_LABEL[req.contentType]} ${action.toLowerCase()}d`,
+      message: `${TYPE_LABEL[req.contentType]} ${action.toLowerCase()}d${awardedPoints ? ` and ${awardedPoints} wallet points awarded` : ""}`,
       post: tagType(req.contentType, updated),
+      awardedPoints,
     });
   } catch (error) {
     console.error(`Review ${req.contentType} error:`, error);
     return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+const bulkModerateContent = async (req, res) => {
+  try {
+    const action = String(req.body?.action || "").toUpperCase();
+    const notes = String(req.body?.notes || req.body?.reason || "").trim();
+    const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+
+    if (!["APPROVE", "REJECT", "DELETE"].includes(action)) {
+      return res.status(400).json({ success: false, message: "action must be APPROVE, REJECT, or DELETE" });
+    }
+    if (!rawItems.length || rawItems.length > 100) {
+      return res.status(400).json({ success: false, message: "Select between 1 and 100 content items" });
+    }
+    if (["REJECT", "DELETE"].includes(action) && !notes) {
+      return res.status(400).json({ success: false, message: `A reason is required to ${action.toLowerCase()} content` });
+    }
+
+    const seen = new Set();
+    const items = [];
+    for (const rawItem of rawItems) {
+      const type = String(rawItem?.type || "").toUpperCase();
+      const id = Number(rawItem?.id);
+      const key = `${type}:${id}`;
+      if (!MODEL[type] || !Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ success: false, message: "Every selected item must have a valid type and ID" });
+      }
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push({ type, id, Model: MODEL[type] });
+      }
+    }
+
+    // Resolve and authorize the complete batch before changing anything.
+    // This avoids approving early rows and then failing halfway through on
+    // an editor-owned row that requires an administrator.
+    for (const item of items) {
+      item.post = await item.Model.findById(item.id);
+      if (!item.post) {
+        return res.status(404).json({ success: false, message: `${TYPE_LABEL[item.type]} ${item.id} not found` });
+      }
+      if (action !== "DELETE" && !canReview(req.user.role, item.post.author_role)) {
+        return res.status(403).json({
+          success: false,
+          message: "Editors can only approve or reject content submitted by authors. Remove restricted items from the selection.",
+        });
+      }
+    }
+
+    let awardedPoints = 0;
+    for (const item of items) {
+      if (action === "DELETE") {
+        if (notes) {
+          console.log(`${TYPE_LABEL[item.type]} ${item.id} deleted in bulk by user ${req.user.userId}. Reason: ${notes}`);
+        }
+        await item.Model.remove(item.id);
+        continue;
+      }
+
+      const updated = await item.Model.review(item.id, {
+        reviewerId: req.user.userId,
+        action,
+        notes: notes || undefined,
+      });
+      if (action === "APPROVE" && ["AUTHOR", "EDITOR"].includes(updated.author_role)) {
+        const reward = await creditContentReward({
+          userId: updated.author_id,
+          contributorRole: updated.author_role,
+          contentType: item.type,
+          contentId: updated.id,
+          title: updated.title,
+          publishedAt: updated.published_at,
+        });
+        if (reward.credited) awardedPoints += reward.points;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `${items.length} item${items.length === 1 ? "" : "s"} ${action.toLowerCase()}d`,
+      processed: items.map(({ type, id }) => ({ type, id })),
+      awardedPoints,
+    });
+  } catch (error) {
+    console.error("Bulk content moderation error:", error);
+    return res.status(500).json({ success: false, message: "Bulk action could not be completed" });
   }
 };
 
@@ -378,4 +480,5 @@ module.exports = {
   submitContent,
   getContentStatus,
   reviewContent,
+  bulkModerateContent,
 };

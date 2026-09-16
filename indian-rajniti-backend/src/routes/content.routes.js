@@ -23,10 +23,12 @@ const {
   submitContent,
   getContentStatus,
   reviewContent,
+  bulkModerateContent,
 } = require("../controllers/content/content.controller");
 const { authenticate, authorizePermission, authorizeRoleOrPermission } = require("../middleware/auth.middleware");
 const { PERMISSIONS } = require("../config/permissions");
 const { uploadFields } = require("../middleware/upload.middleware");
+const { enforceDailyContentLimit } = require("../middleware/contentLimit.middleware");
 
 const CREATE_PERMISSION = {
   ARTICLE: PERMISSIONS.CREATE_ARTICLE,
@@ -53,7 +55,15 @@ function buildResourceRoutes(resource, type) {
   const withType = setContentType(type);
   const withUpload = uploadFields(mediaFieldsFor(type));
 
-  router.post(`/${resource}`, authenticate, authorizePermission(CREATE_PERMISSION[type]), withType, withUpload, createContent);
+  router.post(
+    `/${resource}`,
+    authenticate,
+    authorizePermission(CREATE_PERMISSION[type]),
+    withType,
+    enforceDailyContentLimit,
+    withUpload,
+    createContent
+  );
   router.get(`/${resource}`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT), withType, listContent);
   // Must come before /:id — otherwise Express would match "history" as the
   // :id param and this route would never be reached.
@@ -69,6 +79,13 @@ function buildResourceRoutes(resource, type) {
 }
 
 const routes = express.Router();
+
+routes.post(
+  "/content/bulk",
+  authenticate,
+  authorizePermission(PERMISSIONS.REVIEW_CONTENT),
+  bulkModerateContent
+);
 
 /**
  * @openapi
