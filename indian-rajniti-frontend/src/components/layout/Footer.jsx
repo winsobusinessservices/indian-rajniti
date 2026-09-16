@@ -138,7 +138,7 @@ export default async function Footer() {
                   ):
                                     link ==="Policy Analysis"?(
                     <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
-                      <Link href="/category/policy-analysis" className="inline-block">
+                      <Link href="/policies" className="inline-block">
                         {link}
                       </Link>
                     </li>

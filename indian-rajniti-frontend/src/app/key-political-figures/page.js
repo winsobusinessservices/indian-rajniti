@@ -2,8 +2,9 @@ import CategoryPageShell from "@/components/category/CategoryPageShell";
 import PoliticianCard from "@/components/politician/PoliticianCard";
 import { getKeyFigures } from "@/features/politicians/politician.api";
 import { slugify } from "@/lib/slugify";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Key Political Figures" };
+export const metadata = buildPageMetadata({ title: "Key Indian Political Leaders", description: "Profiles of influential Indian political leaders, their positions, parties, careers, and latest developments.", path: "/key-political-figures" });
 
 export default async function KeyPoliticalFiguresPage() {
   const keyFigures = await getKeyFigures();

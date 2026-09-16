@@ -5,11 +5,13 @@ import Footer from "@/components/layout/Footer";
 import CategoryDetailView, { CategoryBreadcrumb, RecommendedNewsSection } from "@/components/category/CategoryDetailView";
 import { getBreakingNews } from "@/features/news/news.api";
 import { getHouseInfo } from "@/features/parliament/parliament.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Lok Sabha",
   description: "The Lok Sabha — leadership, party-wise composition, and the latest developments from the lower house of India's Parliament.",
-};
+  path: "/loksabha",
+});
 
 export default async function LokSabhaPage() {
   const info = await getHouseInfo("loksabha");

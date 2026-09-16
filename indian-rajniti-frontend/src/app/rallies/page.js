@@ -4,11 +4,13 @@ import Footer from "@/components/layout/Footer";
 import CategoryDetailView, { CategoryBreadcrumb, RecommendedNewsSection } from "@/components/category/CategoryDetailView";
 import { getBreakingNews } from "@/features/news/news.api";
 import { getRalliesInfo } from "@/features/events/events.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Rallies",
   description: "Coverage of rallies from ruling and opposition parties across the country.",
-};
+  path: "/rallies",
+});
 
 export default async function RalliesPage() {
   const info = await getRalliesInfo();

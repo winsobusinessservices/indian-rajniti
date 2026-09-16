@@ -1,8 +1,9 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import VideoCard from "@/components/news/VideoCard";
 import { getAllVideos } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Videos" };
+export const metadata = buildPageMetadata({ title: "Political Videos", description: "Watch political speeches, interviews, press conferences, and video updates from across India.", path: "/videos" });
 
 export default async function VideosPage() {
   const videos = await getAllVideos();

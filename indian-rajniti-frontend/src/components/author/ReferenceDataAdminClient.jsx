@@ -1290,6 +1290,23 @@ export default function ReferenceDataAdminClient() {
     setPage(1);
     setError("");
   };
+  const scrollTabsWithWheel = (event) => {
+    const tabList = event.currentTarget;
+    const distance =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.deltaY;
+    const maxScroll = tabList.scrollWidth - tabList.clientWidth;
+    const canScroll =
+      maxScroll > 0 &&
+      ((distance < 0 && tabList.scrollLeft > 0) ||
+        (distance > 0 && tabList.scrollLeft < maxScroll));
+
+    if (canScroll) {
+      event.preventDefault();
+      tabList.scrollLeft += distance;
+    }
+  };
   const reset = () => {
     setEditing(null);
     setForm({ ...EMPTY[tab] });
@@ -1425,13 +1442,15 @@ export default function ReferenceDataAdminClient() {
   if (tab === "homeWidgets")
     return (
       <div className="space-y-6">
-        <div className="flex gap-2 overflow-x-auto rounded-lg border border-outline-variant/30 bg-surface p-2">
+        <div className="flex w-full min-w-0 max-w-full snap-x gap-2 overflow-x-scroll overscroll-x-contain rounded-lg border border-outline-variant/30 bg-surface p-2 pb-3 touch-pan-x [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]" role="tablist" aria-label="Site data sections" onWheel={scrollTabsWithWheel}>
           {allowedTabs.map((item) => (
             <button
               key={item.key}
               type="button"
               onClick={() => chooseTab(item.key)}
-              className={`flex flex-shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-label-md ${tab === item.key ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container"}`}
+              role="tab"
+              aria-selected={tab === item.key}
+              className={`flex shrink-0 snap-start items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-label-md ${tab === item.key ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container"}`}
             >
               <i className={`fa-solid ${item.icon}`} />
               {item.label}
@@ -1453,13 +1472,15 @@ export default function ReferenceDataAdminClient() {
   if (tab === "pageContent")
     return (
       <div className="space-y-6">
-        <div className="flex gap-2 overflow-x-auto rounded-lg border border-outline-variant/30 bg-surface p-2">
+        <div className="flex w-full min-w-0 max-w-full snap-x gap-2 overflow-x-scroll overscroll-x-contain rounded-lg border border-outline-variant/30 bg-surface p-2 pb-3 touch-pan-x [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]" role="tablist" aria-label="Site data sections" onWheel={scrollTabsWithWheel}>
           {allowedTabs.map((item) => (
             <button
               key={item.key}
               type="button"
               onClick={() => chooseTab(item.key)}
-              className={`flex flex-shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-label-md ${tab === item.key ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container"}`}
+              role="tab"
+              aria-selected={tab === item.key}
+              className={`flex shrink-0 snap-start items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-label-md ${tab === item.key ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container"}`}
             >
               <i className={`fa-solid ${item.icon}`} />
               {item.label}
@@ -1472,13 +1493,15 @@ export default function ReferenceDataAdminClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 overflow-x-auto rounded-lg border border-outline-variant/30 bg-surface p-2">
+      <div className="flex w-full min-w-0 max-w-full snap-x gap-2 overflow-x-scroll overscroll-x-contain rounded-lg border border-outline-variant/30 bg-surface p-2 pb-3 touch-pan-x [scrollbar-width:thin] [-webkit-overflow-scrolling:touch]" role="tablist" aria-label="Site data sections" onWheel={scrollTabsWithWheel}>
         {allowedTabs.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={() => chooseTab(item.key)}
-            className={`flex flex-shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-label-md ${tab === item.key ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container"}`}
+            role="tab"
+            aria-selected={tab === item.key}
+            className={`flex shrink-0 snap-start items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-label-md ${tab === item.key ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container"}`}
           >
             <i className={`fa-solid ${item.icon}`} />
             {item.label}

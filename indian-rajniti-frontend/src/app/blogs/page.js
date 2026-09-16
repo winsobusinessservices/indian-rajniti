@@ -1,8 +1,9 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import NewsCard from "@/components/news/NewsCard";
 import { getBlogs } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Blogs" };
+export const metadata = buildPageMetadata({ title: "Indian Politics Blogs and Analysis", description: "Read commentary, explainers, opinions, and in-depth analysis of Indian politics, elections, Parliament, and public policy.", path: "/blogs" });
 
 export default async function BlogsPage() {
   const blogs = await getBlogs();

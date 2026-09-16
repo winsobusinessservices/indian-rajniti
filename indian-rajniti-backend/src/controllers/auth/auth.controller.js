@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../../models/user.model");
+const Policy = require("../../models/policy.model");
 const {
   sendPasswordResetEmail,
   sendRoleChangedEmail,
@@ -29,6 +30,20 @@ function otpHash(email, otp) {
 
 function tokenKey(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+async function validateAcceptedPolicies(value) {
+  const submittedIds = new Set(
+    (Array.isArray(value) ? value : [])
+      .map(Number)
+      .filter(Number.isInteger)
+  );
+  const requiredPolicies = await Policy.findRegistrationPolicies();
+  const missing = requiredPolicies.filter((policy) => !submittedIds.has(Number(policy.id)));
+  return {
+    acceptedPolicyIds: requiredPolicies.map((policy) => Number(policy.id)),
+    missing,
+  };
 }
 
 const requestRegistrationOtp = async (req, res) => {
@@ -144,7 +159,7 @@ function authUserResponse(user) {
 
 const register = async (req, res) => {
   try {
-    const { name, email, password, agreeToTerms, verificationToken } = req.body;
+    const { name, email, password, agreeToTerms, verificationToken, acceptedPolicyIds } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
@@ -158,6 +173,10 @@ const register = async (req, res) => {
         success: false,
         message: "You must agree to the Terms of Service and Privacy Policy",
       });
+    }
+    const policyAcceptance = await validateAcceptedPolicies(acceptedPolicyIds);
+    if (policyAcceptance.missing.length) {
+      return res.status(400).json({ success: false, message: "Please review and accept all required policies" });
     }
 
     const strongPasswordRegex =/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -214,6 +233,7 @@ const register = async (req, res) => {
       email: normalizedEmail,
       passwordHash,
       termsAccepted: agreeToTerms,
+      acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
     });
 
     return res.status(201).json({
@@ -308,6 +328,12 @@ const googleAuth = async (req, res) => {
         message: "You must agree to the Terms of Service and Privacy Policy",
       });
     }
+    const policyAcceptance = intent === "register"
+      ? await validateAcceptedPolicies(req.body?.acceptedPolicyIds)
+      : { acceptedPolicyIds: [], missing: [] };
+    if (policyAcceptance.missing.length) {
+      return res.status(400).json({ success: false, message: "Please review and accept all required policies" });
+    }
 
     let ticket;
     try {
@@ -346,6 +372,7 @@ const googleAuth = async (req, res) => {
           passwordHash,
           googleSub,
           termsAccepted: true,
+          acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
         });
         created = true;
       } else {

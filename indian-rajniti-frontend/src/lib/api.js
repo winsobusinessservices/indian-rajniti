@@ -224,6 +224,16 @@ export const categoriesApi = {
   remove: (id) => request(`/categories/${id}`, { method: "DELETE" }),
 };
 
+export const policiesApi = {
+  list: () => request("/policies"),
+  listForRegistration: () => request("/policies/registration", { notifyError: false }),
+  listForAdmin: () => request("/policies/manage"),
+  getBySlug: (slug) => request(`/policies/${encodeURIComponent(slug)}`, { notifyError: false }),
+  create: (payload) => request("/policies", { method: "POST", body: payload }),
+  update: (id, payload) => request(`/policies/${id}`, { method: "PATCH", body: payload }),
+  remove: (id) => request(`/policies/${id}`, { method: "DELETE" }),
+};
+
 export const referenceAdminApi = {
   async list() {
     const data = await request("/admin/reference-data");

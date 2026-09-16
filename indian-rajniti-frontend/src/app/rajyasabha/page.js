@@ -5,11 +5,13 @@ import Footer from "@/components/layout/Footer";
 import CategoryDetailView, { CategoryBreadcrumb, RecommendedNewsSection } from "@/components/category/CategoryDetailView";
 import { getBreakingNews } from "@/features/news/news.api";
 import { getHouseInfo } from "@/features/parliament/parliament.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Rajya Sabha",
   description: "The Rajya Sabha — leadership, party-wise composition, and the latest developments from the upper house of India's Parliament.",
-};
+  path: "/rajyasabha",
+});
 
 export default async function RajyaSabhaPage() {
   const info = await getHouseInfo("rajyasabha");

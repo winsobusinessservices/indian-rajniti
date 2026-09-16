@@ -4,6 +4,7 @@ import BreakingNews from "@/components/layout/BreakingNews";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { getBreakingNews } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
 const LEGAL_NOTICE =
   "This is demonstration content while the final policy is being reviewed. It is not the final legal text.";
@@ -140,11 +141,12 @@ export async function generateMetadata({ params }) {
   const { slug } = await params;
   const page = PAGE_CONTENT[slug];
   if (!page) return { title: "Page not found" };
-  return {
+  return buildPageMetadata({
     title: page.title,
     description: page.description,
-    alternates: { canonical: `/${slug}` },
-  };
+    path: `/${slug}`,
+    noIndex: true,
+  });
 }
 
 export default async function DemoSectionPage({ params }) {

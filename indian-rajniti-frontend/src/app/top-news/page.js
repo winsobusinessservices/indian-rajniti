@@ -1,8 +1,9 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import NewsCard from "@/components/news/NewsCard";
 import { getTopStories } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Top News" };
+export const metadata = buildPageMetadata({ title: "Top Indian Political News", description: "Read today's leading Indian political news, election updates, parliamentary developments, and policy stories.", path: "/top-news" });
 
 export default async function TopStoriesPage() {
   const topStories = await getTopStories();

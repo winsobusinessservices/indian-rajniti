@@ -1,8 +1,9 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import NewsCard from "@/components/news/NewsCard";
 import { getTrending } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Trending News" };
+export const metadata = buildPageMetadata({ title: "Trending Political News", description: "Follow the political stories, leaders, elections, and policy debates currently trending across India.", path: "/trending" });
 
 export default async function TrendingPage() {
   const trending = await getTrending();

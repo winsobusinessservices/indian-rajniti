@@ -187,6 +187,11 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
               </Link>
             </li>
             <li>
+              <Link href="/author/policies" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+                <i className="fa-solid fa-scale-balanced w-4" /> Manage Policies
+              </Link>
+            </li>
+            <li>
             <Link
               href="/author/team"
               onClick={onClose}

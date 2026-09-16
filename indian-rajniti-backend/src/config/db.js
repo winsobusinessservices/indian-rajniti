@@ -30,6 +30,13 @@ pool.verifyConnection = async () => {
     if (!googleSubColumns.length) {
       await connection.query("ALTER TABLE users ADD COLUMN google_sub VARCHAR(255) NULL UNIQUE AFTER password_hash");
     }
+    const [acceptedPolicyColumns] = await connection.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'accepted_policy_ids'`
+    );
+    if (!acceptedPolicyColumns.length) {
+      await connection.query("ALTER TABLE users ADD COLUMN accepted_policy_ids JSON NULL AFTER terms_accepted_at");
+    }
     await connection.query(
       `CREATE TABLE IF NOT EXISTS editor_author_assignments (
         author_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
@@ -101,6 +108,32 @@ pool.verifyConnection = async () => {
     );
     if (!categoryVisibilityColumns.length) {
       await connection.query("ALTER TABLE categories ADD COLUMN is_visible TINYINT(1) NOT NULL DEFAULT 1 AFTER slug");
+    }
+
+    await connection.query(
+      `CREATE TABLE IF NOT EXISTS policies (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        slug VARCHAR(220) NOT NULL UNIQUE,
+        title VARCHAR(200) NOT NULL,
+        policy_type VARCHAR(100) NOT NULL,
+        summary VARCHAR(600) NOT NULL,
+        content LONGTEXT NOT NULL,
+        status ENUM('DRAFT', 'PUBLISHED') NOT NULL DEFAULT 'DRAFT',
+        show_on_registration TINYINT(1) NOT NULL DEFAULT 0,
+        created_by BIGINT UNSIGNED NOT NULL,
+        published_at DATETIME NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_policies_status_published (status, published_at),
+        INDEX idx_policies_type (policy_type)
+      ) ENGINE=InnoDB`
+    );
+    const [policyRegistrationColumns] = await connection.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'policies' AND COLUMN_NAME = 'show_on_registration'`
+    );
+    if (!policyRegistrationColumns.length) {
+      await connection.query("ALTER TABLE policies ADD COLUMN show_on_registration TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
     }
 
     await connection.query(

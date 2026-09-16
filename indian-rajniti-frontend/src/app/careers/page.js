@@ -1,8 +1,9 @@
 import Link from "next/link";
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import { careersApi } from "@/lib/api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Careers" };
+export const metadata = buildPageMetadata({ title: "Careers at Indian Rajneeti", description: "Explore journalism, editorial, research, video, and technology opportunities at Indian Rajneeti.", path: "/careers" });
 
 const EMPLOYMENT_LABEL = {
   FULL_TIME: "Full-time",
@@ -10,6 +11,10 @@ const EMPLOYMENT_LABEL = {
   CONTRACT: "Contract",
   INTERNSHIP: "Internship",
 };
+
+function isOpenForApplications(job) {
+  return !job.closes_at || new Date(job.closes_at).getTime() > Date.now();
+}
 
 function JobCard({ job }) {
   return (
@@ -38,15 +43,16 @@ function JobCard({ job }) {
 
 export default async function CareersPage() {
   const { jobs } = await careersApi.list();
+  const activeJobs = jobs.filter(isOpenForApplications);
 
   return (
-    <CategoryPageShell title="Careers" count={jobs.length} gridClassName="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {jobs.length === 0 ? (
+    <CategoryPageShell title="Careers" count={activeJobs.length} gridClassName="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {activeJobs.length === 0 ? (
         <p className="font-body-md text-on-surface-variant col-span-full">
           There are no open positions right now — check back soon.
         </p>
       ) : (
-        jobs.map((job) => <JobCard key={job.id} job={job} />)
+        activeJobs.map((job) => <JobCard key={job.id} job={job} />)
       )}
     </CategoryPageShell>
   );

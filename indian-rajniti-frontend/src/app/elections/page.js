@@ -5,11 +5,13 @@ import Footer from "@/components/layout/Footer";
 import CategoryDetailView, { CategoryBreadcrumb, RecommendedNewsSection } from "@/components/category/CategoryDetailView";
 import { getBreakingNews } from "@/features/news/news.api";
 import { getElectionInfo } from "@/features/parliament/parliament.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Elections",
   description: "The 2024 general election result, the ruling coalition versus the opposition, and the Election Commission's role in overseeing India's elections.",
-};
+  path: "/elections",
+});
 
 export default async function ElectionsPage() {
   const info = await getElectionInfo();

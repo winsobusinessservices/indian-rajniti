@@ -12,6 +12,7 @@ export const NAV_LINKS = [
   { label: "Politics", href: "/parties", key: "politics" },
   { label: "States", href: "/state", key: "states" },
   { label: "Elections", href: "/elections" },
+  { label: "Policies", href: "/policies" },
   { label: "Blogs", href: "/blogs", key: "blogs" },
   { label: "Lok Sabha", href: "/loksabha", key: "loksabha" },
   { label: "Rajya Sabha", href: "/rajyasabha", key: "rajyasabha" },
@@ -31,7 +32,7 @@ export const CATEGORY_TYPE_LABEL = {
 export const SIDEBAR_CATEGORIES = {
   more: [
     "Investors",
-    "Advertize with Us",
+    "Advertise with Us",
     { label:"Career", href: "/careers"},
     "Connect As A Sponsor",
     { label: "Lok Sabha", href: "/loksabha" },
@@ -41,6 +42,6 @@ export const SIDEBAR_CATEGORIES = {
   legal: [
     { label: "About", href: "/about"},
     { label: "Contact", href: "/contact" },
-    { label: "Privacy Policy", href: "/privacy-policy" }
+    { label: "Privacy Policy", href: "/policies/privacy-policy" }
   ]
 };

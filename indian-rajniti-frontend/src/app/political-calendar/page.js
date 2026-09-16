@@ -1,7 +1,8 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import { getPoliticalCalendar } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Political Calendar" };
+export const metadata = buildPageMetadata({ title: "Indian Political Calendar", description: "Track upcoming Indian political events, parliamentary sessions, election dates, rallies, and important public meetings.", path: "/political-calendar" });
 
 export default async function PoliticalCalendarPage() {
   const events = await getPoliticalCalendar();

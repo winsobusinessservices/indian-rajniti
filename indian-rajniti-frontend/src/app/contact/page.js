@@ -3,12 +3,13 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import ContactForm from "@/components/contact/ContactForm";
 import { getBreakingNews } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Contact Us",
   description: "Contact Indian Rajneeti for editorial feedback, story tips, corrections, partnerships, and general enquiries.",
-  alternates: { canonical: "/contact" },
-};
+  path: "/contact",
+});
 
 const CONTACT_DETAILS = [
   {

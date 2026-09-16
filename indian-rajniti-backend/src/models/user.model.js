@@ -4,11 +4,19 @@ const { normalizePermissions } = require("../config/permissions");
 const ROLES = ["USER", "ADMIN", "SUBADMIN", "EDITOR", "AUTHOR", "INVESTOR"];
 
 const PUBLIC_COLUMNS =
-  "id, name, email, role, permissions, status, created_at, terms_accepted, terms_accepted_at, pan_document, aadhar_document, graduation_certificate, created_by";
+  "id, name, email, role, permissions, status, created_at, terms_accepted, terms_accepted_at, accepted_policy_ids, pan_document, aadhar_document, graduation_certificate, created_by";
 
 function parseUser(row) {
   if (!row) return null;
-  return { ...row, permissions: normalizePermissions(row.permissions, row.role) };
+  let acceptedPolicyIds = row.accepted_policy_ids;
+  if (typeof acceptedPolicyIds === "string") {
+    try { acceptedPolicyIds = JSON.parse(acceptedPolicyIds); } catch { acceptedPolicyIds = []; }
+  }
+  return {
+    ...row,
+    permissions: normalizePermissions(row.permissions, row.role),
+    accepted_policy_ids: Array.isArray(acceptedPolicyIds) ? acceptedPolicyIds : [],
+  };
 }
 
 const User = {
@@ -159,6 +167,7 @@ const User = {
     googleSub = null,
     role = "USER",
     termsAccepted = false,
+    acceptedPolicyIds = [],
     panDocument = null,
     aadharDocument = null,
     graduationCertificate = null,
@@ -167,8 +176,8 @@ const User = {
   }) {
     const [result] = await pool.query(
       `INSERT INTO users
-        (name, email, password_hash, google_sub, role, permissions, status, terms_accepted, terms_accepted_at, pan_document, aadhar_document, graduation_certificate, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, email, password_hash, google_sub, role, permissions, status, terms_accepted, terms_accepted_at, accepted_policy_ids, pan_document, aadhar_document, graduation_certificate, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         email,
@@ -179,6 +188,7 @@ const User = {
         "ACTIVE",
         termsAccepted,
         termsAccepted ? new Date() : null,
+        JSON.stringify(acceptedPolicyIds),
         panDocument,
         aadharDocument,
         graduationCertificate,

@@ -23,6 +23,7 @@ const categoriesRoutes = require("./src/routes/categories.routes.js")
 const contactRoutes = require("./src/routes/contact.routes.js")
 const referenceDataRoutes = require("./src/routes/referenceData.routes.js")
 const walletRoutes = require("./src/routes/wallet.routes.js")
+const policiesRoutes = require("./src/routes/policies.routes.js")
 const { publishDueScheduledContent } = require("./src/services/scheduledPublishing.service.js");
 
 const REQUIRED_PRODUCTION_ENV = ["CLIENT_ORIGIN", "JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"];
@@ -91,6 +92,7 @@ app.use("/api", categoriesRoutes)
 app.use("/api", contactRoutes)
 app.use("/api", referenceDataRoutes)
 app.use("/api", walletRoutes)
+app.use("/api", policiesRoutes)
 
 app.get("/", (req, res) => {
   res.send("API is running...");

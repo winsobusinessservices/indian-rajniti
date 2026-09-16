@@ -12,6 +12,7 @@ import { formatViews } from "@/lib/formatViews";
 
 import { getBreakingNews, getPostBySlug, getRelatedPosts } from "@/features/news/news.api";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
 import { mediaUrl } from "@/lib/api";
 import LinkedText from "@/components/common/LinkedText";
 
@@ -19,25 +20,19 @@ export async function generateMetadata({ params }) {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
   if (!post) return { title: "Post not found" };
-  return {
+  const metadata = buildPageMetadata({
     title: post.title,
     description: post.excerpt,
-    alternates: { canonical: `/news/${slug}` },
-    openGraph: {
-      type: "article",
-      url: `/news/${slug}`,
-      title: post.title,
-      description: post.excerpt,
-      siteName: SITE_NAME,
-      images: post.image ? [{ url: post.image, alt: post.title }] : [],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: post.title,
-      description: post.excerpt,
-      images: post.image ? [post.image] : [],
-    },
-  };
+    path: `/news/${slug}`,
+    image: post.image,
+    type: "article",
+  });
+  metadata.openGraph.publishedTime = post.datePublished;
+  metadata.openGraph.modifiedTime = post.dateModified;
+  metadata.openGraph.authors = post.author ? [post.author] : undefined;
+  metadata.openGraph.section = post.category;
+  metadata.openGraph.tags = post.tags;
+  return metadata;
 }
 
 export default async function PostDetailPage({ params }) {
@@ -58,10 +53,27 @@ export default async function PostDetailPage({ params }) {
     author: { "@type": "Person", name: post.author },
     publisher: {
       "@type": "NewsMediaOrganization",
+      "@id": `${SITE_URL}/#organization`,
       name: SITE_NAME,
       logo: { "@type": "ImageObject", url: `${SITE_URL}/icon.png` },
     },
-    mainEntityOfPage: `${SITE_URL}/news/${slug}`,
+    datePublished: post.datePublished,
+    dateModified: post.dateModified,
+    articleSection: post.category,
+    keywords: post.tags?.join(", "),
+    inLanguage: "en-IN",
+    isAccessibleForFree: true,
+    url: absoluteUrl(`/news/${slug}`),
+    mainEntityOfPage: { "@type": "WebPage", "@id": absoluteUrl(`/news/${slug}`) },
+  };
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: absoluteUrl("/") },
+      { "@type": "ListItem", position: 2, name: post.category, item: absoluteUrl(`/category/${slugify(post.category)}`) },
+      { "@type": "ListItem", position: 3, name: post.title, item: absoluteUrl(`/news/${slug}`) },
+    ],
   };
 
   return (
@@ -70,7 +82,7 @@ export default async function PostDetailPage({ params }) {
       <Header />
 
       <main className="w-full bg-background flex-grow">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd([articleSchema, breadcrumbSchema]) }} />
         <div className="max-w-full mx-auto px-4 md:px-16 py-6">
           {/* Breadcrumb */}
           <nav className="flex items-center gap-2 text-xs font-label-md text-on-surface-variant mb-6">

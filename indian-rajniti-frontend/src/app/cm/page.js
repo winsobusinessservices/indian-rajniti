@@ -2,8 +2,9 @@ import CategoryPageShell from "@/components/category/CategoryPageShell";
 import CMCard from "@/components/politician/CMCard";
 import { getChiefMinisters } from "@/features/politicians/politician.api";
 import { slugify } from "@/lib/slugify";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "State Leadership — Chief Ministers" };
+export const metadata = buildPageMetadata({ title: "Chief Ministers of India", description: "View current chief ministers and state leadership across India, with party affiliations and political profiles.", path: "/cm" });
 
 export default async function ChiefMinistersPage() {
   const chiefMinisters = await getChiefMinisters();

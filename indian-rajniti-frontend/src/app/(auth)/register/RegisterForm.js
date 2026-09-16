@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import AuthTextField from "@/components/auth/AuthTextField";
 import AuthPasswordField from "@/components/auth/AuthPasswordField";
 import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
-import { authApi } from "@/lib/api";
+import { authApi, policiesApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 export default function RegisterForm() {
@@ -27,6 +27,21 @@ export default function RegisterForm() {
   const [otp, setOtp] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
 
+  const [registrationPolicies, setRegistrationPolicies] = useState([]);
+
+  useEffect(() => {
+    policiesApi.listForRegistration()
+      .then((data) => setRegistrationPolicies(data.policies || []))
+      .catch(() => setRegistrationPolicies([]));
+  }, []);
+
+  const consentPolicies = registrationPolicies.length > 0
+    ? registrationPolicies.map((policy) => ({ id: policy.id, title: policy.title, href: `/policies/${policy.slug}` }))
+    : [
+        { id: "terms", title: "Terms of Service", href: "/policies/terms-of-service" },
+        { id: "privacy", title: "Privacy Policy", href: "/policies/privacy-policy" },
+      ];
+
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -37,7 +52,7 @@ export default function RegisterForm() {
     setSuccess("");
 
     if (step === "details" && !agreedToTerms) {
-      setError("Please agree to the Terms of Service and Privacy Policy.");
+      setError("Please agree to the required policies.");
       return;
     }
     if (step === "details" && form.password !== form.confirmPassword) {
@@ -68,6 +83,7 @@ export default function RegisterForm() {
         email: form.email.trim(),
         password: form.password,
         agreeToTerms: agreedToTerms,
+        acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
         verificationToken: verified.verificationToken,
       });
       setSuccess("Account created successfully. Redirecting to sign in...");
@@ -107,13 +123,18 @@ export default function RegisterForm() {
     setError("");
     setSuccess("");
     if (!agreedToTerms) {
-      setError("Please agree to the Terms of Service and Privacy Policy.");
+      setError("Please agree to the required policies.");
       return;
     }
 
     setLoading(true);
     try {
-      await authApi.googleAuth({ credential, intent: "register", agreeToTerms: true });
+      await authApi.googleAuth({
+        credential,
+        intent: "register",
+        agreeToTerms: true,
+        acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
+      });
       await refreshUser();
       router.push("/");
     } catch (err) {
@@ -121,7 +142,7 @@ export default function RegisterForm() {
     } finally {
       setLoading(false);
     }
-  }, [agreedToTerms, refreshUser, router]);
+  }, [agreedToTerms, refreshUser, router, registrationPolicies]);
 
   return (
     <AuthShell
@@ -268,13 +289,14 @@ export default function RegisterForm() {
           <div className="ml-3 text-sm">
             <label htmlFor="terms" className="font-label-sm text-on-surface-variant cursor-pointer">
               I agree to the{" "}
-              <Link className="text-primary hover:underline font-label-md" href="/terms-of-service">
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link className="text-primary hover:underline font-label-md" href="/privacy-policy">
-                Privacy Policy
-              </Link>
+              {consentPolicies.map((policy, index) => (
+                <span key={policy.id}>
+                  {index > 0 && (index === consentPolicies.length - 1 ? " and " : ", ")}
+                  <Link className="text-primary hover:underline font-label-md" href={policy.href} target="_blank" rel="noopener noreferrer">
+                    {policy.title}
+                  </Link>
+                </span>
+              ))}
               .
             </label>
           </div>

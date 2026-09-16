@@ -3,12 +3,13 @@ import BreakingNews from "@/components/layout/BreakingNews";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { getBreakingNews } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "About Us",
   description: "Learn about Indian Rajneeti and our commitment to clear, trustworthy, and accessible coverage of Indian politics.",
-  alternates: { canonical: "/about" },
-};
+  path: "/about",
+});
 
 const WORK = [
   {

@@ -8,6 +8,8 @@ import ApplyToJobClient from "@/components/careers/ApplyToJobClient";
 
 import { getBreakingNews } from "@/features/news/news.api";
 import { careersApi } from "@/lib/api";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
 
 const EMPLOYMENT_LABEL = {
   FULL_TIME: "Full-time",
@@ -15,6 +17,10 @@ const EMPLOYMENT_LABEL = {
   CONTRACT: "Contract",
   INTERNSHIP: "Internship",
 };
+
+function hasExpired(job) {
+  return Boolean(job.closes_at && new Date(job.closes_at).getTime() <= Date.now());
+}
 
 async function getJob(slug) {
   try {
@@ -35,10 +41,13 @@ export async function generateMetadata({ params }) {
     };
   }
 
-  return {
+  const isExpired = hasExpired(job);
+  return buildPageMetadata({
     title: job.title,
     description: job.description,
-  };
+    path: `/careers/${slug}`,
+    noIndex: isExpired,
+  });
 }
 
 export default async function CareerDetailPage({ params }) {
@@ -51,6 +60,37 @@ export default async function CareerDetailPage({ params }) {
   }
 
   const breakingNews = await getBreakingNews();
+  const isExpired = hasExpired(job);
+  const isRemote = /remote/i.test(job.location || "");
+  const jobSchema = {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    title: job.title,
+    description: [job.description, job.responsibilities, job.requirements].filter(Boolean).join("\n\n"),
+    datePosted: job.created_at,
+    validThrough: job.closes_at || undefined,
+    employmentType: job.employment_type,
+    hiringOrganization: {
+      "@type": "NewsMediaOrganization",
+      "@id": `${SITE_URL}/#organization`,
+      name: SITE_NAME,
+      sameAs: SITE_URL,
+      logo: `${SITE_URL}/icon.png`,
+    },
+    identifier: { "@type": "PropertyValue", name: SITE_NAME, value: String(job.id) },
+    url: absoluteUrl(`/careers/${slug}`),
+    ...(isRemote
+      ? {
+          jobLocationType: "TELECOMMUTE",
+          applicantLocationRequirements: { "@type": "Country", name: "India" },
+        }
+      : {
+          jobLocation: {
+            "@type": "Place",
+            address: { "@type": "PostalAddress", addressLocality: job.location, addressCountry: "IN" },
+          },
+        }),
+  };
 
   return (
     <>
@@ -58,6 +98,7 @@ export default async function CareerDetailPage({ params }) {
       <Header />
 
       <main className="w-full bg-background flex-grow">
+        {!isExpired && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jobSchema) }} />}
         <div className="max-w-[1600px] mx-auto px-4 md:px-8 lg:px-12 py-8">
 
           {/* Main 65 / 35 Layout */}

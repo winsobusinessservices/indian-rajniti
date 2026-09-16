@@ -1,8 +1,9 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import VideoCard from "@/components/news/VideoCard";
 import { getPressConferenceArchive } from "@/features/news/news.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "Press Conference Archive" };
+export const metadata = buildPageMetadata({ title: "Political Press Conference Archive", description: "Watch and explore press conferences from Indian political parties, government leaders, and opposition representatives.", path: "/press-conferences" });
 
 export default async function PressConferencesPage() {
   const pressConferences = await getPressConferenceArchive();

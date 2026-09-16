@@ -288,7 +288,13 @@ export async function getPostBySlug(slug) {
   const res = await fetch(`${API_BASE_URL}/news/posts/${encodeURIComponent(slug)}`, { cache: "no-store" });
   if (!res.ok) return null;
   const { post } = await res.json();
-  return { ...post, image: mediaUrl(post.image), date: formatDate(post.date) };
+  return {
+    ...post,
+    image: mediaUrl(post.image),
+    datePublished: post.date,
+    dateModified: post.updated_at || post.date,
+    date: formatDate(post.date),
+  };
 }
 
 export async function getRelatedPosts(excludeSlug, limit = 4) {

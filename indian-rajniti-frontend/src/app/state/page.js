@@ -2,8 +2,9 @@ import CategoryPageShell from "@/components/category/CategoryPageShell";
 import CMCard from "@/components/politician/CMCard";
 import { getChiefMinisters } from "@/features/politicians/politician.api";
 import { getAllStatesAndUTs } from "@/features/geography/geography.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = { title: "States" };
+export const metadata = buildPageMetadata({ title: "Indian States and Union Territories", description: "Explore state politics, chief ministers, opposition leaders, elections, and governance across India's states and union territories.", path: "/state" });
 
 export default async function StatesPage() {
   const [places, chiefMinisters] = await Promise.all([

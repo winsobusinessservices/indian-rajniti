@@ -40,6 +40,7 @@ const NAV_GROUPS = [
     items: [
       { label: "Team Members", href: "/author/team", icon: "fa-users-gear", permission: PERMISSIONS.TEAM_MEMBERS },
       { label: "UI Visibility", href: "/author/categories", icon: "fa-eye", permission: PERMISSIONS.MANAGE_CATEGORIES },
+      { label: "Policies", href: "/author/policies", icon: "fa-scale-balanced", roles: ["ADMIN"] },
       { label: "Site Data", href: "/author/site-data", icon: "fa-database", permission: PERMISSIONS.MANAGE_SITE_DATA },
       { label: "Careers", href: "/author/career", icon: "fa-briefcase", permission: PERMISSIONS.MANAGE_CAREERS },
       { label: "Wallet & Points", href: "/author/wallet-admin", icon: "fa-money-check-dollar", permissions: [PERMISSIONS.MANAGE_WALLETS, PERMISSIONS.MANAGE_POINT_RATES] },
@@ -54,6 +55,7 @@ const WEBSITE_ICONS = {
   "/parties": "fa-flag",
   "/state": "fa-map-location-dot",
   "/elections": "fa-check-to-slot",
+  "/policies": "fa-scale-balanced",
   "/blogs": "fa-book-open",
   "/loksabha": "fa-landmark-dome",
   "/rajyasabha": "fa-building-columns",

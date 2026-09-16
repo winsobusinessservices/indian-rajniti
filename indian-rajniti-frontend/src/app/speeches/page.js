@@ -4,11 +4,13 @@ import Footer from "@/components/layout/Footer";
 import CategoryDetailView, { CategoryBreadcrumb, RecommendedNewsSection } from "@/components/category/CategoryDetailView";
 import { getBreakingNews } from "@/features/news/news.api";
 import { getSpeechesInfo } from "@/features/events/events.api";
+import { buildPageMetadata } from "@/lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Speeches",
   description: "Recent addresses and floor speeches from government and opposition leaders.",
-};
+  path: "/speeches",
+});
 
 export default async function SpeechesPage() {
   const info = await getSpeechesInfo();

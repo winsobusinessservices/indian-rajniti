@@ -5,9 +5,9 @@ export default function robots() {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/author/", "/login", "/register", "/forgot-password", "/reset-password", "/search"],
+      disallow: ["/api/", "/author/", "/login", "/register", "/forgot-password", "/reset-password", "/search"],
     },
-    sitemap: `${SITE_URL}/sitemap.xml`,
+    sitemap: [`${SITE_URL}/sitemap.xml`, `${SITE_URL}/news-sitemap.xml`],
     host: SITE_URL,
   };
 }

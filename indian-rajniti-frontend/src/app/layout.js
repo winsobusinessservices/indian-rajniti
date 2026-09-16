@@ -1,6 +1,7 @@
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
+import { DEFAULT_SOCIAL_IMAGE, serializeJsonLd } from "@/lib/seo";
 import ToastProvider from "@/components/common/ToastProvider";
 import AuthorWorkspaceShell from "@/components/author/AuthorWorkspaceShell";
 
@@ -14,10 +15,13 @@ export const metadata = {
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
-  keywords: ["Indian politics", "political news India", "elections India", "Parliament", "Lok Sabha", "Rajya Sabha", "policy analysis"],
+  keywords: ["Indian politics", "political news India", "India elections", "Parliament news", "Lok Sabha", "Rajya Sabha", "government policy India", "political analysis"],
   authors: [{ name: SITE_NAME, url: SITE_URL }],
   creator: SITE_NAME,
   publisher: SITE_NAME,
+  referrer: "origin-when-cross-origin",
+  formatDetection: { email: false, address: false, telephone: false },
+  alternates: { canonical: "/", languages: { "en-IN": "/" } },
   openGraph: {
     type: "website",
     locale: "en_IN",
@@ -25,16 +29,30 @@ export const metadata = {
     siteName: SITE_NAME,
     title: "Indian Rajneeti — Indian Political News & Analysis",
     description: SITE_DESCRIPTION,
-    images: [{ url: "/images/logo.png", width: 1401, height: 752, alt: SITE_NAME }],
+    images: [DEFAULT_SOCIAL_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
     title: "Indian Rajneeti — Indian Political News & Analysis",
     description: SITE_DESCRIPTION,
-    images: ["/images/logo.png"],
+    images: [DEFAULT_SOCIAL_IMAGE.url],
   },
-  robots: { index: true, follow: true },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      noimageindex: false,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   category: "news",
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION || undefined,
+  },
 };
 
 // suppressHydrationWarning below: some browser extensions (e.g. LanguageTool)
@@ -45,12 +63,33 @@ export default async function RootLayout({ children }) {
   // API-backed pages must not contact the separately deployed cPanel backend
   // while `next build` is prerendering. Rendering starts once a real request
   // reaches the running Next.js application instead.
-  const organizationSchema = {
+  const siteSchema = {
     "@context": "https://schema.org",
-    "@type": "NewsMediaOrganization",
-    name: SITE_NAME,
-    url: SITE_URL,
-    logo: `${SITE_URL}/icon.png`,
+    "@graph": [
+      {
+        "@type": "NewsMediaOrganization",
+        "@id": `${SITE_URL}/#organization`,
+        name: SITE_NAME,
+        alternateName: "Indian Rajneeti",
+        description: SITE_DESCRIPTION,
+        url: SITE_URL,
+        logo: {
+          "@type": "ImageObject",
+          url: `${SITE_URL}/icon.png`,
+          contentUrl: `${SITE_URL}/icon.png`,
+        },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#website`,
+        url: SITE_URL,
+        name: SITE_NAME,
+        alternateName: "Indian Rajneeti",
+        description: SITE_DESCRIPTION,
+        inLanguage: "en-IN",
+        publisher: { "@id": `${SITE_URL}/#organization` },
+      },
+    ],
   };
 
   return (
@@ -66,7 +105,7 @@ export default async function RootLayout({ children }) {
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-on-background font-body-md">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteSchema) }} />
         <ToastProvider />
         <AuthProvider>
           <AuthorWorkspaceShell>{children}</AuthorWorkspaceShell>
