@@ -12,7 +12,7 @@ export const NAV_LINKS = [
   { label: "Politics", href: "/parties", key: "politics" },
   { label: "States", href: "/state", key: "states" },
   { label: "Elections", href: "/elections" },
-  { label: "Policies", href: "/policies" },
+  // { label: "Policies", href: "/policies" },
   { label: "Blogs", href: "/blogs", key: "blogs" },
   { label: "Lok Sabha", href: "/loksabha", key: "loksabha" },
   { label: "Rajya Sabha", href: "/rajyasabha", key: "rajyasabha" },
