@@ -70,6 +70,29 @@ router.get("/parties", getParties);
  */
 router.get("/parties/:slug", getPartyBySlug);
 
+/**
+ * @openapi
+ * /api/states:
+ *   get:
+ *     summary: List Indian states and union territories
+ *     tags: [States]
+ *     responses:
+ *       200: { description: State list }
+ *       500: { description: Internal server error }
+ * /api/states/{slug}:
+ *   get:
+ *     summary: Get state details by slug
+ *     tags: [States]
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: State details }
+ *       404: { description: State not found }
+ *       500: { description: Internal server error }
+ */
 router.get("/states", getStates);
 router.get("/states/:slug", getStateBySlug);
 

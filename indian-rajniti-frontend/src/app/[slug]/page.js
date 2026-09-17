@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import BreakingNews from "@/components/layout/BreakingNews";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import CategoryDetailView, { CategoryBreadcrumb, RecommendedNewsSection } from "@/components/category/CategoryDetailView";
 import { getBreakingNews } from "@/features/news/news.api";
-import { buildPageMetadata } from "@/lib/seo";
+import { getStandaloneCategoryInfo } from "@/features/category/category.api";
+import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
 
 const LEGAL_NOTICE =
   "This is demonstration content while the final policy is being reviewed. It is not the final legal text.";
@@ -140,7 +142,11 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const page = PAGE_CONTENT[slug];
-  if (!page) return { title: "Page not found" };
+  if (!page) {
+    const info = await getStandaloneCategoryInfo(slug);
+    if (!info) return { title: "Page not found" };
+    return buildPageMetadata({ title: info.label, description: info.description, path: `/${slug}` });
+  }
   return buildPageMetadata({
     title: page.title,
     description: page.description,
@@ -152,9 +158,36 @@ export async function generateMetadata({ params }) {
 export default async function DemoSectionPage({ params }) {
   const { slug } = await params;
   const page = PAGE_CONTENT[slug];
-  if (!page) notFound();
+  const categoryInfo = page ? null : await getStandaloneCategoryInfo(slug);
+  if (!page && !categoryInfo) notFound();
 
   const breakingNews = await getBreakingNews();
+
+  if (categoryInfo) {
+    const breadcrumbSchema = {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: absoluteUrl("/") },
+        { "@type": "ListItem", position: 2, name: categoryInfo.label, item: absoluteUrl(`/${slug}`) },
+      ],
+    };
+    return (
+      <>
+        <BreakingNews text={breakingNews} />
+        <Header />
+        <main className="w-full flex-grow bg-background">
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbSchema) }} />
+          <div className="mx-auto max-w-full px-4 py-6 md:px-16">
+            <CategoryBreadcrumb label={categoryInfo.label} />
+            <CategoryDetailView info={categoryInfo} />
+          </div>
+        </main>
+        <RecommendedNewsSection recommendedNews={categoryInfo.recommendedNews} />
+        <Footer />
+      </>
+    );
+  }
 
   return (
     <>

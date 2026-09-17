@@ -11,7 +11,7 @@ const options = {
 
     servers: [
       {
-        url: process.env.API_PUBLIC_URL || "http://localhost:8000",
+        url: process.env.SWAGGER_SERVER_URL || "/",
       },
     ],
 

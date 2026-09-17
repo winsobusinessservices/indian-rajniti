@@ -32,10 +32,15 @@ if (process.env.NODE_ENV === "production" && missingProductionEnv.length) {
   throw new Error(`Missing required production environment variables: ${missingProductionEnv.join(", ")}`);
 }
 
-const allowedOrigins = (process.env.CLIENT_ORIGIN || "")
-  .split(",")
+const allowedOrigins = new Set([
+  process.env.CLIENT_ORIGIN || "",
+  process.env.API_PUBLIC_URL || "",
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+]
+  .flatMap((value) => value.split(","))
   .map((origin) => origin.trim().replace(/\/$/, ""))
-  .filter(Boolean);
+  .filter(Boolean));
 
 app.use(
   cors({
@@ -47,7 +52,7 @@ app.use(
 
       const normalizedOrigin = origin.replace(/\/$/, "");
 
-      if (allowedOrigins.includes(normalizedOrigin)) {
+      if (allowedOrigins.has(normalizedOrigin)) {
         return callback(null, true);
       }
 
@@ -109,8 +114,14 @@ app.get("/health", async (req, res) => {
 // Surfaces multer errors (bad file type, file too large) as JSON instead of
 // Express's default HTML error page, which the frontend can't parse.
 app.use((err, req, res, next) => {
-  if (err?.status === 403 && err.message === "Origin is not allowed by CORS") {
+  if (err?.message === "Origin is not allowed by CORS") {
     return res.status(403).json({ success: false, message: err.message });
+  }
+  if (err?.type === "entity.parse.failed" || (err instanceof SyntaxError && err?.status === 400)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid JSON body. Remove trailing commas and check the request syntax.",
+    });
   }
   if (err && err.name === "MulterError") {
     const message = err.code === "LIMIT_FILE_SIZE" ? "File is too large." : err.message;

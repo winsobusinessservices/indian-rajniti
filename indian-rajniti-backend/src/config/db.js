@@ -97,6 +97,7 @@ pool.verifyConnection = async () => {
         name VARCHAR(120) NOT NULL,
         slug VARCHAR(140) NOT NULL UNIQUE,
         is_visible TINYINT(1) NOT NULL DEFAULT 1,
+        content LONGTEXT NULL,
         created_by BIGINT UNSIGNED NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY uq_categories_name (name)
@@ -108,6 +109,13 @@ pool.verifyConnection = async () => {
     );
     if (!categoryVisibilityColumns.length) {
       await connection.query("ALTER TABLE categories ADD COLUMN is_visible TINYINT(1) NOT NULL DEFAULT 1 AFTER slug");
+    }
+    const [categoryContentColumns] = await connection.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'categories' AND COLUMN_NAME = 'content'`
+    );
+    if (!categoryContentColumns.length) {
+      await connection.query("ALTER TABLE categories ADD COLUMN content LONGTEXT NULL AFTER is_visible");
     }
 
     await connection.query(

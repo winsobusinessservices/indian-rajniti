@@ -102,7 +102,8 @@ function stateInput(body, existing) {
 
 async function listReferenceData(req, res) {
   const [politicians, parties, states, widgets] = await Promise.all([
-    Politician.findAll(), Party.findAll(), State.findAll(), HomeWidget.getAll(),
+    Politician.findAll(), Party.findAll(), State.findAll(),
+    HomeWidget.getAll(),
   ]);
   const parliament = widgets.parliament_data || null;
   const pageProfiles = widgets.page_profiles || null;

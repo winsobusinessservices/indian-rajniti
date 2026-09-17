@@ -32,6 +32,12 @@ function tokenKey(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+function sendRoleChangedEmailInBackground(user, oldRole, newRole) {
+  void sendRoleChangedEmail(user.email, user.name, oldRole, newRole).catch((error) => {
+    console.error("Role changed email error:", error);
+  });
+}
+
 async function validateAcceptedPolicies(value) {
   const submittedIds = new Set(
     (Array.isArray(value) ? value : [])
@@ -266,7 +272,7 @@ const login = async (req, res) => {
       });
     }
 
-    const user = await User.findByEmail(email);
+    const user = await User.findByEmail(normalizedEmailOf(email));
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -278,6 +284,13 @@ const login = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Your account is not active",
+      });
+    }
+
+    if (!user.password_hash) {
+      return res.status(401).json({
+        success: false,
+        message: "This account uses Google sign-in. Continue with Google instead.",
       });
     }
 
@@ -606,11 +619,7 @@ const adminAssignRole = async (req, res) => {
     });
 
     if (role !== previousRole) {
-      try {
-        await sendRoleChangedEmail(user.email, user.name, previousRole, role);
-      } catch (emailError) {
-        console.error("Role changed email error:", emailError);
-      }
+      sendRoleChangedEmailInBackground(user, previousRole, role);
     }
 
     return res.status(200).json({
@@ -665,11 +674,7 @@ const updateUserRole = async (req, res) => {
     }
 
     if (role !== existing.role) {
-      try {
-        await sendRoleChangedEmail(user.email, user.name, existing.role, role);
-      } catch (emailError) {
-        console.error("Role changed email error:", emailError);
-      }
+      sendRoleChangedEmailInBackground(user, existing.role, role);
     }
 
     return res.status(200).json({
@@ -779,11 +784,7 @@ const updateUser = async (req, res) => {
     }
 
     if (role !== undefined && role !== existing.role) {
-      try {
-        await sendRoleChangedEmail(user.email, user.name, existing.role, role);
-      } catch (emailError) {
-        console.error("Role changed email error:", emailError);
-      }
+      sendRoleChangedEmailInBackground(user, existing.role, role);
     }
 
     return res.status(200).json({

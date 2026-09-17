@@ -41,6 +41,35 @@ function FigureCard({ figure, accent, label }) {
   );
 }
 
+function CategoryDescription({ info }) {
+  if (info.type !== "topic") {
+    return <p className="mb-10 whitespace-pre-wrap break-words font-body-lg leading-relaxed text-on-surface-variant">{info.description}</p>;
+  }
+
+  const blocks = String(info.description || "").trim().split(/\n\s*\n/).filter(Boolean);
+  return (
+    <div className="mb-10 space-y-5">
+      {blocks.map((block, index) => {
+        const text = block.trim();
+        const markdownHeading = text.match(/^#{1,3}\s+(.+)$/);
+        const isShortHeading = !text.includes("\n") && text.length <= 100 && !/[.!?]$/.test(text);
+        if (markdownHeading || isShortHeading) {
+          return (
+            <h2 key={`${text}-${index}`} className="border-l-4 border-primary pl-3 font-headline-lg text-xl text-primary">
+              {markdownHeading?.[1] || text}
+            </h2>
+          );
+        }
+        return (
+          <p key={`${text.slice(0, 30)}-${index}`} className="whitespace-pre-wrap break-words font-body-lg leading-relaxed text-on-surface-variant">
+            {text}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * Shared layout for anything resolved like a "category": states, parties,
  * topics, individual politicians (via /category/[slug]), and — reusing the
@@ -65,15 +94,19 @@ export default function CategoryDetailView({ info }) {
           {info.label}
           {info.type === "state" && " Politics"}
         </h1>
-        <p className="font-body-lg text-on-surface-variant leading-relaxed mb-10 whitespace-pre-wrap break-words">{info.description}</p>
+        <CategoryDescription info={info} />
 
-        <h2 className="font-headline-lg text-primary text-xl mb-6">
-          {info.type === "politician" ? "Profile" : "Current vs. Opposition"}
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
-          <FigureCard figure={info.current} accent="border-primary" label={info.currentLabel} />
-          <FigureCard figure={info.opposition} accent="border-secondary" label={info.oppositionLabel} />
-        </div>
+        {info.type !== "topic" && (
+          <>
+            <h2 className="font-headline-lg text-primary text-xl mb-6">
+              {info.type === "politician" ? "Profile" : "Current vs. Opposition"}
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
+              <FigureCard figure={info.current} accent="border-primary" label={info.currentLabel} />
+              <FigureCard figure={info.opposition} accent="border-secondary" label={info.oppositionLabel} />
+            </div>
+          </>
+        )}
 
         {info.bio && (
           <div className="mb-12">
@@ -289,6 +322,10 @@ export function CategoryBreadcrumb({ label }) {
     <nav className="flex items-center gap-2 text-xs font-label-md text-on-surface-variant mb-6">
       <Link href="/" className="hover:text-primary transition-colors">
         Home
+      </Link>
+      <i className="fa-solid fa-chevron-right text-[10px]" />
+      <Link href="/category" className="hover:text-primary transition-colors">
+        Categories
       </Link>
       <i className="fa-solid fa-chevron-right text-[10px]" />
       <span className="text-primary">{label}</span>

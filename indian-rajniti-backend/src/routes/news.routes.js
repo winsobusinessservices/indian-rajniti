@@ -32,6 +32,29 @@ router.get("/news/home", getHome);
  *         description: Alphabetized category list
  */
 router.get("/news/categories", getCategories);
+
+/**
+ * @openapi
+ * /api/news/topics:
+ *   get:
+ *     summary: List published posts matching topic terms
+ *     tags: [News]
+ *     parameters:
+ *       - in: query
+ *         name: term
+ *         required: true
+ *         description: Repeat this parameter to search up to ten topic terms
+ *         style: form
+ *         explode: true
+ *         schema:
+ *           type: array
+ *           maxItems: 10
+ *           items: { type: string }
+ *     responses:
+ *       200: { description: Matching published posts }
+ *       400: { description: At least one topic term is required }
+ *       500: { description: Internal server error }
+ */
 router.get("/news/topics", getTopicPosts);
 
 /**

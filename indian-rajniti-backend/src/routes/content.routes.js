@@ -80,6 +80,39 @@ function buildResourceRoutes(resource, type) {
 
 const routes = express.Router();
 
+/**
+ * @openapi
+ * /api/content/bulk:
+ *   post:
+ *     summary: Moderate multiple content items
+ *     tags: [Content]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action, items]
+ *             properties:
+ *               action: { type: string, enum: [APPROVE, REJECT, DELETE] }
+ *               notes: { type: string }
+ *               items:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: object
+ *                   required: [type, id]
+ *                   properties:
+ *                     type: { type: string, enum: [ARTICLE, BLOG, VIDEO] }
+ *                     id: { type: integer }
+ *     responses:
+ *       200: { description: Bulk moderation completed }
+ *       400: { description: Invalid action or content items }
+ *       401: { description: Authentication required }
+ *       403: { description: Review permission required }
+ *       500: { description: Internal server error }
+ */
 routes.post(
   "/content/bulk",
   authenticate,

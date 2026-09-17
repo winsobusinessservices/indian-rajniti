@@ -218,7 +218,8 @@ export const authorApi = {
 export const categoriesApi = {
   list: () => request("/categories"),
   listVisibilitySettings: () => request("/admin/ui-visibility"),
-  create: (name) => request("/categories", { method: "POST", body: { name } }),
+  create: (payload) => request("/categories", { method: "POST", body: typeof payload === "string" ? { name: payload } : payload }),
+  updateContent: (id, content) => request(`/categories/${id}/content`, { method: "PATCH", body: { content } }),
   setVisibility: (id, isVisible) => request(`/categories/${id}/visibility`, { method: "PATCH", body: { isVisible } }),
   setSectionVisibility: (key, isVisible) => request(`/admin/ui-sections/${encodeURIComponent(key)}/visibility`, { method: "PATCH", body: { isVisible } }),
   remove: (id) => request(`/categories/${id}`, { method: "DELETE" }),

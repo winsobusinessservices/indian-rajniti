@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import BreakingNews from "@/components/layout/BreakingNews";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -25,6 +25,7 @@ export default async function CategoryDetailPage({ params }) {
   if (!info) {
     notFound();
   }
+  if (info.managedCategorySlug) redirect(`/${info.managedCategorySlug}`);
 
   const breakingNews = await getBreakingNews();
   const breadcrumbSchema = {

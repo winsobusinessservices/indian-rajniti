@@ -39,7 +39,7 @@ const NAV_GROUPS = [
     label: "Administration",
     items: [
       { label: "Team Members", href: "/author/team", icon: "fa-users-gear", permission: PERMISSIONS.TEAM_MEMBERS },
-      { label: "UI Visibility", href: "/author/categories", icon: "fa-eye", permission: PERMISSIONS.MANAGE_CATEGORIES },
+      { label: "Categories & UI", href: "/author/categories", icon: "fa-folder-tree", permission: PERMISSIONS.MANAGE_CATEGORIES },
       { label: "Policies", href: "/author/policies", icon: "fa-scale-balanced", roles: ["ADMIN"] },
       { label: "Site Data", href: "/author/site-data", icon: "fa-database", permission: PERMISSIONS.MANAGE_SITE_DATA },
       { label: "Careers", href: "/author/career", icon: "fa-briefcase", permission: PERMISSIONS.MANAGE_CAREERS },

@@ -10,6 +10,7 @@ const STATIC_ROUTES = [
   { path: "/blogs", changeFrequency: "daily", priority: 0.8 },
   { path: "/policies", changeFrequency: "weekly", priority: 0.8 },
   { path: "/videos", changeFrequency: "daily", priority: 0.8 },
+  { path: "/category", changeFrequency: "daily", priority: 0.8 },
   { path: "/press-conferences", changeFrequency: "daily", priority: 0.8 },
   { path: "/speeches", changeFrequency: "daily", priority: 0.8 },
   { path: "/rallies", changeFrequency: "daily", priority: 0.8 },
@@ -65,7 +66,13 @@ export default async function sitemap() {
   });
 
   const categorySlugs = new Set();
-  (categoryData?.categories || []).forEach((category) => categorySlugs.add(category.slug || slugify(category.name)));
+  const standaloneCategorySlugs = new Set();
+  (categoryData?.categories || []).filter((category) => !category.route_owner).forEach((category) => {
+    const slug = category.slug || slugify(category.name);
+    if (!slug) return;
+    standaloneCategorySlugs.add(slug);
+    entries.push({ url: `${SITE_URL}/${slug}`, changeFrequency: "daily", priority: 0.7 });
+  });
   posts.forEach((post) => {
     if (post.category) categorySlugs.add(slugify(post.category));
     (post.tags || []).forEach((tag) => categorySlugs.add(slugify(tag)));
@@ -79,7 +86,7 @@ export default async function sitemap() {
     (politicianData?.[group] || []).forEach((person) => categorySlugs.add(person.slug || slugify(person.name)));
   });
   categorySlugs.forEach((slug) => {
-    if (slug) entries.push({ url: `${SITE_URL}/category/${slug}`, changeFrequency: "daily", priority: 0.7 });
+    if (slug && !standaloneCategorySlugs.has(slug)) entries.push({ url: `${SITE_URL}/category/${slug}`, changeFrequency: "daily", priority: 0.7 });
   });
 
   (careerData?.jobs || []).filter((job) => {

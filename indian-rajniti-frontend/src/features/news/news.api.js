@@ -252,13 +252,18 @@ export function allTeasers() {
 // blog categories and states, plus the site's curated tag lists) — the
 // single source the /category/[slug] registry aggregates from, so no
 // clickable label 404s.
-export async function getAllCategoryLabels() {
-  const [{ posts, news, widgets }, categoriesRes] = await Promise.all([
-    getHomeData(),
-    fetch(`${API_BASE_URL}/categories`, { cache: "no-store" }),
-  ]);
+export async function getCategoryDefinitions() {
+  const categoriesRes = await fetch(`${API_BASE_URL}/categories`, { cache: "no-store" });
   if (!categoriesRes.ok) throw new Error(`Failed to load categories (${categoriesRes.status})`);
   const { categories } = await categoriesRes.json();
+  return categories;
+}
+
+export async function getAllCategoryLabels() {
+  const [{ posts, news, widgets }, categories] = await Promise.all([
+    getHomeData(),
+    getCategoryDefinitions(),
+  ]);
   const postTags = posts.flatMap((post) => post.tags || []);
   return [
     ...categories.map((category) => category.name),

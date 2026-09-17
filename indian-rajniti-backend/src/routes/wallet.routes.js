@@ -28,6 +28,169 @@ const router = express.Router();
  *       403: { description: Author or editor role required }
  */
 router.get("/wallet", authenticate, authorize("AUTHOR", "EDITOR"), getWallet);
+
+/**
+ * @openapi
+ * /api/wallet/razorpay/webhook:
+ *   post:
+ *     summary: Receive Razorpay payout status events
+ *     tags: [Wallet]
+ *     parameters:
+ *       - in: header
+ *         name: x-razorpay-signature
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [event, payload]
+ *             properties:
+ *               event: { type: string }
+ *               payload: { type: object, additionalProperties: true }
+ *     responses:
+ *       200: { description: Webhook accepted }
+ *       400: { description: Invalid webhook payload }
+ *       401: { description: Invalid webhook signature }
+ * /api/wallet/withdrawals:
+ *   post:
+ *     summary: Request a wallet withdrawal
+ *     tags: [Wallet]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [points]
+ *             properties:
+ *               points: { type: integer, minimum: 1 }
+ *     responses:
+ *       201: { description: Withdrawal requested }
+ *       400: { description: Invalid amount or withdrawal unavailable }
+ *       401: { description: Authentication required }
+ *       403: { description: Withdrawal access denied }
+ *       409: { description: Withdrawal already requested }
+ * /api/wallet/withdrawals/{withdrawalId}/payout-link:
+ *   post:
+ *     summary: Generate a payout link for a withdrawal
+ *     tags: [Wallet]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: withdrawalId
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200: { description: Payout link generated }
+ *       400: { description: Withdrawal cannot be paid }
+ *       401: { description: Authentication required }
+ *       403: { description: Access denied }
+ *       404: { description: Withdrawal not found }
+ *       502: { description: Payout provider error }
+ * /api/admin/wallets:
+ *   get:
+ *     summary: List contributor wallets and withdrawals
+ *     tags: [Wallet Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Wallet administration data }
+ *       401: { description: Authentication required }
+ *       403: { description: Insufficient permission }
+ * /api/admin/wallets/withdrawal-settings:
+ *   get:
+ *     summary: Get withdrawal balance settings
+ *     tags: [Wallet Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Withdrawal settings }
+ *       401: { description: Authentication required }
+ *       403: { description: Admin role required }
+ *   put:
+ *     summary: Update withdrawal balance settings
+ *     tags: [Wallet Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [minimumWithdrawalInr, authorMinimumRemainingInr, editorMinimumRemainingInr]
+ *             properties:
+ *               minimumWithdrawalInr: { type: number, minimum: 0 }
+ *               authorMinimumRemainingInr: { type: number, minimum: 0 }
+ *               editorMinimumRemainingInr: { type: number, minimum: 0 }
+ *     responses:
+ *       200: { description: Withdrawal settings updated }
+ *       400: { description: Invalid amounts }
+ *       401: { description: Authentication required }
+ *       403: { description: Admin role required }
+ * /api/admin/wallets/{userId}/withdrawal-access:
+ *   patch:
+ *     summary: Enable or disable withdrawals for a user
+ *     tags: [Wallet Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [enabled]
+ *             properties:
+ *               enabled: { type: boolean }
+ *     responses:
+ *       200: { description: Withdrawal access updated }
+ *       400: { description: Boolean enabled value required }
+ *       401: { description: Authentication required }
+ *       403: { description: Insufficient permission }
+ * /api/admin/wallets/point-rates:
+ *   get:
+ *     summary: Get point values and reward settings
+ *     tags: [Wallet Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Point and reward settings }
+ *       401: { description: Authentication required }
+ *       403: { description: Insufficient permission }
+ *   put:
+ *     summary: Update point values and reward settings
+ *     tags: [Wallet Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [authorRate, editorRate, authorArticlePoints, authorBlogPoints, authorVideoPoints, editorArticlePoints, editorBlogPoints, editorVideoPoints, editorReviewArticlePoints, editorReviewBlogPoints, editorReviewVideoPoints]
+ *             properties:
+ *               authorRate: { type: number, minimum: 0 }
+ *               editorRate: { type: number, minimum: 0 }
+ *               authorArticlePoints: { type: integer, minimum: 1 }
+ *               authorBlogPoints: { type: integer, minimum: 1 }
+ *               authorVideoPoints: { type: integer, minimum: 1 }
+ *               editorArticlePoints: { type: integer, minimum: 1 }
+ *               editorBlogPoints: { type: integer, minimum: 1 }
+ *               editorVideoPoints: { type: integer, minimum: 1 }
+ *               editorReviewArticlePoints: { type: integer, minimum: 1 }
+ *               editorReviewBlogPoints: { type: integer, minimum: 1 }
+ *               editorReviewVideoPoints: { type: integer, minimum: 1 }
+ *     responses:
+ *       200: { description: Point and reward settings updated }
+ *       400: { description: Invalid rates or reward points }
+ *       401: { description: Authentication required }
+ *       403: { description: Insufficient permission }
+ */
 router.post("/wallet/razorpay/webhook", razorpayWebhook);
 router.post("/wallet/withdrawals", authenticate, authorize("AUTHOR", "EDITOR"), requestWithdrawal);
 router.post("/wallet/withdrawals/:withdrawalId/payout-link", authenticate, authorize("AUTHOR", "EDITOR"), generatePayoutLink);

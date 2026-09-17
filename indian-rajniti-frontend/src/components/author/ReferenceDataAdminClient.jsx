@@ -1202,11 +1202,11 @@ function PageContentAdmin({ profiles, onReload }) {
 
 export default function ReferenceDataAdminClient() {
   const { user } = useAuth();
-  const allowedTabs = TABS.filter((item) =>
+  const allowedTabs = useMemo(() => TABS.filter((item) =>
     item.key === "homeWidgets"
       ? HOME_WIDGET_PERMISSIONS.some((permission) => hasPermission(user, permission))
       : hasPermission(user, item.permission)
-  );
+  ), [user]);
   const [data, setData] = useState({
     politicians: [],
     parties: [],

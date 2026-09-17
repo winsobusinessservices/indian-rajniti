@@ -15,9 +15,9 @@ const SUBADMIN_MANAGEABLE_ROLES = ["EDITOR", "AUTHOR", "INVESTOR"];
 const ROLE_BADGE = {
   ADMIN: "bg-primary text-white",
   SUBADMIN: "bg-secondary text-white",
-  EDITOR: "bg-primary text-white",
-  AUTHOR: "bg-primary text-white",
-  INVESTOR: "bg-primary text-white",
+  EDITOR: "bg-yellow-500 text-white",
+  AUTHOR: "bg-blue-500 text-white",
+  INVESTOR: "bg-green-500 text-white",
 };
 
 const STATUS_BADGE = {

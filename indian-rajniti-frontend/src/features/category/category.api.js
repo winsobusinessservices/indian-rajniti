@@ -1,5 +1,5 @@
 import { slugify } from "@/lib/slugify";
-import { allTeasers, getAllCategoryLabels, getPostsForTopics } from "@/features/news/news.api";
+import { allTeasers, getAllCategoryLabels, getCategoryDefinitions, getPostsForTopics } from "@/features/news/news.api";
 import {
   getChiefMinisters,
   getParties,
@@ -23,8 +23,9 @@ function findNationalFigure(keyFigures, roleKeyword, fallbackName) {
 }
 
 async function buildRegistry() {
-  const [labels, chiefMinisters, parties, formerPMs, keyFigures, statesAndUTs] = await Promise.all([
+  const [labels, categories, chiefMinisters, parties, formerPMs, keyFigures, statesAndUTs] = await Promise.all([
     getAllCategoryLabels(),
+    getCategoryDefinitions(),
     getChiefMinisters(),
     getParties(),
     getFormerPMs(),
@@ -59,6 +60,14 @@ async function buildRegistry() {
     add(party.abbreviation, "party", party);
     add(party.name, "party", party);
   });
+  // Dedicated state, politician and party records are registered first, so
+  // a generic category can never replace their richer existing route data.
+  categories.forEach((category) => {
+    if (category.route_owner) return;
+    const entry = { label: category.name, type: "topic", data: { content: category.content || null, categorySlug: category.slug } };
+    if (!registry.has(category.slug)) registry.set(category.slug, entry);
+    add(category.name, "topic", entry.data);
+  });
   labels.forEach((label) => add(label, "topic"));
 
   return { registry, chiefMinisters, parties, NATIONAL_RULING, NATIONAL_OPPOSITION };
@@ -74,6 +83,14 @@ export async function getAllCategoryEntries() {
     label: entry.label,
     type: entry.type,
   }));
+}
+
+export async function getStandaloneCategoryInfo(slug) {
+  const categories = await getCategoryDefinitions();
+  const category = categories.find((item) => item.slug === slug && !item.route_owner);
+  if (!category) return null;
+  const info = await getCategoryInfo(slug);
+  return info?.managedCategorySlug === category.slug ? info : null;
 }
 
 export async function getCategoryInfo(slug) {
@@ -94,6 +111,8 @@ export async function getCategoryInfo(slug) {
   let description = `Comprehensive coverage of ${label} — the latest developments, analysis, and updates from across Indian politics.`;
   let bio = null;
   let profile = null;
+
+  if (type === "topic" && data?.content) description = data.content;
 
   if (type === "state") {
     const cm = chiefMinisters.find((c) => c.state.toLowerCase() === label.toLowerCase());
@@ -224,6 +243,7 @@ export async function getCategoryInfo(slug) {
     label,
     type,
     subtype: data?.subtype ?? null,
+    managedCategorySlug: type === "topic" ? data?.categorySlug ?? null : null,
     description,
     current,
     opposition,

@@ -23,7 +23,7 @@ export default async function CategorySidebar() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <WidgetHeading title="News Keywords" icon="fa-solid fa-tag" />
+        <WidgetHeading title="News Keywords" icon="fa-solid fa-tag" action={<ViewAllLink href="/category" />} />
         <div className="flex flex-wrap gap-2">
           {tags.slice(0, 14).map((tag) => (
             <Link

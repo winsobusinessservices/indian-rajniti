@@ -40,8 +40,10 @@ const { uploadUserDocuments } = require("../middleware/upload.middleware");
  *               email: { type: string, format: email }
  *     responses:
  *       200: { description: Verification code sent }
+ *       400: { description: Invalid email address }
  *       409: { description: Account already exists }
  *       429: { description: Code requested too frequently }
+ *       500: { description: Unable to send verification code through the configured cPanel mail account }
  */
 routes.post("/auth/register/request-otp", requestRegistrationOtp);
 
@@ -121,6 +123,8 @@ routes.post("/auth/register", register);
  *         description: Invalid email or password
  *       403:
  *         description: Account is not active
+ *       500:
+ *         description: Internal server error
  */
 routes.post("/auth/login", login);
 
@@ -129,11 +133,50 @@ routes.post("/auth/login", login);
  * /api/auth/google:
  *   post:
  *     summary: Sign in or register with a Google ID token
+ *     description: Send the Google ID token returned by Google Identity Services. Do not send the OAuth client ID here.
  *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [credential]
+ *             properties:
+ *               credential:
+ *                 type: string
+ *                 description: Google ID token (JWT) returned by Google Identity Services
+ *               intent:
+ *                 type: string
+ *                 enum: [login, register]
+ *                 default: login
+ *               agreeToTerms:
+ *                 type: boolean
+ *                 description: Required when intent is register
+ *               acceptedPolicyIds:
+ *                 type: array
+ *                 description: Required registration policy IDs when intent is register
+ *                 items: { type: integer }
  *     responses:
  *       200: { description: Google login successful }
  *       201: { description: Google registration successful }
+ *       400: { description: Missing credential, terms acceptance, or required policies }
  *       401: { description: Invalid Google credential }
+ *       403: { description: Account is not active }
+ *       404: { description: No account uses this Google email }
+ *       409: { description: Google account is already linked }
+ *       500: { description: Unable to authenticate with Google }
+ *       503: { description: Google authentication is not configured }
+ */
+/**
+ * @openapi
+ * /api/auth/google/config:
+ *   get:
+ *     summary: Get the public Google OAuth client configuration
+ *     tags: [Auth]
+ *     responses:
+ *       200: { description: Google OAuth configuration }
+ *       500: { description: Server configuration error }
  */
 routes.get("/auth/google/config", getGoogleAuthConfig);
 routes.post("/auth/google", googleAuth);
@@ -282,6 +325,35 @@ routes.patch("/auth/users/:id/role", authenticate, authorizePermission(PERMISSIO
  *         description: Email already in use
  */
 routes.patch("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), updateUser);
+
+/**
+ * @openapi
+ * /api/auth/users/{id}/editor:
+ *   patch:
+ *     summary: Assign or unassign an editor for an author
+ *     tags: [Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: integer }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [editorId]
+ *             properties:
+ *               editorId: { type: integer, nullable: true }
+ *     responses:
+ *       200: { description: Editor assignment updated }
+ *       400: { description: Invalid author or editor }
+ *       401: { description: Authentication required }
+ *       403: { description: Insufficient permission }
+ *       500: { description: Unable to update assignment }
+ */
 routes.patch("/auth/users/:id/editor", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), assignAuthorEditor);
 
 /**
