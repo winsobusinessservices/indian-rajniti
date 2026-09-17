@@ -16,7 +16,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/a
 
 function formatDate(iso) {
   if (!iso) return null;
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    // This runs in Server Components too, where the host commonly uses UTC.
+    // News dates should follow the site's Indian calendar day in every environment.
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(iso));
 }
 
 function playbackUrl(value) {
