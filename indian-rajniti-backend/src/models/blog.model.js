@@ -187,7 +187,7 @@ const Blog = {
        SET title = ?, excerpt = ?, content = ?, featured_image = ?, category = ?, tags = ?, related_article_id = ?, scheduled_publish_at = ?,
            status = 'DRAFT', ai_status = 'NOT_CHECKED', ai_notes = NULL, ai_language = NULL, ai_language_confidence = NULL,
            ai_summary = NULL, ai_grammar_issues = NULL, ai_spelling_issues = NULL, ai_corrected_content = NULL, ai_quality_score = NULL, ai_recommendation = NULL,
-           reviewer_id = NULL, review_notes = NULL, submitted_at = NULL, reviewed_at = NULL, published_at = NULL
+           reviewer_id = NULL, review_notes = NULL, submitted_at = NULL, reviewed_at = NULL
        WHERE id = ?`,
       [title, excerpt ?? null, content, featuredImage, category, tags ? JSON.stringify(tags) : null, relatedArticleId ?? null, scheduledPublishAt ?? null, id]
     );
@@ -259,7 +259,7 @@ const Blog = {
       );
     } else if (action === "SCHEDULE") {
       await pool.query(
-        `UPDATE ${TABLE} SET status = 'PENDING', reviewer_id = ?, review_notes = ?, scheduled_publish_at = ?, reviewed_at = NULL, published_at = NULL WHERE id = ?`,
+        `UPDATE ${TABLE} SET status = 'PENDING', reviewer_id = ?, review_notes = ?, scheduled_publish_at = ?, reviewed_at = NULL WHERE id = ?`,
         [reviewerId, notes ?? null, fields.scheduledPublishAt, id]
       );
     } else {
@@ -268,7 +268,7 @@ const Blog = {
       await pool.query(
         `UPDATE ${TABLE} SET status = ?, reviewer_id = ?, review_notes = ?, reviewed_at = NOW(),
          scheduled_publish_at = NULL,
-         published_at = CASE WHEN ? = 'APPROVED' THEN ? ELSE NULL END
+         published_at = CASE WHEN ? = 'APPROVED' THEN COALESCE(published_at, ?) ELSE published_at END
          WHERE id = ?`,
         [status, reviewerId, notes ?? null, status, publishedAt, id]
       );

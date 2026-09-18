@@ -36,6 +36,24 @@ function array(value) {
   }
 }
 
+function careerTimeline(value) {
+  return array(value).map((entry) => {
+    if (typeof entry === "string") {
+      const [role = "", organization = "", fromYear = "", toYear = ""] = entry
+        .split("|")
+        .map((item) => item.trim());
+      return { role, organization, fromYear, toYear };
+    }
+    if (!entry || typeof entry !== "object") return null;
+    return {
+      role: text(entry.role ?? entry.title, 500) || "",
+      organization: text(entry.organization, 500) || "",
+      fromYear: text(entry.fromYear ?? entry.from ?? entry.startYear, 50) || "",
+      toYear: text(entry.toYear ?? entry.to ?? entry.endYear, 50) || "",
+    };
+  }).filter((entry) => entry?.role);
+}
+
 function politicianInput(body, existing) {
   const name = text(body.name, 150);
   const category = String(body.category || "").toUpperCase();
@@ -56,7 +74,7 @@ function politicianInput(body, existing) {
     oppositionParty: text(body.oppositionParty ?? body.opposition_party, 250),
     sinceYear: integer(body.sinceYear ?? body.since_year),
     education: array(body.education),
-    careerTimeline: array(body.careerTimeline ?? body.career_timeline),
+    careerTimeline: careerTimeline(body.careerTimeline ?? body.career_timeline),
     summary: text(body.summary, 2000),
     bio: array(body.bio),
     sortOrder: integer(body.sortOrder ?? body.sort_order, existing?.sort_order || 0),

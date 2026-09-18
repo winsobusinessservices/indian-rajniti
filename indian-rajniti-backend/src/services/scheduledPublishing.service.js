@@ -28,7 +28,7 @@ async function publishDueScheduledContent() {
       for (const item of items) {
         const [result] = await pool.query(
           `UPDATE \`${source.table}\`
-           SET status = 'APPROVED', reviewed_at = NOW(), published_at = scheduled_publish_at
+           SET status = 'APPROVED', reviewed_at = NOW(), published_at = COALESCE(published_at, scheduled_publish_at)
            WHERE id = ? AND status = 'PENDING' AND scheduled_publish_at <= NOW()`,
           [item.id]
         );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { authorApi } from "@/lib/api";
 import AiCheckLoader from "@/components/common/AiCheckLoader";
@@ -29,6 +29,7 @@ const TYPE_ICON = {
 };
 
 export default function MyPostsClient({ compact = false, refreshSignal }) {
+  const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [posts, setPosts] = useState([]);
@@ -62,6 +63,31 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
     // post is created elsewhere on the page) should trigger a re-fetch.
   }, [loadPosts, refreshSignal]);
 
+  const filteredPosts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return posts;
+
+    return posts.filter((post) => {
+      const searchableText = [
+        post.title,
+        post.slug,
+        post.excerpt,
+        post.description,
+        post.category,
+        post.state,
+        post.status,
+        post.type,
+        post.related_politician,
+        ...(Array.isArray(post.tags) ? post.tags : []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchableText.includes(query);
+    });
+  }, [posts, searchQuery]);
+
   const handleDelete = async (reason) => {
     // See ReviewQueueClient's handleDelete for why this guard isn't optional:
     // the React Compiler's auto-memoization reads deleteTarget.type/.id on
@@ -94,6 +120,20 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
       {!compact && <h1 className="font-display-lg text-3xl text-primary mb-6">My Content</h1>}
 
       <div className="mb-6 grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:flex lg:items-end">
+        <label className="block w-full min-w-0 sm:col-span-2 lg:min-w-64 lg:flex-1">
+          <span className="mb-1 block font-label-md text-xs text-on-surface-variant">Search my content</span>
+          <div className="relative">
+            <i className="fa-solid fa-magnifying-glass pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-on-surface-variant" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search title, category, state, tag..."
+              className="block min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface py-2.5 pl-10 pr-3 text-sm text-on-surface outline-none transition-colors placeholder:text-on-surface-variant/70 focus:border-primary focus:ring-2 focus:ring-primary/15"
+            />
+          </div>
+        </label>
+
         <label className="block w-full min-w-0 lg:w-48">
           <span className="mb-1 block font-label-md text-xs text-on-surface-variant">Content type</span>
           <select
@@ -136,11 +176,13 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
         <p className="text-sm text-error font-body-md" role="alert">
           {error}
         </p>
-      ) : posts.length === 0 ? (
-        <p className="font-body-md text-on-surface-variant">No content found.</p>
+      ) : filteredPosts.length === 0 ? (
+        <p className="font-body-md text-on-surface-variant">
+          {searchQuery.trim() ? `No content matches “${searchQuery.trim()}”.` : "No content found."}
+        </p>
       ) : (
         <div className="space-y-3">
-          {posts.map((post) => (
+          {filteredPosts.map((post) => (
             <div
               key={`${post.type}-${post.id}`}
               className="flex flex-col items-stretch gap-4 p-4 bg-surface-container rounded-lg border border-outline-variant/20 sm:flex-row sm:items-start"

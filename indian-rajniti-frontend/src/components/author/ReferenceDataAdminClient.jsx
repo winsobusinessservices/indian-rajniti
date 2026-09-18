@@ -209,6 +209,13 @@ const lines = (value) =>
     .split("\n")
     .map((item) => item.trim())
     .filter(Boolean);
+const careerEntries = (value) =>
+  lines(value).map((line) => {
+    const [role = "", organization = "", fromYear = "", toYear = ""] = line
+      .split("|")
+      .map((item) => item.trim());
+    return { role, organization, fromYear, toYear };
+  });
 const careerText = (value) =>
   (value || [])
     .map((entry) =>
@@ -217,8 +224,8 @@ const careerText = (value) =>
         : [
             entry.role || entry.title,
             entry.organization,
-            entry.from || entry.startYear,
-            entry.to || entry.endYear,
+            entry.fromYear || entry.from || entry.startYear,
+            entry.toYear || entry.to || entry.endYear,
           ]
             .filter(Boolean)
             .join(" | "),
@@ -244,7 +251,7 @@ function payloadOf(type, form) {
     Object.assign(payload, {
       education: lines(form.education),
       bio: lines(form.bio),
-      career_timeline: lines(form.career_timeline),
+      career_timeline: careerEntries(form.career_timeline),
     });
   if (type === "parties") payload.founders = lines(form.founders);
   return payload;

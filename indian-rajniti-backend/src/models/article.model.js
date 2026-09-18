@@ -404,8 +404,7 @@ const Article = {
          reviewer_id = NULL,
          review_notes = NULL,
          submitted_at = NULL,
-         reviewed_at = NULL,
-         published_at = NULL
+         reviewed_at = NULL
 
        WHERE id = ?`,
       [
@@ -584,8 +583,7 @@ const Article = {
            review_notes = ?,
            reviewed_at = NOW(),
 
-           submitted_at = NULL,
-           published_at = NULL
+           submitted_at = NULL
 
          WHERE id = ?`,
         [
@@ -620,7 +618,7 @@ const Article = {
     } else if (action === "SCHEDULE") {
       await pool.query(
         `UPDATE ${TABLE}
-         SET status = 'PENDING', reviewer_id = ?, review_notes = ?, scheduled_publish_at = ?, reviewed_at = NULL, published_at = NULL
+         SET status = 'PENDING', reviewer_id = ?, review_notes = ?, scheduled_publish_at = ?, reviewed_at = NULL
          WHERE id = ?`,
         [reviewerId, notes ?? null, fields.scheduledPublishAt, id]
       );
@@ -643,7 +641,7 @@ const Article = {
            review_notes = ?,
            reviewed_at = NOW(),
            scheduled_publish_at = NULL,
-           published_at = CASE WHEN ? = 'APPROVED' THEN ? ELSE NULL END
+           published_at = CASE WHEN ? = 'APPROVED' THEN COALESCE(published_at, ?) ELSE published_at END
          WHERE id = ?`,
         [
           status,

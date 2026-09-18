@@ -32,6 +32,27 @@ const getPartiesData = createJsonResource(`${API_BASE_URL}/parties`, {
   fetchOptions: { cache: "no-store" },
 });
 
+function normalizeCareerTimeline(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === "string") {
+        const [role = "", organization = "", fromYear = "", toYear = ""] = entry
+          .split("|")
+          .map((item) => item.trim());
+        return { role, organization, fromYear, toYear };
+      }
+      if (!entry || typeof entry !== "object") return null;
+      return {
+        role: entry.role || entry.title || "",
+        organization: entry.organization || "",
+        fromYear: entry.fromYear || entry.from || entry.startYear || "",
+        toYear: entry.toYear || entry.to || entry.endYear || "",
+      };
+    })
+    .filter((entry) => entry?.role);
+}
+
 function toPoliticianShape(row) {
   return {
     id: row.id,
@@ -47,7 +68,7 @@ function toPoliticianShape(row) {
     currentPosition: row.current_position,
     stillInOffice: !!row.still_in_office,
     education: row.education || [],
-    careerTimeline: row.career_timeline || [],
+    careerTimeline: normalizeCareerTimeline(row.career_timeline),
     summary: row.summary,
     bio: row.bio || [],
   };

@@ -22,6 +22,15 @@ function findNationalFigure(keyFigures, roleKeyword, fallbackName) {
   return { name: fallbackName, role: roleKeyword, icon: "fa-solid fa-user-tie" };
 }
 
+function findPartyByReference(parties, reference) {
+  const value = String(reference || "").trim().toLowerCase();
+  if (!value) return null;
+  return parties.find((party) =>
+    party.name?.trim().toLowerCase() === value ||
+    party.abbreviation?.trim().toLowerCase() === value
+  ) || null;
+}
+
 async function buildRegistry() {
   const [labels, categories, chiefMinisters, parties, formerPMs, keyFigures, statesAndUTs] = await Promise.all([
     getAllCategoryLabels(),
@@ -119,6 +128,8 @@ export async function getCategoryInfo(slug) {
     const stateProfile = await getStateProfile(label);
     const currentCmName = stateProfile?.currentCmName || cm?.name;
     const currentCmParty = cm?.party;
+    const oppositionPartyName = stateProfile?.oppositionParty || cm?.oppositionParty;
+    const oppositionParty = findPartyByReference(parties, oppositionPartyName);
 
     if (cm || currentCmName) {
       current = { name: currentCmName, role: `Chief Minister, ${label}${cm?.party ? ` — ${cm.party}` : ""}`, icon: "fa-solid fa-user-tie", photo: stateProfile?.cmImage || cm?.photo, photoFallback: cm?.photoFallback };
@@ -126,7 +137,8 @@ export async function getCategoryInfo(slug) {
         name: stateProfile?.oppositionLeaderName || stateProfile?.oppositionParty || cm?.oppositionParty || "Opposition",
         role: `${stateProfile?.oppositionLeaderName ? "Opposition Leader" : "Principal Opposition"}${stateProfile?.oppositionParty ? ` — ${stateProfile.oppositionParty}` : ""}, ${label} Assembly`,
         icon: "fa-solid fa-people-group",
-        photo: stateProfile?.oppositionLeaderImage,
+        photo: stateProfile?.oppositionLeaderImage || oppositionParty?.photo,
+        photoFallback: oppositionParty?.photoFallback,
       };
       description = `${label}${cm?.party ? ` is governed by the ${cm.party}` : ""}, led by Chief Minister ${currentCmName}. Track the latest political developments, policy decisions, and electoral dynamics shaping ${label}.`;
     }
@@ -135,7 +147,8 @@ export async function getCategoryInfo(slug) {
         name: stateProfile.oppositionLeaderName || stateProfile.oppositionParty,
         role: stateProfile.oppositionParty ? `Opposition Leader — ${stateProfile.oppositionParty}, ${label} Assembly` : `Opposition Leader, ${label} Assembly`,
         icon: "fa-solid fa-people-group",
-        photo: stateProfile.oppositionLeaderImage,
+        photo: stateProfile.oppositionLeaderImage || oppositionParty?.photo,
+        photoFallback: oppositionParty?.photoFallback,
       };
     }
 
@@ -199,8 +212,15 @@ export async function getCategoryInfo(slug) {
     bio = data.bio ?? null;
 
     if (data.subtype === "cm") {
+      const oppositionParty = findPartyByReference(parties, data.oppositionParty);
       current = { name: data.name, role: `Chief Minister, ${data.state} — ${data.party}`, icon: "fa-solid fa-user-tie", photo: data.photo, photoFallback: data.photoFallback };
-      opposition = { name: data.oppositionParty, role: `Principal Opposition, ${data.state} Assembly`, icon: "fa-solid fa-people-group" };
+      opposition = {
+        name: data.oppositionParty,
+        role: `Principal Opposition, ${data.state} Assembly`,
+        icon: "fa-solid fa-people-group",
+        photo: oppositionParty?.photo,
+        photoFallback: oppositionParty?.photoFallback,
+      };
       currentLabel = "Chief Minister";
       oppositionLabel = "Principal Opposition";
       const yearsAsRuler = data.since ? new Date().getFullYear() - data.since : null;
