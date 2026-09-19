@@ -17,6 +17,20 @@ const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 const VIDEO_SOURCES = ["YOUTUBE", "VIMEO", "UPLOAD", "EXTERNAL"];
 const LOCAL_DRAFT_VERSION = 1;
 
+function FormatButton({ label, title, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-md border border-outline-variant/40 bg-surface px-2.5 font-label-md text-sm text-on-surface transition-colors hover:border-primary hover:bg-primary-fixed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      aria-label={label}
+      title={title || label}
+    >
+      {children}
+    </button>
+  );
+}
+
 function localDraftKey(userId, type) {
   return userId ? `indian-rajneeti:content-draft:${userId}:${type}` : null;
 }
@@ -359,6 +373,46 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
     setFiles((prev) => ({ ...prev, additionalImages: (prev.additionalImages || []).filter((_, itemIndex) => itemIndex !== index) }));
   };
 
+  const applyInlineFormat = (before, after, placeholder) => {
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? start;
+    const selected = form.content.slice(start, end) || placeholder;
+    const replacement = `${before}${selected}${after}`;
+
+    setForm((prev) => ({
+      ...prev,
+      content: `${prev.content.slice(0, start)}${replacement}${prev.content.slice(end)}`,
+    }));
+
+    window.requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(start + before.length, start + before.length + selected.length);
+    });
+  };
+
+  const applyHeading = (marker, placeholder) => {
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? start;
+    const selected = form.content.slice(start, end) || placeholder;
+    const headingText = selected.replace(/^#{1,6}\s+/gm, "").replace(/\n+/g, " ").trim();
+    const leadingBreak = start > 0 && !form.content.slice(0, start).endsWith("\n\n") ? "\n\n" : "";
+    const trailingBreak = end < form.content.length && !form.content.slice(end).startsWith("\n\n") ? "\n\n" : "";
+    const replacement = `${leadingBreak}${marker} ${headingText}${trailingBreak}`;
+
+    setForm((prev) => ({
+      ...prev,
+      content: `${prev.content.slice(0, start)}${replacement}${prev.content.slice(end)}`,
+    }));
+
+    window.requestAnimationFrame(() => {
+      const selectionStart = start + leadingBreak.length + marker.length + 1;
+      textarea?.focus();
+      textarea?.setSelectionRange(selectionStart, selectionStart + headingText.length);
+    });
+  };
+
   const insertExternalLink = () => {
     const label = linkText.trim();
     let url = linkUrl.trim();
@@ -488,6 +542,22 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                 <FieldLabel icon="fa-file-lines" required>
                   Content
                 </FieldLabel>
+                <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-t-lg border border-outline-variant/40 bg-surface-container-low px-2 py-2" role="toolbar" aria-label="Article text formatting">
+                  <span className="mr-1 hidden font-label-md text-[11px] text-on-surface-variant sm:inline">Format</span>
+                  <FormatButton label="Section heading" title="Section heading (H2)" onClick={() => applyHeading("##", "Section heading")}>
+                    <span className="font-bold">H2</span>
+                  </FormatButton>
+                  <FormatButton label="Subheading" title="Subheading (H3)" onClick={() => applyHeading("###", "Subheading")}>
+                    <span className="font-bold">H3</span>
+                  </FormatButton>
+                  <span className="mx-1 h-6 w-px bg-outline-variant/60" aria-hidden="true" />
+                  <FormatButton label="Bold" title="Bold selected text" onClick={() => applyInlineFormat("**", "**", "bold text")}>
+                    <span className="font-bold">B</span>
+                  </FormatButton>
+                  <FormatButton label="Italic" title="Italicize selected text" onClick={() => applyInlineFormat("*", "*", "italic text")}>
+                    <span className="font-serif font-bold italic">I</span>
+                  </FormatButton>
+                </div>
                 <textarea
                   ref={contentRef}
                   name="content"
@@ -495,8 +565,11 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                   rows={16}
                   value={form.content}
                   onChange={handleChange}
-                  className={`${fieldClass} resize-y`}
+                  className={`${fieldClass} resize-y rounded-t-none`}
                 />
+                <p className="mt-2 text-[11px] text-on-surface-variant">
+                  Select existing text before choosing a format, or place the cursor where you want new formatted text. Headings should stay on their own line.
+                </p>
                 <div className="mt-3 rounded-lg border border-outline-variant/30 bg-surface-container-low p-3">
                   <p className="font-label-md text-xs text-on-surface mb-2">
                     <i className="fa-solid fa-link text-primary mr-1.5" /> Add a website link

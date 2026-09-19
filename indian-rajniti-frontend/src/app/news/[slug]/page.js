@@ -14,7 +14,7 @@ import { getBreakingNews, getPostBySlug, getRelatedPosts } from "@/features/news
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
 import { mediaUrl } from "@/lib/api";
-import LinkedText from "@/components/common/LinkedText";
+import PostBody from "@/components/common/PostBody";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -134,19 +134,7 @@ export default async function PostDetailPage({ params }) {
               />
 
               <div className="space-y-6">
-                {post.content.map((paragraph, index) => (
-                  <p
-                    key={index}
-                    className={
-                      index === 0
-                        ? "font-body-lg text-on-surface leading-relaxed"
-                        : "font-body-md text-on-surface-variant leading-relaxed"
-                    }
-                  >
-                    <LinkedText>{paragraph}</LinkedText>
-                  </p>
-                ))}
-
+                <PostBody content={post.content} />
                 <blockquote className="border-l-4 border-primary pl-6 py-2 italic font-headline-md text-lg text-on-surface">
                   &ldquo;{post.excerpt}&rdquo;
                 </blockquote>

@@ -11,7 +11,7 @@ import ReasonModal from "@/components/common/ReasonModal";
 import { resolveBackTarget } from "@/lib/postNav";
 import { ArticleBodySkeleton } from "@/components/common/PageSkeletons";
 import { splitContentMedia } from "@/lib/contentMedia";
-import LinkedText from "@/components/common/LinkedText";
+import PostBody from "@/components/common/PostBody";
 
 const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 
@@ -229,9 +229,7 @@ export default function ViewPostClient({ type, id }) {
           <p className="font-body-lg text-on-surface leading-relaxed italic whitespace-pre-wrap break-words">{post.excerpt || post.description}</p>
         )}
         {contentMedia.text && (
-          <p className="font-body-md text-on-surface-variant leading-relaxed whitespace-pre-wrap break-words">
-            <LinkedText>{contentMedia.text}</LinkedText>
-          </p>
+          <PostBody content={contentMedia.text} className="space-y-4" />
         )}
         {contentMedia.images.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
