@@ -36,7 +36,7 @@ function UpcomingEvents() {
   if (!events.length) return null;
 
   return (
-    <Link href="/political-calendar" className="hidden md:flex flex-col gap-2 items-end group">
+    <Link href="/political-calendar" className="hidden md:flex flex-col gap-2 items-start group">
       <span className="flex items-center gap-2 font-headline-md text-base text-primary group-hover:underline">
         <i className="fa-solid fa-calendar-days" />
         Upcoming Events
@@ -63,7 +63,7 @@ function UpcomingRallies() {
   if (!events.length) return null;
 
   return (
-    <Link href="/rallies" className="hidden md:flex flex-col gap-2 items-end group">
+    <Link href="/political-rallies" className="hidden md:flex flex-col gap-2 items-start group">
       <span className="flex items-center gap-2 font-headline-md text-base text-primary group-hover:underline">
         <i className="fa-solid fa-calendar-days" />
         Upcoming Rallies
