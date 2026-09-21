@@ -60,7 +60,7 @@ const Blog = {
 
   async findCategories() {
     const [rows] = await pool.query(
-      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
     );
     return rows.map((row) => row.category);
   },
@@ -81,21 +81,21 @@ const Blog = {
   // check in particular — can see the author's role without a second query.
   async findById(id) {
     const [rows] = await pool.query(
-      `SELECT b.*, u.role AS author_role FROM ${TABLE} b LEFT JOIN users u ON u.id = b.author_id WHERE b.id = ?`,
+      `SELECT b.*, u.role AS author_role FROM ${TABLE} b LEFT JOIN users u ON u.id = b.author_id WHERE b.id = ? AND b.deleted_at IS NULL`,
       [id]
     );
     return parseRow(rows[0]);
   },
 
   async findBySlug(slug) {
-    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE slug = ?`, [slug]);
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE slug = ? AND deleted_at IS NULL`, [slug]);
     return parseRow(rows[0]);
   },
 
   // Public reads — no auth, APPROVED only. See article.model.js's
   // findPublished for the category-substring-match rationale.
   async findPublished({ category, orderBy = "recent", limit = 20 } = {}) {
-    const conditions = ["b.status = 'APPROVED'", "COALESCE(b.published_at, b.created_at) <= NOW()"];
+    const conditions = ["b.deleted_at IS NULL", "b.status = 'APPROVED'", "COALESCE(b.published_at, b.created_at) <= NOW()"];
     const params = [];
     if (category) {
       conditions.push("b.category LIKE ?");
@@ -125,7 +125,7 @@ const Blog = {
     const params = topics.flatMap((topic) => [topic, topic, `%${topic}%`]);
     const [rows] = await pool.query(
       `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id
-       WHERE b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW() AND (${topicCondition})
+       WHERE b.deleted_at IS NULL AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW() AND (${topicCondition})
        ORDER BY b.published_at DESC, b.views DESC LIMIT ?`,
       [...params, limit]
     );
@@ -134,7 +134,7 @@ const Blog = {
 
   async findPublishedBySlug(slug) {
     const [rows] = await pool.query(
-      `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id WHERE b.slug = ? AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()`,
+      `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id WHERE b.slug = ? AND b.deleted_at IS NULL AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()`,
       [slug]
     );
     return parseRow(rows[0]);
@@ -147,7 +147,7 @@ const Blog = {
   // Always scoped to the caller's own content — see article.model.js's
   // findForUser for why this no longer branches on role.
   async findForUser(user, { status } = {}) {
-    const conditions = ["b.author_id = ?"];
+    const conditions = ["b.author_id = ?", "b.deleted_at IS NULL"];
     const params = [user.userId];
     if (status) {
       conditions.push("b.status = ?");
@@ -163,7 +163,7 @@ const Blog = {
   // Moderator-only — every author, every status. See article.model.js's
   // findAll for the full rationale.
   async findAll({ status } = {}) {
-    const conditions = [];
+    const conditions = ["b.deleted_at IS NULL"];
     const params = [];
     if (status) {
       conditions.push("b.status = ?");
@@ -278,6 +278,11 @@ const Blog = {
 
   async remove(id) {
     await pool.query(`DELETE FROM ${TABLE} WHERE id = ?`, [id]);
+  },
+
+  async setCommentsEnabled(id, enabled) {
+    await pool.query(`UPDATE ${TABLE} SET comments_enabled = ? WHERE id = ?`, [enabled ? 1 : 0, id]);
+    return Blog.findById(id);
   },
 };
 

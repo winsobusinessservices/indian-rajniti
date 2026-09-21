@@ -24,7 +24,7 @@ const CareerJob = {
 
   async findById(id) {
     const [rows] = await pool.query(
-      `SELECT j.*, u.name AS posted_by_name FROM ${TABLE} j JOIN users u ON u.id = j.posted_by WHERE j.id = ?`,
+      `SELECT j.*, u.name AS posted_by_name FROM ${TABLE} j JOIN users u ON u.id = j.posted_by WHERE j.id = ? AND j.deleted_at IS NULL`,
       [id]
     );
     return rows[0];
@@ -32,7 +32,7 @@ const CareerJob = {
 
   async findBySlug(slug) {
     const [rows] = await pool.query(
-      `SELECT j.*, u.name AS posted_by_name FROM ${TABLE} j JOIN users u ON u.id = j.posted_by WHERE j.slug = ?`,
+      `SELECT j.*, u.name AS posted_by_name FROM ${TABLE} j JOIN users u ON u.id = j.posted_by WHERE j.slug = ? AND j.deleted_at IS NULL`,
       [slug]
     );
     return rows[0];
@@ -42,7 +42,7 @@ const CareerJob = {
   // admins managing postings pass no filter to see everything, including
   // closed ones.
   async findAll({ status } = {}) {
-    const conditions = [];
+    const conditions = ["deleted_at IS NULL"];
     const params = [];
     if (status) {
       conditions.push("status = ?");

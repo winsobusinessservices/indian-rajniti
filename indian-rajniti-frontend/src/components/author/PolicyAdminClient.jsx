@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { policiesApi } from "@/lib/api";
+import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
 
 const EMPTY_FORM = { title: "", policyType: "", summary: "", content: "", status: "DRAFT", showOnRegistration: false };
 
 export default function PolicyAdminClient() {
+  const confirmDelete = useConfirmDialog();
   const [policies, setPolicies] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
@@ -65,7 +67,11 @@ export default function PolicyAdminClient() {
   };
 
   const deletePolicy = async (policy) => {
-    if (!window.confirm(`Delete “${policy.title}”? This cannot be undone.`)) return;
+    const confirmed = await confirmDelete({
+      title: "Delete policy?",
+      description: `“${policy.title}” will be moved to Deleted Items and can be restored by an Admin.`,
+    });
+    if (!confirmed) return;
     try {
       await policiesApi.remove(policy.id);
       setPolicies((current) => current.filter((item) => item.id !== policy.id));

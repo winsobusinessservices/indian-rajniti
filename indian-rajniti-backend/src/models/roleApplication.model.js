@@ -48,22 +48,22 @@ const RoleApplication = {
   // Includes password_hash — only used internally by reviewApplication() to
   // create the real user account on approval. Never returned from a route.
   async findByIdWithPassword(id) {
-    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE id = ?`, [id]);
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
     return rows[0] || null;
   },
 
   async findById(id) {
-    const [rows] = await pool.query(`SELECT ${PUBLIC_COLUMNS} FROM ${TABLE} WHERE id = ?`, [id]);
+    const [rows] = await pool.query(`SELECT ${PUBLIC_COLUMNS} FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
     return rows[0] || null;
   },
 
   async findPendingByEmail(email) {
-    const [rows] = await pool.query(`SELECT ${PUBLIC_COLUMNS} FROM ${TABLE} WHERE email = ? AND status = 'PENDING'`, [email]);
+    const [rows] = await pool.query(`SELECT ${PUBLIC_COLUMNS} FROM ${TABLE} WHERE email = ? AND status = 'PENDING' AND deleted_at IS NULL`, [email]);
     return rows[0] || null;
   },
 
   async findAll({ status, role } = {}) {
-    const conditions = [];
+    const conditions = ["a.deleted_at IS NULL"];
     const params = [];
     if (status) {
       conditions.push("a.status = ?");

@@ -164,10 +164,10 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = async (reason) => {
     if (!deleteTarget) return;
 
-    await authApi.deleteUser(deleteTarget.id);
+    await authApi.deleteUser(deleteTarget.id, reason);
     setMembers((prev) => prev.filter((m) => m.id !== deleteTarget.id));
     setDeleteTarget(null);
   };
@@ -396,7 +396,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
         title="Delete this team member?"
         description={
           deleteTarget
-            ? `This permanently removes ${deleteTarget.name}'s (${deleteTarget.email}) account. This cannot be undone.`
+            ? `${deleteTarget.name}'s (${deleteTarget.email}) account will move to Deleted Items and can be restored by an Admin.`
             : undefined
         }
         confirmLabel="Delete"

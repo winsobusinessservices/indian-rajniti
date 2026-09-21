@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { categoriesApi } from "@/lib/api";
 import { slugify } from "@/lib/slugify";
+import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
 
 const ROWS_PER_PAGE = 6;
 
 export default function CategoryAdminClient() {
+  const confirmDelete = useConfirmDialog();
   const [categories, setCategories] = useState([]);
   const [sections, setSections] = useState([]);
   const [name, setName] = useState("");
@@ -90,7 +92,11 @@ export default function CategoryAdminClient() {
   };
 
   const removeCategory = async (category) => {
-    if (!window.confirm(`Delete the category “${category.name}”? Existing posts will keep their saved category.`)) return;
+    const confirmed = await confirmDelete({
+      title: "Delete category?",
+      description: `“${category.name}” will be removed from the author dropdown. Existing posts will keep their saved category.`,
+    });
+    if (!confirmed) return;
     setError("");
     setSuccess("");
     try {

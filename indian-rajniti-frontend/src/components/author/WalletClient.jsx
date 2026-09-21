@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { walletApi } from "@/lib/api";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
@@ -13,6 +14,8 @@ const EMPTY_SUMMARY = {
   lifetimeEarnedValueInr: 0,
   lifetimeWithdrawnPoints: 0,
   lifetimeWithdrawnValueInr: 0,
+  lifetimeBonusPoints: 0,
+  lifetimeBonusValueInr: 0,
 };
 
 const SUMMARY_CARDS = [
@@ -20,6 +23,7 @@ const SUMMARY_CARDS = [
   { key: "availableValueInr", label: "Available value", icon: "fa-indian-rupee-sign", accent: "text-emerald-700 bg-emerald-100", currency: true },
   { key: "lifetimeEarnedPoints", label: "Total earned points", icon: "fa-arrow-trend-up", accent: "text-green-700 bg-green-100" },
   { key: "lifetimeEarnedValueInr", label: "Total earned value", icon: "fa-sack-dollar", accent: "text-teal-700 bg-teal-100", currency: true },
+  { key: "lifetimeBonusPoints", label: "Bonus points only", icon: "fa-gift", accent: "text-amber-700 bg-amber-100" },
   { key: "pendingWithdrawalPoints", label: "Pending withdrawal points", icon: "fa-clock", accent: "text-amber-700 bg-amber-100" },
   { key: "lifetimeWithdrawnPoints", label: "Total withdrawn points", icon: "fa-money-bill-transfer", accent: "text-blue-700 bg-blue-100" },
 ];
@@ -38,7 +42,7 @@ function formatInr(value) {
 }
 
 export default function WalletClient() {
-  const [wallet, setWallet] = useState({ summary: EMPTY_SUMMARY, transactions: [], withdrawals: [] });
+  const [wallet, setWallet] = useState({ summary: EMPTY_SUMMARY, transactions: [], bonuses: [], withdrawals: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -46,6 +50,8 @@ export default function WalletClient() {
   const [withdrawalPoints, setWithdrawalPoints] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
   const [generatingWithdrawalId, setGeneratingWithdrawalId] = useState(null);
+  const [acknowledgingBonusId, setAcknowledgingBonusId] = useState(null);
+  const [transactionFilter, setTransactionFilter] = useState("ALL");
 
   useEffect(() => {
     walletApi
@@ -92,6 +98,24 @@ export default function WalletClient() {
     }
   };
 
+  const acknowledgeBonus = async (bonusId) => {
+    setError("");
+    setAcknowledgingBonusId(bonusId);
+    try {
+      const data = await walletApi.acknowledgeBonus(bonusId);
+      setWallet((current) => ({
+        ...current,
+        bonuses: current.bonuses.map((bonus) => bonus.id === bonusId
+          ? { ...bonus, acknowledgedAt: data.acknowledgedAt }
+          : bonus),
+      }));
+    } catch (acknowledgeError) {
+      setError(acknowledgeError.message);
+    } finally {
+      setAcknowledgingBonusId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="mx-auto max-w-full px-4 py-10 md:px-16">
@@ -104,6 +128,11 @@ export default function WalletClient() {
   const eligibility = wallet.withdrawalEligibility;
   const rupeesPerPoint = wallet.pointRate?.rupeesPerPoint || 1;
   const requestedValueInr = (Number(withdrawalPoints) || 0) * rupeesPerPoint;
+  const bonusHistory = wallet.bonuses || [];
+  const bonusNotifications = bonusHistory.filter((bonus) => !bonus.acknowledgedAt);
+  const filteredTransactions = transactionFilter === "BONUS"
+    ? wallet.transactions.filter((transaction) => transaction.category === "CONTENT_BONUS")
+    : wallet.transactions;
 
   return (
     <div className="mx-auto max-w-full px-4 py-10 md:px-16">
@@ -183,7 +212,7 @@ export default function WalletClient() {
         </>
       )}
 
-      <section aria-label="Wallet summary" className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <section aria-label="Wallet summary" className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {SUMMARY_CARDS.map((card) => (
           <div key={card.key} className="rounded-xl flex flex-col md:flex-row md:justify-between md:items-center border border-outline-variant/20 bg-surface-container p-5">
             <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-full">
@@ -200,6 +229,48 @@ export default function WalletClient() {
           </div>
         ))}
       </section>
+
+      {bonusNotifications.length > 0 && (
+        <section className="mb-10" aria-labelledby="bonus-awards-heading">
+          <div className="mb-4">
+            <p className="font-label-md text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Notifications</p>
+            <h2 id="bonus-awards-heading" className="mt-1 font-display-lg text-2xl text-primary">Recent bonus awards</h2>
+          </div>
+          <div className="space-y-3">
+            {bonusNotifications.map((bonus) => (
+              <article key={bonus.id} className="rounded-xl border border-amber-500/30 bg-amber-50 p-5">
+                <div className="flex items-start gap-4">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                    <i className="fa-solid fa-gift" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-label-md text-sm font-bold text-on-surface">+{bonus.points.toLocaleString("en-IN")} bonus points</h3>
+                      <time className="font-body-md text-xs text-on-surface-variant" dateTime={bonus.createdAt}>{formatDate(bonus.createdAt)}</time>
+                    </div>
+                    <p className="mt-1 font-body-md text-sm font-semibold text-on-surface">{bonus.contentTitle}</p>
+                    <p className="mt-2 font-body-md text-sm text-on-surface-variant"><span className="font-semibold">Reason:</span> {bonus.reason}</p>
+                    {bonus.contentSlug && (
+                      <Link href={`/news/${bonus.contentSlug}`} className="mt-3 inline-flex items-center gap-1 font-label-md text-xs font-semibold text-primary hover:underline">
+                        View related content <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" aria-hidden="true" />
+                      </Link>
+                    )}
+                    <button
+                      type="button"
+                      disabled={acknowledgingBonusId === bonus.id}
+                      onClick={() => acknowledgeBonus(bonus.id)}
+                      className="mt-3 ml-3 inline-flex min-h-9 items-center gap-2 rounded-lg bg-amber-600 px-4 font-label-md text-xs font-semibold text-white hover:bg-amber-700 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <i className="fa-solid fa-check" aria-hidden="true" />
+                      {acknowledgingBonusId === bonus.id ? "Acknowledging..." : "Acknowledge"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {wallet.withdrawals?.length > 0 && (
         <section className="mb-10">
@@ -237,19 +308,41 @@ export default function WalletClient() {
       )}
 
       <section>
-        <div className="mb-4">
-          <h2 className="font-display-lg text-2xl text-primary">Points history</h2>
-          <p className="mt-1 font-body-md text-xs text-on-surface-variant">Your 100 most recent wallet transactions</p>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="font-display-lg text-2xl text-primary">Points history</h2>
+            <p className="mt-1 font-body-md text-xs text-on-surface-variant">Your 100 most recent wallet transactions</p>
+          </div>
+          <div className="inline-flex w-fit rounded-lg border border-outline-variant/30 bg-surface-container-low p-1" aria-label="Filter points history">
+            <button
+              type="button"
+              aria-pressed={transactionFilter === "ALL"}
+              onClick={() => setTransactionFilter("ALL")}
+              className={`min-h-9 rounded-md px-3 font-label-md text-xs font-semibold transition-colors ${transactionFilter === "ALL" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container-high"}`}
+            >
+              All activity
+            </button>
+            <button
+              type="button"
+              aria-pressed={transactionFilter === "BONUS"}
+              onClick={() => setTransactionFilter("BONUS")}
+              className={`min-h-9 rounded-md px-3 font-label-md text-xs font-semibold transition-colors ${transactionFilter === "BONUS" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:bg-surface-container-high"}`}
+            >
+              Bonus points
+            </button>
+          </div>
         </div>
-        {wallet.transactions.length === 0 ? (
+        {filteredTransactions.length === 0 ? (
           <div className="rounded-xl border border-dashed border-outline-variant/50 bg-surface-container-low px-5 py-12 text-center">
-            <i className="fa-solid fa-receipt mb-3 text-3xl text-outline" aria-hidden="true" />
-            <p className="font-label-md text-sm font-semibold text-on-surface">No points activity yet</p>
+            <i className={`fa-solid ${transactionFilter === "BONUS" ? "fa-gift" : "fa-receipt"} mb-3 text-3xl text-outline`} aria-hidden="true" />
+            <p className="font-label-md text-sm font-semibold text-on-surface">
+              {transactionFilter === "BONUS" ? "No bonus points awarded yet" : "No points activity yet"}
+            </p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-xl border border-outline-variant/20 bg-surface-container">
             <ul className="divide-y divide-outline-variant/20">
-              {wallet.transactions.map((transaction) => {
+              {filteredTransactions.map((transaction) => {
                 const credit = transaction.direction === "CREDIT";
                 return (
                   <li key={transaction.id} className="flex items-center gap-4 p-4 sm:p-5">
@@ -259,6 +352,14 @@ export default function WalletClient() {
                     <div className="min-w-0 flex-1">
                       <p className="font-label-md text-sm font-semibold text-on-surface">{transaction.description}</p>
                       <p className="mt-1 font-body-md text-xs text-on-surface-variant">{formatCategory(transaction.category)} · {formatDate(transaction.createdAt)}</p>
+                      {transaction.category === "CONTENT_BONUS" && transaction.metadata?.reason && (
+                        <p className="mt-1 font-body-md text-xs text-on-surface-variant">Reason: {transaction.metadata.reason}</p>
+                      )}
+                      {transaction.category === "CONTENT_BONUS" && transaction.metadata?.contentSlug && (
+                        <Link href={`/news/${transaction.metadata.contentSlug}`} className="mt-2 inline-flex items-center gap-1 font-label-md text-xs font-semibold text-primary hover:underline">
+                          View related content <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" aria-hidden="true" />
+                        </Link>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className={`font-body-md text-base font-bold tabular-nums ${credit ? "text-green-700" : "text-red-700"}`}>{credit ? "+" : "-"}{transaction.points.toLocaleString("en-IN")}</p>

@@ -2,6 +2,7 @@ const Politician = require("../../models/politician.model");
 const Party = require("../../models/party.model");
 const State = require("../../models/state.model");
 const HomeWidget = require("../../models/homeWidget.model");
+const DeletionAudit = require("../../models/deletionAudit.model");
 
 const POLITICIAN_CATEGORIES = ["KEY_FIGURE", "FORMER_PM", "CHIEF_MINISTER", "PARTY_LEADER"];
 const STATE_KINDS = ["STATE", "UNION_TERRITORY"];
@@ -142,7 +143,7 @@ async function listReferenceData(req, res) {
   });
 }
 
-function crudHandlers(model, input, label) {
+function crudHandlers(model, input, label, entityType) {
   return {
     create: async (req, res) => {
       try {
@@ -166,16 +167,16 @@ function crudHandlers(model, input, label) {
       }
     },
     remove: async (req, res) => {
-      const deleted = await model.delete(req.params.id);
+      const deleted = await DeletionAudit.softDelete({ entityType, entityId: req.params.id, deletedBy: req.user.userId, reason: req.body?.reason });
       if (!deleted) return res.status(404).json({ success: false, message: `${label} not found` });
-      return res.json({ success: true, message: `${label} deleted` });
+      return res.json({ success: true, message: `${label} moved to deleted items` });
     },
   };
 }
 
-const politicianCrud = crudHandlers(Politician, politicianInput, "Politician");
-const partyCrud = crudHandlers(Party, partyInput, "Party");
-const stateCrud = crudHandlers(State, stateInput, "State/UT");
+const politicianCrud = crudHandlers(Politician, politicianInput, "Politician", "POLITICIAN");
+const partyCrud = crudHandlers(Party, partyInput, "Party", "PARTY");
+const stateCrud = crudHandlers(State, stateInput, "State/UT", "STATE");
 
 async function updateParliament(req, res) {
   const parliament = req.body.parliament;

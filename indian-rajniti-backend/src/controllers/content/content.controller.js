@@ -5,6 +5,7 @@
 const Article = require("../../models/article.model");
 const Blog = require("../../models/blog.model");
 const Video = require("../../models/video.model");
+const DeletionAudit = require("../../models/deletionAudit.model");
 const User = require("../../models/user.model");
 const { fileUrl } = require("../../middleware/upload.middleware");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
@@ -226,6 +227,30 @@ const getContentById = async (req, res) => {
   }
 };
 
+const updateCommentSetting = async (req, res) => {
+  try {
+    if (typeof req.body?.enabled !== "boolean") {
+      return res.status(400).json({ success: false, message: "enabled must be true or false" });
+    }
+
+    const Model = MODEL[req.contentType];
+    const item = await Model.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, message: `${TYPE_LABEL[req.contentType]} not found` });
+    }
+
+    const updated = await Model.setCommentsEnabled(item.id, req.body.enabled);
+    return res.status(200).json({
+      success: true,
+      message: `Comments ${req.body.enabled ? "enabled" : "disabled"}`,
+      post: tagType(req.contentType, updated),
+    });
+  } catch (error) {
+    console.error(`Update ${req.contentType} comment setting error:`, error);
+    return res.status(500).json({ success: false, message: "Comment setting could not be updated" });
+  }
+};
+
 const updateContent = async (req, res) => {
   try {
     const item = await loadOwnedContent(req, res);
@@ -266,17 +291,26 @@ const deleteContent = async (req, res) => {
     const item = await loadOwnedContent(req, res);
     if (!item) return;
 
+    // Authors and editors may delete content in any workflow state (including
+    // APPROVED) only when they created it. Administrators retain site-wide
+    // deletion authority.
+    if (req.user.role !== "ADMIN" && Number(item.author_id) !== Number(req.user.userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Authors and editors can only delete their own content.",
+      });
+    }
+
     // No audit-log table exists yet, so this is recorded to the server log
     // rather than persisted — good enough for now, but if this needs to
     // survive a restart or reach the author, it'll need a real audit table.
-    if (req.body?.reason) {
-      console.log(
-        `${TYPE_LABEL[req.contentType]} ${item.id} ("${item.title}") deleted by user ${req.user.userId} (${req.user.role}). Reason: ${req.body.reason}`
-      );
-    }
-
-    await MODEL[req.contentType].remove(item.id);
-    return res.status(200).json({ success: true, message: `${TYPE_LABEL[req.contentType]} deleted` });
+    await DeletionAudit.softDelete({
+      entityType: req.contentType,
+      entityId: item.id,
+      deletedBy: req.user.userId,
+      reason: req.body?.reason,
+    });
+    return res.status(200).json({ success: true, message: `${TYPE_LABEL[req.contentType]} moved to deleted items` });
   } catch (error) {
     console.error(`Delete ${req.contentType} error:`, error);
     return res.status(500).json({ success: false, message: "Internal server error" });
@@ -468,6 +502,16 @@ const bulkModerateContent = async (req, res) => {
           message: "One or more selected items belong to an author assigned to another editor.",
         });
       }
+      if (
+        action === "DELETE"
+        && req.user.role !== "ADMIN"
+        && Number(item.post.author_id) !== Number(req.user.userId)
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "Authors and editors can only delete their own content. Remove other creators' items from the selection.",
+        });
+      }
       if (action !== "DELETE" && !canReview(req.user.role, item.post.author_role)) {
         return res.status(403).json({
           success: false,
@@ -480,10 +524,12 @@ const bulkModerateContent = async (req, res) => {
     let editorAwardedPoints = 0;
     for (const item of items) {
       if (action === "DELETE") {
-        if (notes) {
-          console.log(`${TYPE_LABEL[item.type]} ${item.id} deleted in bulk by user ${req.user.userId}. Reason: ${notes}`);
-        }
-        await item.Model.remove(item.id);
+        await DeletionAudit.softDelete({
+          entityType: item.type,
+          entityId: item.id,
+          deletedBy: req.user.userId,
+          reason: notes,
+        });
         continue;
       }
 
@@ -534,6 +580,7 @@ module.exports = {
   listContent,
   listAllContent,
   getContentById,
+  updateCommentSetting,
   updateContent,
   deleteContent,
   submitContent,

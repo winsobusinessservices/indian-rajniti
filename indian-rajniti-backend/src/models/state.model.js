@@ -5,17 +5,17 @@ const COLUMNS = "id, slug, name, capital, image_url, current_cm_name, cm_image_u
 
 const State = {
   async findAll() {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} ORDER BY sort_order ASC, id ASC`);
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE deleted_at IS NULL ORDER BY sort_order ASC, id ASC`);
     return rows;
   },
 
   async findBySlug(slug) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ?`, [slug]);
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ? AND deleted_at IS NULL`, [slug]);
     return rows[0];
   },
 
   async findById(id) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ?`, [id]);
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
     return rows[0];
   },
 

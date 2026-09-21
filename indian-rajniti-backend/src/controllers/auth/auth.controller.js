@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../../models/user.model");
 const Policy = require("../../models/policy.model");
+const DeletionAudit = require("../../models/deletionAudit.model");
 const {
   sendPasswordResetEmail,
   sendRoleChangedEmail,
@@ -13,6 +14,8 @@ const { userDocumentUrl } = require("../../middleware/upload.middleware");
 const { ALL_PERMISSIONS, normalizePermissions } = require("../../config/permissions");
 
 const EMAIL_REGEX = /^[a-zA-Z0-9](?!.*\.\.)[a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const VALID_NAME_REGEX = /^[a-zA-Z\s]+$/;
 const OTP_TTL = "10m";
 const VERIFIED_EMAIL_TTL = "15m";
 const OTP_RESEND_DELAY_MS = 60 * 1000;
@@ -52,12 +55,52 @@ async function validateAcceptedPolicies(value) {
   };
 }
 
+async function validateRegistrationFields(payload, { requirePasswordConfirmation = false } = {}) {
+  const name = String(payload?.name || "").trim();
+  const email = normalizedEmailOf(payload?.email);
+  const password = String(payload?.password || "");
+  const confirmPassword = String(payload?.confirmPassword || "");
+
+  if (!name || !email || !password || (requirePasswordConfirmation && !confirmPassword)) {
+    return {
+      error: requirePasswordConfirmation
+        ? "Name, email, password and password confirmation are required"
+        : "Name, email and password are required",
+    };
+  }
+  if (!VALID_NAME_REGEX.test(name)) {
+    return { error: "Name can only contain letters and spaces" };
+  }
+  if (!EMAIL_REGEX.test(email)) {
+    return { error: "Please enter a valid email address" };
+  }
+  if (!STRONG_PASSWORD_REGEX.test(password)) {
+    return {
+      error: "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character",
+    };
+  }
+  if (requirePasswordConfirmation && password !== confirmPassword) {
+    return { error: "Passwords do not match" };
+  }
+  if (!payload?.agreeToTerms) {
+    return { error: "You must agree to the Terms of Service and Privacy Policy" };
+  }
+
+  const policyAcceptance = await validateAcceptedPolicies(payload?.acceptedPolicyIds);
+  if (policyAcceptance.missing.length) {
+    return { error: "Please review and accept all required policies" };
+  }
+
+  return { name, email, password, policyAcceptance };
+}
+
 const requestRegistrationOtp = async (req, res) => {
   try {
-    const email = normalizedEmailOf(req.body.email);
-    if (!EMAIL_REGEX.test(email)) {
-      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+    const validation = await validateRegistrationFields(req.body, { requirePasswordConfirmation: true });
+    if (validation.error) {
+      return res.status(400).json({ success: false, message: validation.error });
     }
+    const { email } = validation;
     if (await User.findByEmail(email)) {
       return res.status(409).json({ success: false, message: "An account with this email already exists" });
     }
@@ -165,46 +208,12 @@ function authUserResponse(user) {
 
 const register = async (req, res) => {
   try {
-    const { name, email, password, agreeToTerms, verificationToken, acceptedPolicyIds } = req.body;
-
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "Name, email and password are required",
-      });
+    const { verificationToken } = req.body;
+    const validation = await validateRegistrationFields(req.body);
+    if (validation.error) {
+      return res.status(400).json({ success: false, message: validation.error });
     }
-
-    if (!agreeToTerms) {
-      return res.status(400).json({
-        success: false,
-        message: "You must agree to the Terms of Service and Privacy Policy",
-      });
-    }
-    const policyAcceptance = await validateAcceptedPolicies(acceptedPolicyIds);
-    if (policyAcceptance.missing.length) {
-      return res.status(400).json({ success: false, message: "Please review and accept all required policies" });
-    }
-
-    const strongPasswordRegex =/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-
-    if (!strongPasswordRegex.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character",
-      });
-    }
-
-   const validEmailRegex =/^[a-zA-Z0-9](?!.*\.\.)[a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!validEmailRegex.test(normalizedEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid email address",
-      });
-    }
+    const { name, email: normalizedEmail, password, policyAcceptance } = validation;
 
     try {
       const verification = jwt.verify(verificationToken || "", process.env.JWT_SECRET);
@@ -213,14 +222,6 @@ const register = async (req, res) => {
       }
     } catch {
       return res.status(400).json({ success: false, message: "Email verification has expired. Please verify again" });
-    }
-
-    const validNameRegex = /^[a-zA-Z\s]+$/;
-    if (!validNameRegex.test(name.trim())) {
-      return res.status(400).json({
-        success: false,
-        message: "Name can only contain letters and spaces",
-      });
     }
 
     const existingUser = await User.findByEmail(normalizedEmail);
@@ -232,13 +233,13 @@ const register = async (req, res) => {
     }
 
 
-    const passwordHash = await bcrypt.hash(strongPasswordRegex.test(password) ? password : "", 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      name: name.trim(),
+      name,
       email: normalizedEmail,
       passwordHash,
-      termsAccepted: agreeToTerms,
+      termsAccepted: true,
       acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
     });
 
@@ -372,6 +373,9 @@ const googleAuth = async (req, res) => {
     if (!user) {
       const emailUser = await User.findByEmail(email);
       if (emailUser) {
+        if (emailUser.status !== "ACTIVE") {
+          return res.status(403).json({ success: false, message: "Your account is not active" });
+        }
         user = await User.linkGoogleAccount(emailUser.id, googleSub);
       } else if (intent === "register") {
         // Keep password_hash non-null for compatibility. This random value is
@@ -865,12 +869,16 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    await User.clearEditorAssignmentsForUser(id);
-    await User.delete(id);
+    await DeletionAudit.softDelete({
+      entityType: "USER",
+      entityId: id,
+      deletedBy: req.user.userId,
+      reason: req.body?.reason,
+    });
 
     return res.status(200).json({
       success: true,
-      message: "User deleted",
+      message: "User moved to deleted items",
     });
   } catch (error) {
     console.error("Delete user error:", error);

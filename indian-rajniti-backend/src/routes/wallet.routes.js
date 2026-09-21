@@ -10,6 +10,8 @@ const {
   updatePointRates,
   getWithdrawalSettings,
   updateWithdrawalSettings,
+  awardContentBonus,
+  acknowledgeBonus,
 } = require("../controllers/wallet/wallet.controller");
 const { authenticate, authorize, authorizePermission } = require("../middleware/auth.middleware");
 const { PERMISSIONS } = require("../config/permissions");
@@ -194,11 +196,13 @@ router.get("/wallet", authenticate, authorize("AUTHOR", "EDITOR"), getWallet);
 router.post("/wallet/razorpay/webhook", razorpayWebhook);
 router.post("/wallet/withdrawals", authenticate, authorize("AUTHOR", "EDITOR"), requestWithdrawal);
 router.post("/wallet/withdrawals/:withdrawalId/payout-link", authenticate, authorize("AUTHOR", "EDITOR"), generatePayoutLink);
+router.patch("/wallet/bonuses/:bonusId/acknowledge", authenticate, authorize("AUTHOR", "EDITOR"), acknowledgeBonus);
 router.get("/admin/wallets", authenticate, authorizePermission(PERMISSIONS.MANAGE_WALLETS), listWalletsForAdmin);
 router.get("/admin/wallets/withdrawal-settings", authenticate, authorize("ADMIN"), getWithdrawalSettings);
 router.put("/admin/wallets/withdrawal-settings", authenticate, authorize("ADMIN"), updateWithdrawalSettings);
 router.patch("/admin/wallets/:userId/withdrawal-access", authenticate, authorizePermission(PERMISSIONS.MANAGE_WALLETS), updateWithdrawalAccess);
 router.get("/admin/wallets/point-rates", authenticate, authorizePermission(PERMISSIONS.MANAGE_POINT_RATES), getPointRates);
 router.put("/admin/wallets/point-rates", authenticate, authorizePermission(PERMISSIONS.MANAGE_POINT_RATES), updatePointRates);
+router.post("/admin/wallets/bonuses", authenticate, authorize("ADMIN"), awardContentBonus);
 
 module.exports = router;

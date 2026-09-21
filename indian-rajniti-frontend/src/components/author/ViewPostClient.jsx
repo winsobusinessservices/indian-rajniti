@@ -453,7 +453,7 @@ export default function ViewPostClient({ type, id }) {
         onClose={() => setDeleteOpen(false)}
         onConfirm={handleDelete}
         title="Delete this post?"
-        description="This cannot be undone."
+        description="This post will move to Deleted Items and can be restored by an Admin."
         confirmLabel="Delete"
         placeholder="Why is this being deleted?"
         required="true"

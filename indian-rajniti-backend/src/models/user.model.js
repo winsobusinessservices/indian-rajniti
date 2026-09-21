@@ -39,14 +39,14 @@ const User = {
 
   async findById(id) {
     const [rows] = await pool.query(
-      `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = ?`,
+      `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = ? AND deleted_at IS NULL`,
       [id]
     );
     return parseUser(rows[0]);
   },
 
   async findByIdWithPassword(id) {
-    const [rows] = await pool.query("SELECT * FROM users WHERE id = ?", [id]);
+    const [rows] = await pool.query("SELECT * FROM users WHERE id = ? AND deleted_at IS NULL", [id]);
     return parseUser(rows[0]);
   },
 
@@ -59,7 +59,7 @@ const User = {
 
   async findAll() {
     const [rows] = await pool.query(
-      `SELECT ${PUBLIC_COLUMNS} FROM users ORDER BY created_at DESC`
+      `SELECT ${PUBLIC_COLUMNS} FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC`
     );
     return rows.map(parseUser);
   },
@@ -68,7 +68,7 @@ const User = {
     const [rows] = await pool.query(
       `SELECT assignment.author_id, assignment.editor_id, editor.name AS editor_name
        FROM editor_author_assignments assignment
-       INNER JOIN users editor ON editor.id = assignment.editor_id`
+       INNER JOIN users editor ON editor.id = assignment.editor_id AND editor.deleted_at IS NULL`
     );
     return rows;
   },

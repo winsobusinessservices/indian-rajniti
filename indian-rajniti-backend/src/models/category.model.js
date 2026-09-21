@@ -15,31 +15,31 @@ const Category = {
   async findAll({ includeHidden = false } = {}) {
     const [rows] = await pool.query(
       `SELECT id, name, slug, is_visible, content, created_by, created_at FROM ${TABLE}
-       ${includeHidden ? "" : "WHERE is_visible = 1"} ORDER BY name ASC`
+       WHERE deleted_at IS NULL ${includeHidden ? "" : "AND is_visible = 1"} ORDER BY name ASC`
     );
     return rows;
   },
 
   async findHiddenNames() {
-    const [rows] = await pool.query(`SELECT name FROM ${TABLE} WHERE is_visible = 0`);
+    const [rows] = await pool.query(`SELECT name FROM ${TABLE} WHERE is_visible = 0 AND deleted_at IS NULL`);
     return rows.map((row) => row.name);
   },
 
   async findById(id) {
-    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE id = ?`, [id]);
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
     return rows[0];
   },
 
   async findByName(name) {
-    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE LOWER(name) = LOWER(?)`, [name]);
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL`, [name]);
     return rows[0];
   },
 
   async findReservedRoutes() {
     const [[parties], [politicians], [states]] = await Promise.all([
-      pool.query("SELECT slug, name, abbreviation FROM parties"),
-      pool.query("SELECT slug, name FROM politicians"),
-      pool.query("SELECT slug, name FROM states"),
+      pool.query("SELECT slug, name, abbreviation FROM parties WHERE deleted_at IS NULL"),
+      pool.query("SELECT slug, name FROM politicians WHERE deleted_at IS NULL"),
+      pool.query("SELECT slug, name FROM states WHERE deleted_at IS NULL"),
     ]);
     const routes = new Map(RESERVED_ROOT_SLUGS.map((slug) => [slug, {
       type: "existing website page", name: `/${slug}`, section: null,

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { slugify } from "@/lib/slugify";
 import { getParties, getChiefMinisters, getKeyFigures, getFormerPMs } from "@/features/politicians/politician.api";
-import { getPopularTags } from "@/features/news/news.api";
+import { getFollowUs, getPopularTags } from "@/features/news/news.api";
 
 const SECTIONS = [
   {
@@ -52,12 +52,13 @@ function KeywordColumn({ title, viewAllHref, items }) {
 }
 
 export default async function Footer() {
-  const [parties, chiefMinisters, keyFigures, formerPMs, popularTags] = await Promise.all([
+  const [parties, chiefMinisters, keyFigures, formerPMs, popularTags, followUs] = await Promise.all([
     getParties(),
     getChiefMinisters(),
     getKeyFigures(),
     getFormerPMs(),
     getPopularTags(),
+    getFollowUs(),
   ]);
 
   // Capped to keep the columns roughly even — each group's "View All" link
@@ -91,10 +92,26 @@ export default async function Footer() {
             <p className="font-body-md text-on-surface-variant mb-4 text-xs">
               Authoritative political analysis and policy discourse from the heart of the world&apos;s largest democracy.
             </p>
-            <div className="flex gap-4 text-on-surface-variant">
-              <i className="fa-solid fa-globe cursor-pointer hover:text-primary hover:scale-110 transition-transform text-lg" />
-              <i className="fa-solid fa-rss cursor-pointer hover:text-primary hover:scale-110 transition-transform text-lg" />
-            </div>
+            {Array.isArray(followUs) && followUs.length > 0 && (
+              <div>
+                <h3 className="mb-2 font-label-md text-[10px] uppercase tracking-widest text-primary">Follow Us</h3>
+                <div className="flex gap-2 flex-wrap">
+                  {followUs.map((social) => (
+                    <a
+                      key={social.id || `${social.label}-${social.url}`}
+                      href={social.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Visit our ${social.label || "website"}`}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-md border border-outline-variant/30 bg-surface px-2.5 py-1.5 font-label-md text-xs text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
+                    >
+                      <i className={`${social.icon || "fa-solid fa-globe"} text-base`} aria-hidden="true" />
+                      <span>{social.label || "Website"}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {SECTIONS.map((section) => (

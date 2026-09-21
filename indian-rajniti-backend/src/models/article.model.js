@@ -113,7 +113,7 @@ const Article = {
 
   async findCategories() {
     const [rows] = await pool.query(
-      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
     );
     return rows.map((row) => row.category);
   },
@@ -189,7 +189,7 @@ const Article = {
       `SELECT a.*, u.role AS author_role
        FROM ${TABLE} a
        LEFT JOIN users u ON u.id = a.author_id
-       WHERE a.id = ?`,
+       WHERE a.id = ? AND a.deleted_at IS NULL`,
       [id]
     );
 
@@ -201,7 +201,7 @@ const Article = {
    */
   async findBySlug(slug) {
     const [rows] = await pool.query(
-      `SELECT * FROM ${TABLE} WHERE slug = ?`,
+      `SELECT * FROM ${TABLE} WHERE slug = ? AND deleted_at IS NULL`,
       [slug]
     );
 
@@ -219,7 +219,7 @@ const Article = {
   // substring match since authors free-type both fields in PostForm.jsx —
   // there's no fixed taxonomy to match exactly against.
   async findPublished({ category, state, sinceDays, orderBy = "recent", limit = 20 } = {}) {
-    const conditions = ["a.status = 'APPROVED'", "COALESCE(a.published_at, a.created_at) <= NOW()"];
+    const conditions = ["a.deleted_at IS NULL", "a.status = 'APPROVED'", "COALESCE(a.published_at, a.created_at) <= NOW()"];
     const params = [];
 
     if (category) {
@@ -262,7 +262,7 @@ const Article = {
     const params = topics.flatMap((topic) => [topic, topic, topic, topic, topic, `%${topic}%`]);
     const [rows] = await pool.query(
       `SELECT a.*, u.name AS author_name FROM ${TABLE} a JOIN users u ON u.id = a.author_id
-       WHERE a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW() AND (${topicCondition})
+       WHERE a.deleted_at IS NULL AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW() AND (${topicCondition})
        ORDER BY a.published_at DESC, a.views DESC LIMIT ?`,
       [...params, limit]
     );
@@ -274,7 +274,7 @@ const Article = {
       `SELECT a.*, u.name AS author_name
        FROM ${TABLE} a
        JOIN users u ON u.id = a.author_id
-       WHERE a.slug = ? AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()`,
+       WHERE a.slug = ? AND a.deleted_at IS NULL AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()`,
       [slug]
     );
     return parseRow(rows[0]);
@@ -292,7 +292,7 @@ const Article = {
    * work use findAll() (the review queue / content history) instead.
    */
   async findForUser(user, { status } = {}) {
-    const conditions = ["a.author_id = ?"];
+    const conditions = ["a.author_id = ?", "a.deleted_at IS NULL"];
     const params = [user.userId];
 
     if (status) {
@@ -324,7 +324,7 @@ const Article = {
    * author — that's findForUser()'s job.
    */
   async findAll({ status } = {}) {
-    const conditions = [];
+    const conditions = ["a.deleted_at IS NULL"];
     const params = [];
 
     if (status) {
@@ -665,6 +665,11 @@ const Article = {
       `DELETE FROM ${TABLE} WHERE id = ?`,
       [id]
     );
+  },
+
+  async setCommentsEnabled(id, enabled) {
+    await pool.query(`UPDATE ${TABLE} SET comments_enabled = ? WHERE id = ?`, [enabled ? 1 : 0, id]);
+    return Article.findById(id);
   },
 };
 

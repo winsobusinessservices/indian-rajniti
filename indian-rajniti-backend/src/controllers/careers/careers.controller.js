@@ -7,6 +7,7 @@ const CareerApplication = require("../../models/careerApplication.model");
 const { careerDocumentUrl } = require("../../middleware/upload.middleware");
 const { sendApplicationShortlistedEmail } = require("../../services/nodemailer.service");
 const User = require("../../models/user.model");
+const DeletionAudit = require("../../models/deletionAudit.model");
 
 const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"];
 
@@ -134,8 +135,8 @@ const deleteJob = async (req, res) => {
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
-    await CareerJob.remove(req.params.id);
-    return res.status(200).json({ success: true, message: "Job posting deleted" });
+    await DeletionAudit.softDelete({ entityType: "CAREER_JOB", entityId: req.params.id, deletedBy: req.user.userId, reason: req.body?.reason });
+    return res.status(200).json({ success: true, message: "Job posting moved to deleted items" });
   } catch (error) {
     console.error("Delete career job error:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });

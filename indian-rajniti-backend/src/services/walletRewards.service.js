@@ -53,15 +53,15 @@ async function syncApprovedContentRewards(userId) {
             u.role AS contributor_role,
             COALESCE(a.published_at, a.created_at) AS published_at
      FROM articles a JOIN users u ON u.id = a.author_id
-     WHERE a.author_id = ? AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()
+     WHERE a.author_id = ? AND a.deleted_at IS NULL AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()
      UNION ALL
      SELECT b.id, b.author_id, b.title, 'BLOG', u.role, COALESCE(b.published_at, b.created_at)
      FROM blogs b JOIN users u ON u.id = b.author_id
-     WHERE b.author_id = ? AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()
+     WHERE b.author_id = ? AND b.deleted_at IS NULL AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()
      UNION ALL
      SELECT v.id, v.author_id, v.title, 'VIDEO', u.role, COALESCE(v.published_at, v.created_at)
      FROM videos v JOIN users u ON u.id = v.author_id
-     WHERE v.author_id = ? AND v.status = 'APPROVED'`,
+     WHERE v.author_id = ? AND v.deleted_at IS NULL AND v.status = 'APPROVED'`,
     [userId, userId, userId]
   );
 
@@ -88,17 +88,17 @@ async function syncEditorReviewRewards(editorId) {
     `SELECT a.id, a.title, 'ARTICLE' AS content_type,
             COALESCE(a.published_at, a.reviewed_at) AS published_at
      FROM articles a
-     WHERE a.reviewer_id = ? AND a.status = 'APPROVED'
+     WHERE a.reviewer_id = ? AND a.deleted_at IS NULL AND a.status = 'APPROVED'
        AND COALESCE(a.published_at, a.created_at) <= NOW()
      UNION ALL
      SELECT b.id, b.title, 'BLOG', COALESCE(b.published_at, b.reviewed_at)
      FROM blogs b
-     WHERE b.reviewer_id = ? AND b.status = 'APPROVED'
+     WHERE b.reviewer_id = ? AND b.deleted_at IS NULL AND b.status = 'APPROVED'
        AND COALESCE(b.published_at, b.created_at) <= NOW()
      UNION ALL
      SELECT v.id, v.title, 'VIDEO', COALESCE(v.published_at, v.reviewed_at)
      FROM videos v
-     WHERE v.reviewer_id = ? AND v.status = 'APPROVED'`,
+     WHERE v.reviewer_id = ? AND v.deleted_at IS NULL AND v.status = 'APPROVED'`,
     [editorId, editorId, editorId]
   );
 

@@ -74,7 +74,7 @@ const WIDGETS = {
   digital_pulse: [
     { id: 1, tag: "Viral", tagClass: "bg-error text-on-error", text: "Unverified clip of cabinet meeting goes viral on social platforms." },
     { id: 2, tag: "Debate", tagClass: "bg-primary text-on-primary", text: "Netizens divided over new urban development tax proposal." },
-    { id: 3, tag: "Fact Check", tagClass: "bg-surface-tint text-on-primary", text: "No, the Election Commission has not changed the voting age." },
+    { id: 3, tag: "Fact Check", tagClass: "bg-green-500 text-to-primary", text: "No, the Election Commission has not changed the voting age." },
   ],
 
   the_briefing: [

@@ -628,6 +628,30 @@ export default async function Home() {
           <aside className={sectionClass("home_sidebar", "self-stretch lg:w-1/4 flex flex-col bg-surface-container rounded-xl p-4 border border-outline-variant/30 gap-6")}>
             <TrendingNews items={trending} viewAllHref="/trending" />
 
+            {Array.isArray(followUs) && followUs.length > 0 && (
+              <div className="pt-4 border-t border-outline-variant/30">
+                <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
+                  <h3 className="font-headline-md text-primary tracking-tight text-lg">Follow Us</h3>
+                  <i className="fa-solid fa-share-nodes text-secondary text-lg" aria-hidden="true" />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {followUs.map((social) => (
+                    <a
+                      key={social.id || `${social.label}-${social.url}`}
+                      href={social.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-outline-variant/30 bg-surface px-3 py-2 font-label-md text-xs font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary"
+                      aria-label={`Visit our ${social.label || "website"}`}
+                    >
+                      <i className={`${social.icon || "fa-solid fa-globe"} text-base`} aria-hidden="true" />
+                      <span>{social.label || "Website"}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <PollOfTheDay initialPoll={pollOfTheDay} />
 
             <div className="pt-4 border-t border-outline-variant/30">

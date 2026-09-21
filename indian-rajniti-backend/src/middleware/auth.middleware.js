@@ -43,6 +43,27 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// Public routes can use the signed-in identity when available without
+// requiring visitors to authenticate. Invalid/expired optional credentials
+// are treated as anonymous and never grant access.
+const optionalAuthenticate = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.split("Bearer ")[1] : null;
+    const token = req.cookies?.[AUTH_COOKIE_NAME] || bearerToken;
+    if (!token || !process.env.JWT_SECRET) return next();
+
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decodedToken.userId);
+    if (user?.status === "ACTIVE") {
+      req.user = { userId: user.id, id: user.id, role: user.role, permissions: user.permissions };
+    }
+    return next();
+  } catch {
+    return next();
+  }
+};
+
 const authorizePermission = (...requiredPermissions) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ success: false, message: "Authentication required" });
   if (req.user.role === "ADMIN" || requiredPermissions.some((permission) => req.user.permissions?.includes(permission))) return next();
@@ -76,4 +97,4 @@ const authorize = (...allowedRoles) => {
   };
 };
 
-module.exports = { authenticate, authorize, authorizePermission, authorizeRoleOrPermission };
+module.exports = { authenticate, optionalAuthenticate, authorize, authorizePermission, authorizeRoleOrPermission };

@@ -10,6 +10,8 @@ import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import { authApi, policiesApi } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
+const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
 export default function RegisterForm() {
   const router = useRouter();
   const { refreshUser } = useAuth();
@@ -59,13 +61,24 @@ export default function RegisterForm() {
       setError("Passwords do not match.");
       return;
     }
+    if (step === "details" && !STRONG_PASSWORD_REGEX.test(form.password)) {
+      setError("Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character.");
+      return;
+    }
 
     setLoading(true);
 
 
     try {
       if (step === "details") {
-        const data = await authApi.requestRegistrationOtp(form.email.trim());
+        const data = await authApi.requestRegistrationOtp({
+          name: form.name.trim(),
+          email: form.email.trim(),
+          password: form.password,
+          confirmPassword: form.confirmPassword,
+          agreeToTerms: agreedToTerms,
+          acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
+        });
         setChallengeToken(data.challengeToken);
         setOtp("");
         setStep("otp");
@@ -100,7 +113,14 @@ export default function RegisterForm() {
     setSuccess("");
     setLoading(true);
     try {
-      const data = await authApi.requestRegistrationOtp(form.email.trim());
+      const data = await authApi.requestRegistrationOtp({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        confirmPassword: form.confirmPassword,
+        agreeToTerms: agreedToTerms,
+        acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
+      });
       setChallengeToken(data.challengeToken);
       setOtp("");
       setSuccess("A new verification code was sent.");
@@ -113,6 +133,7 @@ export default function RegisterForm() {
 
   const changeEmail = () => {
     setStep("details");
+    setForm((current) => ({ ...current, email: "" }));
     setOtp("");
     setChallengeToken("");
     setError("");
@@ -252,14 +273,17 @@ export default function RegisterForm() {
               className="mt-5 w-full rounded border border-outline-variant/40 bg-surface px-4 py-3 text-center font-headline-lg text-2xl tracking-[0.45em] text-on-surface outline-none focus:border-primary"
               placeholder="000000"
             />
-            <div className="mt-4 flex flex-wrap justify-center gap-4 text-xs font-label-md">
+            <div className="mt-4 text-xs font-label-md">
               <button type="button" onClick={resendOtp} disabled={loading} className="text-primary hover:underline disabled:opacity-50">
                 Resend code
               </button>
-              <button type="button" onClick={changeEmail} disabled={loading} className="text-on-surface-variant hover:text-primary hover:underline disabled:opacity-50">
-                Change email
-              </button>
             </div>
+            <p className="mt-5 border-t border-outline-variant/30 pt-4 font-body-md text-sm text-on-surface-variant">
+              Want to change your email?{" "}
+              <button type="button" onClick={changeEmail} disabled={loading} className="font-label-md font-semibold text-primary hover:underline disabled:opacity-50">
+                Return to sign up
+              </button>
+            </p>
           </div>
         )}
 

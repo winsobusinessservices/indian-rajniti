@@ -1,22 +1,10 @@
 const pool = require("../config/db");
+const { ContentLimit } = require("../models/contentLimit.model");
 
 const TABLE_BY_TYPE = {
   ARTICLE: "articles",
   BLOG: "blogs",
   VIDEO: "videos",
-};
-
-const DAILY_LIMITS = {
-  AUTHOR: {
-    ARTICLE: 5,
-    BLOG: 5,
-    VIDEO: 2,
-  },
-  EDITOR: {
-    ARTICLE: 10,
-    BLOG: 10,
-    VIDEO: 5,
-  },
 };
 
 const TYPE_LABEL = {
@@ -27,13 +15,13 @@ const TYPE_LABEL = {
 
 async function enforceDailyContentLimit(req, res, next) {
   const type = req.contentType;
-  const limit = DAILY_LIMITS[req.user.role]?.[type];
 
   // Only authors and editors have daily posting limits. Admins and any role
   // added later retain their existing permission-driven behaviour.
-  if (!limit) return next();
+  if (!['AUTHOR', 'EDITOR'].includes(req.user.role)) return next();
 
   try {
+    const limit = await ContentLimit.get(req.user.role, type);
     const table = TABLE_BY_TYPE[type];
     const [rows] = await pool.query(
       `SELECT COUNT(*) AS total
@@ -65,4 +53,4 @@ async function enforceDailyContentLimit(req, res, next) {
   }
 }
 
-module.exports = { DAILY_LIMITS, enforceDailyContentLimit };
+module.exports = { enforceDailyContentLimit };

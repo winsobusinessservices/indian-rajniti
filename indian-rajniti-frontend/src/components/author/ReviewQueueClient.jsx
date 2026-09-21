@@ -129,6 +129,9 @@ export default function ReviewQueueClient() {
 
   const selectedPosts = posts.filter((post) => selected.has(postKey(post)));
   const hasRestrictedSelection = user?.role !== "ADMIN" && selectedPosts.some((post) => post.author_role !== "AUTHOR");
+  const hasNonOwnedSelection = user?.role !== "ADMIN" && selectedPosts.some(
+    (post) => Number(post.author_id) !== Number(user?.id)
+  );
 
   const toggleSelected = (post) => {
     setSelected((current) => {
@@ -205,8 +208,9 @@ export default function ReviewQueueClient() {
             </button>
             <button
               type="button"
-              disabled={!selectedPosts.length}
+              disabled={!selectedPosts.length || hasNonOwnedSelection}
               onClick={() => setBulkAction("DELETE")}
+              title={hasNonOwnedSelection ? "Authors and editors can only delete their own content" : undefined}
               className="min-h-9 rounded border border-error/40 px-3 font-label-md text-xs text-error hover:bg-error hover:text-on-error disabled:cursor-not-allowed disabled:opacity-45"
             >
               <i className="fa-solid fa-trash mr-1.5" />Delete
@@ -340,12 +344,14 @@ export default function ReviewQueueClient() {
                     Requires admin review
                   </p>
                 )}
-                <button
-                  onClick={() => setDeleteTarget(post)}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-label-md border border-error/40 text-error rounded hover:bg-error hover:text-on-error transition-colors"
-                >
-                  <i className="fa-solid fa-trash" /> Delete
-                </button>
+                {(user?.role === "ADMIN" || Number(post.author_id) === Number(user?.id)) && (
+                  <button
+                    onClick={() => setDeleteTarget(post)}
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-label-md border border-error/40 text-error rounded hover:bg-error hover:text-on-error transition-colors"
+                  >
+                    <i className="fa-solid fa-trash" /> Delete
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -398,7 +404,7 @@ export default function ReviewQueueClient() {
         onClose={() => setBulkAction(null)}
         onConfirm={handleBulkAction}
         title={`${bulkAction === "APPROVE" ? "Approve" : bulkAction === "REJECT" ? "Reject" : "Delete"} ${selectedPosts.length} selected item${selectedPosts.length === 1 ? "" : "s"}?`}
-        description={bulkAction === "DELETE" ? "Selected content will be permanently deleted. This cannot be undone." : "This action will be applied to every selected item."}
+        description={bulkAction === "DELETE" ? "Selected content will be moved to Deleted Items and can be restored by an Admin." : "This action will be applied to every selected item."}
         confirmLabel={bulkAction === "APPROVE" ? "Approve All" : bulkAction === "REJECT" ? "Reject All" : "Delete All"}
         placeholder={bulkAction === "REJECT" ? "Explain what the authors need to change..." : "Why is this content being deleted?"}
         required={bulkAction !== "APPROVE"}
@@ -410,7 +416,7 @@ export default function ReviewQueueClient() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Delete this post?"
-        description="This cannot be undone."
+        description="This post will move to Deleted Items and can be restored by an Admin."
         confirmLabel="Delete"
         placeholder="Why is this being deleted?"
         danger

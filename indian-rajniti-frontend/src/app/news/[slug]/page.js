@@ -15,6 +15,7 @@ import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
 import { mediaUrl } from "@/lib/api";
 import PostBody from "@/components/common/PostBody";
+import CommentSection from "@/components/news/CommentSection";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -163,6 +164,8 @@ export default async function PostDetailPage({ params }) {
                   ))}
                 </div>
               </div>
+
+              <CommentSection postSlug={post.slug || slug} commentsEnabled={post.comments_enabled !== 0 && post.comments_enabled !== false} />
             </article>
 
             <NewsAsideRight />

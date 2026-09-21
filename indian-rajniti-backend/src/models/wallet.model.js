@@ -22,6 +22,79 @@ function parseMetadata(value) {
 }
 
 const Wallet = {
+  async awardBonus({ userId, points, reason, contentType, contentId, contentTitle, contentSlug, relationship, awardedBy }) {
+    if (!Number.isInteger(points) || points <= 0) throw new Error("Bonus points must be a positive integer");
+
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      await connection.query("INSERT IGNORE INTO wallets (user_id) VALUES (?)", [userId]);
+      const [walletRows] = await connection.query(
+        "SELECT available_points FROM wallets WHERE user_id = ? FOR UPDATE",
+        [userId]
+      );
+      const [awardResult] = await connection.query(
+        `INSERT INTO wallet_bonus_awards
+          (user_id, points, reason, content_type, content_id, content_title, content_slug,
+           recipient_relationship, awarded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [userId, points, reason, contentType, contentId, contentTitle, contentSlug || null, relationship, awardedBy]
+      );
+      const awardId = Number(awardResult.insertId);
+      const balanceAfter = Number(walletRows[0].available_points) + points;
+      await connection.query(
+        `UPDATE wallets
+         SET available_points = ?, lifetime_earned_points = lifetime_earned_points + ?
+         WHERE user_id = ?`,
+        [balanceAfter, points, userId]
+      );
+      const description = `Bonus for ${contentTitle}`.slice(0, 255);
+      const [transactionResult] = await connection.query(
+        `INSERT INTO wallet_transactions
+          (user_id, direction, category, points, balance_after, status, description,
+           reference_type, reference_id, metadata)
+         VALUES (?, 'CREDIT', 'CONTENT_BONUS', ?, ?, 'COMPLETED', ?, 'BONUS_AWARD', ?, ?)`,
+        [
+          userId,
+          points,
+          balanceAfter,
+          description,
+          awardId,
+          JSON.stringify({
+            reason,
+            contentType,
+            contentId,
+            contentTitle,
+            contentSlug: contentSlug || null,
+            relationship,
+            awardedBy,
+          }),
+        ]
+      );
+      await connection.query(
+        "UPDATE wallet_bonus_awards SET wallet_transaction_id = ? WHERE id = ?",
+        [transactionResult.insertId, awardId]
+      );
+      await connection.commit();
+      return { awardId, transactionId: Number(transactionResult.insertId), balanceAfter };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  },
+
+  async acknowledgeBonus({ bonusId, userId }) {
+    const [result] = await pool.query(
+      `UPDATE wallet_bonus_awards
+       SET acknowledged_at = COALESCE(acknowledged_at, CURRENT_TIMESTAMP)
+       WHERE id = ? AND user_id = ?`,
+      [bonusId, userId]
+    );
+    return result.affectedRows > 0;
+  },
+
   async credit({ userId, points, category, description, referenceType, referenceId, metadata = null, createdAt = null }) {
     if (!Number.isInteger(points) || points <= 0) {
       throw new Error("Wallet credit points must be a positive integer");
@@ -125,7 +198,7 @@ const Wallet = {
         `SELECT u.role, COALESCE(r.rupees_per_point, 1.0000) AS rupees_per_point
          FROM users u
          LEFT JOIN wallet_point_rates r ON r.role = u.role
-         WHERE u.id = ? AND u.role IN ('AUTHOR', 'EDITOR')`,
+         WHERE u.id = ? AND u.deleted_at IS NULL AND u.role IN ('AUTHOR', 'EDITOR')`,
         [userId]
       );
       if (!rateRows.length) {
@@ -415,7 +488,7 @@ const Wallet = {
 
   async setWithdrawalAccess({ userId, enabled, updatedBy }) {
     const [users] = await pool.query(
-      "SELECT id, role FROM users WHERE id = ? AND role IN ('AUTHOR', 'EDITOR')",
+      "SELECT id, role FROM users WHERE id = ? AND deleted_at IS NULL AND role IN ('AUTHOR', 'EDITOR')",
       [userId]
     );
     if (!users.length) return null;
@@ -584,7 +657,7 @@ const Wallet = {
        LEFT JOIN wallets w ON w.user_id = u.id
        LEFT JOIN wallet_point_rates r ON r.role = u.role
        LEFT JOIN wallet_withdrawal_access a ON a.user_id = u.id
-       WHERE u.role IN ('AUTHOR', 'EDITOR')
+       WHERE u.deleted_at IS NULL AND u.role IN ('AUTHOR', 'EDITOR')
        ORDER BY u.name, u.id`
     );
     return rows.map((row) => ({
@@ -603,7 +676,7 @@ const Wallet = {
   },
 
   async getForUser(userId) {
-    const [[walletRows], [transactionRows], [accessRows], [withdrawalRows], [rateRows]] = await Promise.all([
+    const [[walletRows], [transactionRows], [accessRows], [withdrawalRows], [rateRows], [bonusRows], [bonusSummaryRows]] = await Promise.all([
       pool.query(
         `SELECT available_points, pending_withdrawal_points,
                 lifetime_earned_points, lifetime_withdrawn_points, updated_at
@@ -639,6 +712,19 @@ const Wallet = {
          FROM users u
          LEFT JOIN wallet_point_rates r ON r.role = u.role
          WHERE u.id = ?`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT id, points, reason, content_type, content_id, content_title, content_slug,
+                recipient_relationship, awarded_by, wallet_transaction_id, acknowledged_at, created_at
+         FROM wallet_bonus_awards
+         WHERE user_id = ?
+         ORDER BY created_at DESC, id DESC
+         LIMIT 100`,
+        [userId]
+      ),
+      pool.query(
+        "SELECT COALESCE(SUM(points), 0) AS total_bonus_points FROM wallet_bonus_awards WHERE user_id = ?",
         [userId]
       ),
     ]);
@@ -705,7 +791,24 @@ const Wallet = {
     summary.lifetimeEarnedValueInr = Number((summary.lifetimeEarnedPoints * pointRate.rupeesPerPoint).toFixed(2));
     summary.lifetimeWithdrawnValueInr = Number((summary.lifetimeWithdrawnPoints * pointRate.rupeesPerPoint).toFixed(2));
 
-    return { summary, transactions, withdrawalAccess, withdrawals, pointRate };
+    summary.lifetimeBonusPoints = Number(bonusSummaryRows[0]?.total_bonus_points || 0);
+    summary.lifetimeBonusValueInr = Number((summary.lifetimeBonusPoints * pointRate.rupeesPerPoint).toFixed(2));
+    const bonuses = bonusRows.map((row) => ({
+      id: Number(row.id),
+      points: Number(row.points),
+      reason: row.reason,
+      contentType: row.content_type,
+      contentId: Number(row.content_id),
+      contentTitle: row.content_title,
+      contentSlug: row.content_slug,
+      relationship: row.recipient_relationship,
+      awardedBy: Number(row.awarded_by),
+      walletTransactionId: row.wallet_transaction_id == null ? null : Number(row.wallet_transaction_id),
+      acknowledgedAt: row.acknowledged_at,
+      createdAt: row.created_at,
+    }));
+
+    return { summary, transactions, bonuses, withdrawalAccess, withdrawals, pointRate };
   },
 };
 

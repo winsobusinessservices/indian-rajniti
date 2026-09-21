@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { careersApi, mediaUrl } from "@/lib/api";
 import Link from "next/link";
+import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
 
 const EMPLOYMENT_TYPES = [
   { value: "FULL_TIME", label: "Full-time" },
@@ -47,6 +48,7 @@ const fieldClass =
   "w-full border border-outline-variant/30 bg-surface-container-low rounded px-3 py-2.5 text-on-surface focus:border-primary focus:outline-none font-body-md transition-colors";
 
 export default function CareerAdminClient() {
+  const confirmDelete = useConfirmDialog();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(initialForm);
@@ -72,6 +74,8 @@ export default function CareerAdminClient() {
   };
 
   useEffect(() => {
+    // Initial client-side data load; loadJobs owns the request lifecycle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadJobs();
   }, []);
 
@@ -131,7 +135,11 @@ export default function CareerAdminClient() {
   };
 
   const handleDelete = async (job) => {
-    if (!window.confirm(`Are you sure you want to delete “${job.title}”? This action cannot be undone.`)) return;
+    const confirmed = await confirmDelete({
+      title: "Delete job posting?",
+      description: `“${job.title}” will be moved to Deleted Items and can be restored by an Admin.`,
+    });
+    if (!confirmed) return;
     await careersApi.remove(job.id);
     await loadJobs();
   };

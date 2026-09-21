@@ -35,12 +35,19 @@ const { uploadUserDocuments } = require("../middleware/upload.middleware");
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email]
+ *             required: [name, email, password, confirmPassword, agreeToTerms, acceptedPolicyIds]
  *             properties:
+ *               name: { type: string, example: John Doe }
  *               email: { type: string, format: email }
+ *               password: { type: string, format: password }
+ *               confirmPassword: { type: string, format: password }
+ *               agreeToTerms: { type: boolean }
+ *               acceptedPolicyIds:
+ *                 type: array
+ *                 items: { type: integer }
  *     responses:
  *       200: { description: Verification code sent }
- *       400: { description: Invalid email address }
+ *       400: { description: Missing or invalid registration fields }
  *       409: { description: Account already exists }
  *       429: { description: Code requested too frequently }
  *       500: { description: Unable to send verification code through the configured cPanel mail account }

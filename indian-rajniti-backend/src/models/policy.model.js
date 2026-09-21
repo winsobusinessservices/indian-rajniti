@@ -11,7 +11,9 @@ const SELECT = `
 
 const Policy = {
   async findAll({ publishedOnly = false } = {}) {
-    const where = publishedOnly ? "WHERE p.status = 'PUBLISHED' AND p.published_at <= NOW()" : "";
+    const where = publishedOnly
+      ? "WHERE p.deleted_at IS NULL AND p.status = 'PUBLISHED' AND p.published_at <= NOW()"
+      : "WHERE p.deleted_at IS NULL";
     const [rows] = await pool.query(
       `${SELECT} ${where}
        ORDER BY COALESCE(p.published_at, p.created_at) DESC, p.id DESC`
@@ -22,20 +24,20 @@ const Policy = {
   async findRegistrationPolicies() {
     const [rows] = await pool.query(
       `${SELECT}
-       WHERE p.status = 'PUBLISHED' AND p.show_on_registration = 1 AND p.published_at <= NOW()
+       WHERE p.deleted_at IS NULL AND p.status = 'PUBLISHED' AND p.show_on_registration = 1 AND p.published_at <= NOW()
        ORDER BY p.published_at ASC, p.id ASC`
     );
     return rows;
   },
 
   async findById(id) {
-    const [rows] = await pool.query(`${SELECT} WHERE p.id = ?`, [id]);
+    const [rows] = await pool.query(`${SELECT} WHERE p.id = ? AND p.deleted_at IS NULL`, [id]);
     return rows[0];
   },
 
   async findBySlug(slug, { publishedOnly = false } = {}) {
     const statusClause = publishedOnly ? "AND p.status = 'PUBLISHED' AND p.published_at <= NOW()" : "";
-    const [rows] = await pool.query(`${SELECT} WHERE p.slug = ? ${statusClause}`, [slug]);
+    const [rows] = await pool.query(`${SELECT} WHERE p.slug = ? AND p.deleted_at IS NULL ${statusClause}`, [slug]);
     return rows[0];
   },
 

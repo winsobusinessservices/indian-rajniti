@@ -56,6 +56,52 @@ pool.verifyConnection = async () => {
         await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN scheduled_publish_at DATETIME NULL AFTER published_at`);
       }
     }
+    for (const tableName of ["articles", "blogs", "videos"]) {
+      const [commentSettingColumns] = await connection.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'comments_enabled'`,
+        [tableName]
+      );
+      if (!commentSettingColumns.length) {
+        await connection.query(
+          `ALTER TABLE \`${tableName}\` ADD COLUMN comments_enabled TINYINT(1) NOT NULL DEFAULT 1`
+        );
+      }
+    }
+    await connection.query(
+      `CREATE TABLE IF NOT EXISTS comments (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        author_id BIGINT UNSIGNED NOT NULL,
+        post_type ENUM('ARTICLE', 'BLOG', 'WORDPRESS') NOT NULL,
+        post_id VARCHAR(100) NOT NULL,
+        post_slug VARCHAR(255) NOT NULL,
+        post_title VARCHAR(500) NOT NULL,
+        content VARCHAR(1000) NOT NULL,
+        status ENUM('VISIBLE', 'HIDDEN') NOT NULL DEFAULT 'VISIBLE',
+        hidden_by BIGINT UNSIGNED NULL,
+        hidden_at DATETIME NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_comments_post_status_created (post_slug, status, created_at),
+        INDEX idx_comments_author (author_id, created_at)
+      ) ENGINE=InnoDB`
+    );
+    await connection.query(
+      `CREATE TABLE IF NOT EXISTS content_daily_limits (
+        role ENUM('AUTHOR', 'EDITOR') NOT NULL,
+        content_type ENUM('ARTICLE', 'BLOG', 'VIDEO') NOT NULL,
+        daily_limit INT UNSIGNED NOT NULL,
+        updated_by BIGINT UNSIGNED NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (role, content_type)
+      ) ENGINE=InnoDB`
+    );
+    await connection.query(
+      `INSERT IGNORE INTO content_daily_limits (role, content_type, daily_limit)
+       VALUES
+         ('AUTHOR', 'ARTICLE', 5), ('AUTHOR', 'BLOG', 5), ('AUTHOR', 'VIDEO', 2),
+         ('EDITOR', 'ARTICLE', 10), ('EDITOR', 'BLOG', 10), ('EDITOR', 'VIDEO', 5)`
+    );
     const [roleColumns] = await connection.query(
       `SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'`
@@ -308,6 +354,36 @@ pool.verifyConnection = async () => {
        VALUES ('ARTICLE', 1), ('BLOG', 1), ('VIDEO', 1)`
     );
     await connection.query(
+      `CREATE TABLE IF NOT EXISTS wallet_bonus_awards (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        user_id BIGINT UNSIGNED NOT NULL,
+        points INT UNSIGNED NOT NULL,
+        reason VARCHAR(500) NOT NULL,
+        content_type ENUM('ARTICLE', 'BLOG', 'VIDEO') NOT NULL,
+        content_id BIGINT UNSIGNED NOT NULL,
+        content_title VARCHAR(500) NOT NULL,
+        content_slug VARCHAR(255) NULL,
+        recipient_relationship ENUM('CREATOR', 'REVIEWER') NOT NULL,
+        awarded_by BIGINT UNSIGNED NOT NULL,
+        wallet_transaction_id BIGINT UNSIGNED NULL,
+        acknowledged_at TIMESTAMP NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_bonus_user_created (user_id, created_at),
+        INDEX idx_bonus_content (content_type, content_id),
+        UNIQUE KEY uq_bonus_transaction (wallet_transaction_id)
+      ) ENGINE=InnoDB`
+    );
+    const [bonusAcknowledgementColumns] = await connection.query(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wallet_bonus_awards'
+         AND COLUMN_NAME = 'acknowledged_at'`
+    );
+    if (!bonusAcknowledgementColumns.length) {
+      await connection.query(
+        "ALTER TABLE wallet_bonus_awards ADD COLUMN acknowledged_at TIMESTAMP NULL AFTER wallet_transaction_id"
+      );
+    }
+    await connection.query(
       `CREATE TABLE IF NOT EXISTS wallet_withdrawals (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         user_id BIGINT UNSIGNED NOT NULL,
@@ -382,6 +458,60 @@ pool.verifyConnection = async () => {
       await connection.query(
         "CREATE UNIQUE INDEX uq_wallet_provider_payout_link ON wallet_withdrawals (provider_payout_link_id)"
       );
+    }
+
+    await connection.query(
+      `CREATE TABLE IF NOT EXISTS deletion_audit (
+        id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        entity_type VARCHAR(40) NOT NULL,
+        entity_table VARCHAR(64) NOT NULL,
+        entity_id VARCHAR(100) NOT NULL,
+        entity_label VARCHAR(500) NOT NULL,
+        owner_id BIGINT UNSIGNED NULL,
+        owner_name VARCHAR(200) NULL,
+        deleted_by BIGINT UNSIGNED NOT NULL,
+        deleted_by_name VARCHAR(200) NOT NULL,
+        deleted_by_email VARCHAR(255) NULL,
+        deleted_by_role VARCHAR(30) NOT NULL,
+        reason VARCHAR(500) NULL,
+        snapshot JSON NULL,
+        deleted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        restored_by BIGINT UNSIGNED NULL,
+        restored_at TIMESTAMP NULL,
+        permanently_deleted_by BIGINT UNSIGNED NULL,
+        permanently_deleted_at TIMESTAMP NULL,
+        INDEX idx_deletion_audit_active (restored_at, permanently_deleted_at, deleted_at),
+        INDEX idx_deletion_audit_entity (entity_table, entity_id)
+      ) ENGINE=InnoDB`
+    );
+
+    const softDeleteTables = [
+      "users", "articles", "blogs", "videos", "comments", "categories", "policies",
+      "career_jobs", "role_applications", "politicians", "parties", "states",
+    ];
+    for (const tableName of softDeleteTables) {
+      const [tables] = await connection.query(
+        `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+        [tableName]
+      );
+      if (!tables.length) continue;
+      const [columns] = await connection.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+           AND COLUMN_NAME IN ('deleted_at', 'deleted_by', 'delete_reason')`,
+        [tableName]
+      );
+      const existing = new Set(columns.map((column) => column.COLUMN_NAME));
+      if (!existing.has("deleted_at")) {
+        await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN deleted_at DATETIME NULL`);
+      }
+      if (!existing.has("deleted_by")) {
+        await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN deleted_by BIGINT UNSIGNED NULL`);
+      }
+      if (!existing.has("delete_reason")) {
+        await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN delete_reason VARCHAR(500) NULL`);
+      }
     }
   } finally {
     connection.release();

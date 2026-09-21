@@ -11,7 +11,7 @@ const COLUMNS =
 
 const Politician = {
   async findAll({ category } = {}) {
-    const conditions = [];
+    const conditions = ["deleted_at IS NULL"];
     const params = [];
     if (category) {
       conditions.push("category = ?");
@@ -26,12 +26,12 @@ const Politician = {
   },
 
   async findBySlug(slug) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ?`, [slug]);
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ? AND deleted_at IS NULL`, [slug]);
     return rows[0];
   },
 
   async findById(id) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ?`, [id]);
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
     return rows[0];
   },
 

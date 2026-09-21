@@ -105,7 +105,7 @@ async function requestForm(path, { method = "POST", formData } = {}) {
 }
 
 export const authApi = {
-  requestRegistrationOtp: (email) => request("/auth/register/request-otp", { method: "POST", body: { email } }),
+  requestRegistrationOtp: (payload) => request("/auth/register/request-otp", { method: "POST", body: payload }),
   verifyRegistrationOtp: (payload) => request("/auth/register/verify-otp", { method: "POST", body: payload }),
   register: (payload) => request("/auth/register", { method: "POST", body: payload }),
   login: (payload) => request("/auth/login", { method: "POST", body: payload }),
@@ -127,7 +127,7 @@ export const authApi = {
     body: { editorId },
   }),
   // Admin only — removes a team member's account entirely.
-  deleteUser: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
+  deleteUser: (id, reason) => request(`/auth/users/${id}`, { method: "DELETE", body: { reason } }),
   // Admin assigning an Author/Editor/Investor role (with KYC documents) to an
   // already-registered account — no password is set here, the person must
   // already exist via register().
@@ -138,8 +138,28 @@ export const contactApi = {
   submit: (payload) => request("/contact", { method: "POST", body: payload }),
 };
 
+export const commentsApi = {
+  listForPost: (postSlug) => request(`/comments/post/${encodeURIComponent(postSlug)}`, { notifyError: false }),
+  create: (postSlug, content) => request("/comments", { method: "POST", body: { postSlug, content } }),
+  listForAdmin: () => request("/admin/comments"),
+  setHidden: (id, hidden) => request(`/admin/comments/${id}/visibility`, { method: "PATCH", body: { hidden } }),
+  remove: (id) => request(`/comments/${id}`, { method: "DELETE" }),
+};
+
+export const contentLimitsApi = {
+  get: () => request("/admin/content-limits"),
+  update: (limits) => request("/admin/content-limits", { method: "PUT", body: { limits } }),
+};
+
+export const deletionsApi = {
+  list: (state = "ACTIVE") => request(`/admin/deletions?state=${encodeURIComponent(state)}`),
+  restore: (id) => request(`/admin/deletions/${id}/restore`, { method: "PATCH" }),
+  permanentlyDelete: (id) => request(`/admin/deletions/${id}/permanent`, { method: "DELETE" }),
+};
+
 export const walletApi = {
   getWallet: () => request("/wallet"),
+  acknowledgeBonus: (bonusId) => request(`/wallet/bonuses/${bonusId}/acknowledge`, { method: "PATCH" }),
   requestWithdrawal: (points) => request("/wallet/withdrawals", { method: "POST", body: { points } }),
   generatePayoutLink: (withdrawalId) => request(`/wallet/withdrawals/${withdrawalId}/payout-link`, { method: "POST" }),
   listForAdmin: () => request("/admin/wallets"),
@@ -157,6 +177,7 @@ export const walletApi = {
     method: "PUT",
     body: settings,
   }),
+  awardBonus: (payload) => request("/admin/wallets/bonuses", { method: "POST", body: payload }),
 };
 
 function toQueryString(params = {}) {
@@ -204,6 +225,10 @@ export const authorApi = {
   },
 
   getPost: (type, id) => request(`/${RESOURCE_PATH[type]}/${id}`),
+  setCommentsEnabled: (type, id, enabled) => request(`/${RESOURCE_PATH[type]}/${id}/comments`, {
+    method: "PATCH",
+    body: { enabled },
+  }),
   updatePost: (type, id, formData) => requestForm(`/${RESOURCE_PATH[type]}/${id}`, { method: "PUT", formData }),
   deletePost: (type, id, reason) => request(`/${RESOURCE_PATH[type]}/${id}`, { method: "DELETE", body: reason ? { reason } : undefined }),
   submitPost: (type, id) => request(`/${RESOURCE_PATH[type]}/${id}/submit`, { method: "POST" }),

@@ -4,6 +4,7 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import { DEFAULT_SOCIAL_IMAGE, serializeJsonLd } from "@/lib/seo";
 import ToastProvider from "@/components/common/ToastProvider";
 import AuthorWorkspaceShell from "@/components/author/AuthorWorkspaceShell";
+import ConfirmDialogProvider from "@/components/common/ConfirmDialogProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -107,9 +108,11 @@ export default async function RootLayout({ children }) {
       <body className="min-h-full flex flex-col bg-background text-on-background font-body-md">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteSchema) }} />
         <ToastProvider />
-        <AuthProvider>
-          <AuthorWorkspaceShell>{children}</AuthorWorkspaceShell>
-        </AuthProvider>
+        <ConfirmDialogProvider>
+          <AuthProvider>
+            <AuthorWorkspaceShell>{children}</AuthorWorkspaceShell>
+          </AuthProvider>
+        </ConfirmDialogProvider>
       </body>
     </html>
   );

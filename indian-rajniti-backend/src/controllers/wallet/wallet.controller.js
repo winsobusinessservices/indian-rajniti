@@ -1,5 +1,8 @@
 const Wallet = require("../../models/wallet.model");
 const User = require("../../models/user.model");
+const Article = require("../../models/article.model");
+const Blog = require("../../models/blog.model");
+const Video = require("../../models/video.model");
 const { syncApprovedContentRewards, syncEditorReviewRewards } = require("../../services/walletRewards.service");
 const RazorpayPayout = require("../../services/razorpayPayout.service");
 const { getWithdrawalWindow } = require("../../utils/withdrawalWindow");
@@ -418,6 +421,85 @@ const updatePointRates = async (req, res) => {
   }
 };
 
+const awardContentBonus = async (req, res) => {
+  try {
+    const userId = Number(req.body?.userId);
+    const contentId = Number(req.body?.contentId);
+    const contentType = String(req.body?.contentType || "").toUpperCase();
+    const points = Number(req.body?.points);
+    const reason = String(req.body?.reason || "").trim();
+    const Model = { ARTICLE: Article, BLOG: Blog, VIDEO: Video }[contentType];
+
+    if (!Number.isInteger(userId) || userId <= 0 || !Model || !Number.isInteger(contentId) || contentId <= 0) {
+      return res.status(400).json({ success: false, message: "Select a valid recipient and content item" });
+    }
+    if (!Number.isInteger(points) || points < 1 || points > 1000000) {
+      return res.status(400).json({ success: false, message: "Bonus points must be a whole number between 1 and 1,000,000" });
+    }
+    if (reason.length < 5 || reason.length > 500) {
+      return res.status(400).json({ success: false, message: "Bonus reason must contain between 5 and 500 characters" });
+    }
+
+    const [recipient, content] = await Promise.all([User.findById(userId), Model.findById(contentId)]);
+    if (!recipient || !["AUTHOR", "EDITOR"].includes(recipient.role)) {
+      return res.status(404).json({ success: false, message: "Author or Editor not found" });
+    }
+    if (!content || content.status !== "APPROVED") {
+      return res.status(404).json({ success: false, message: "Approved content not found" });
+    }
+
+    const isCreator = Number(content.author_id) === userId;
+    const isReviewer = recipient.role === "EDITOR" && Number(content.reviewer_id) === userId;
+    if (!isCreator && !isReviewer) {
+      return res.status(400).json({ success: false, message: "The selected content is not associated with this contributor" });
+    }
+
+    const bonus = await Wallet.awardBonus({
+      userId,
+      points,
+      reason,
+      contentType,
+      contentId,
+      contentTitle: content.title,
+      contentSlug: content.slug || null,
+      relationship: isCreator ? "CREATOR" : "REVIEWER",
+      awardedBy: req.user.userId,
+    });
+    return res.status(201).json({
+      success: true,
+      message: `${points.toLocaleString("en-IN")} bonus points awarded to ${recipient.name}`,
+      bonus: {
+        ...bonus,
+        userId,
+        userName: recipient.name,
+        points,
+        reason,
+        contentType,
+        contentId,
+        contentTitle: content.title,
+      },
+    });
+  } catch (error) {
+    console.error("Award content bonus error:", error);
+    return res.status(500).json({ success: false, message: "Bonus points could not be awarded" });
+  }
+};
+
+const acknowledgeBonus = async (req, res) => {
+  try {
+    const bonusId = Number(req.params.bonusId);
+    if (!Number.isInteger(bonusId) || bonusId <= 0) {
+      return res.status(400).json({ success: false, message: "Invalid bonus award" });
+    }
+    const acknowledged = await Wallet.acknowledgeBonus({ bonusId, userId: req.user.userId });
+    if (!acknowledged) return res.status(404).json({ success: false, message: "Bonus award not found" });
+    return res.status(200).json({ success: true, message: "Bonus notification acknowledged", acknowledgedAt: new Date() });
+  } catch (error) {
+    console.error("Acknowledge bonus error:", error);
+    return res.status(500).json({ success: false, message: "Bonus notification could not be acknowledged" });
+  }
+};
+
 module.exports = {
   getWallet,
   requestWithdrawal,
@@ -429,4 +511,6 @@ module.exports = {
   updateWithdrawalSettings,
   getPointRates,
   updatePointRates,
+  awardContentBonus,
+  acknowledgeBonus,
 };

@@ -1,5 +1,6 @@
 const pool = require("../../config/db");
 const RoleApplication = require("../../models/roleApplication.model");
+const DeletionAudit = require("../../models/deletionAudit.model");
 
 const ALLOWED_ROLES = ["AUTHOR", "EDITOR"];
 const REVIEWER_ROLES = ["ADMIN"];
@@ -631,13 +632,16 @@ const deleteRoleApplication = async (req, res) => {
       });
     }
 
-    await RoleApplication.remove(
-      application.id
-    );
+    await DeletionAudit.softDelete({
+      entityType: "ROLE_APPLICATION",
+      entityId: application.id,
+      deletedBy: req.user.userId,
+      reason: req.body?.reason,
+    });
 
     return res.status(200).json({
       success: true,
-      message: "Application deleted",
+      message: "Application moved to deleted items",
     });
 
   } catch (error) {

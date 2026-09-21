@@ -1,4 +1,5 @@
 const Category = require("../../models/category.model");
+const DeletionAudit = require("../../models/deletionAudit.model");
 const UiSection = require("../../models/uiSection.model");
 const { slugify } = require("../../utils/slugify");
 
@@ -133,9 +134,9 @@ const createCategory = async (req, res) => {
 
 const deleteCategory = async (req, res) => {
   try {
-    const removed = await Category.remove(req.params.id);
+    const removed = await DeletionAudit.softDelete({ entityType: "CATEGORY", entityId: req.params.id, deletedBy: req.user.userId, reason: req.body?.reason });
     if (!removed) return res.status(404).json({ success: false, message: "Category not found" });
-    return res.status(200).json({ success: true, message: "Category deleted" });
+    return res.status(200).json({ success: true, message: "Category moved to deleted items" });
   } catch (error) {
     console.error("Delete category error:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });

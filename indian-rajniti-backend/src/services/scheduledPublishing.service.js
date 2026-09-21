@@ -21,6 +21,7 @@ async function publishDueScheduledContent() {
          JOIN users contributor ON contributor.id = content.author_id
          LEFT JOIN users reviewer ON reviewer.id = content.reviewer_id
          WHERE content.status = 'PENDING'
+           AND content.deleted_at IS NULL
            AND content.scheduled_publish_at IS NOT NULL
            AND content.scheduled_publish_at <= NOW()`
       );
@@ -29,7 +30,7 @@ async function publishDueScheduledContent() {
         const [result] = await pool.query(
           `UPDATE \`${source.table}\`
            SET status = 'APPROVED', reviewed_at = NOW(), published_at = COALESCE(published_at, scheduled_publish_at)
-           WHERE id = ? AND status = 'PENDING' AND scheduled_publish_at <= NOW()`,
+           WHERE id = ? AND deleted_at IS NULL AND status = 'PENDING' AND scheduled_publish_at <= NOW()`,
           [item.id]
         );
         if (!result.affectedRows) continue;

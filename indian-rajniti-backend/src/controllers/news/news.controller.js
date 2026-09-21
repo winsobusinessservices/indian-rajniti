@@ -335,6 +335,8 @@ const getPostBySlug = async (req, res) => {
 
     const contentMedia = kind === "WORDPRESS" ? null : splitContentMedia(row.content);
     const post = {
+      id: row.id,
+      type: kind,
       slug: row.slug,
       category: row.category || row.state || "News",
       title: row.title,
@@ -347,6 +349,7 @@ const getPostBySlug = async (req, res) => {
       views: kind === "WORDPRESS" ? row.views : (Number(row.views) || 0) + 1,
       content: kind === "WORDPRESS" ? wordpressParagraphsOf(row.content) : paragraphsOf(contentMedia.text),
       additionalImages: contentMedia?.images || [],
+      comments_enabled: kind === "WORDPRESS" ? true : row.comments_enabled !== 0,
     };
 
     return res.status(200).json({ success: true, post });

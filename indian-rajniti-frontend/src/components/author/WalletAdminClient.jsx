@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { walletApi } from "@/lib/api";
+import { authorApi, walletApi } from "@/lib/api";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import { useAuth } from "@/context/AuthContext";
 import { PERMISSIONS, hasPermission } from "@/lib/permissions";
@@ -40,6 +40,9 @@ export default function WalletAdminClient() {
   const [updatingId, setUpdatingId] = useState(null);
   const [savingRates, setSavingRates] = useState(false);
   const [savingWithdrawalRules, setSavingWithdrawalRules] = useState(false);
+  const [contentPosts, setContentPosts] = useState([]);
+  const [bonus, setBonus] = useState({ userId: "", postKey: "", points: "", reason: "" });
+  const [awardingBonus, setAwardingBonus] = useState(false);
 
   useEffect(() => {
     const requests = [];
@@ -67,6 +70,7 @@ export default function WalletAdminClient() {
         setEditorMinimumRemainingInr(String(data.editorMinimumRemainingInr));
         setMinimumWithdrawalInr(String(data.minimumWithdrawalInr));
       }));
+      requests.push(authorApi.listAllHistory({ status: "APPROVED" }).then(setContentPosts));
     }
     Promise.all(requests)
       .catch((err) => setError(err.message))
@@ -139,6 +143,41 @@ export default function WalletAdminClient() {
       setError(err.message);
     } finally {
       setSavingWithdrawalRules(false);
+    }
+  };
+
+  const selectedBonusUser = wallets.find((wallet) => String(wallet.id) === bonus.userId);
+  const eligibleBonusPosts = selectedBonusUser ? contentPosts.filter((post) => (
+    Number(post.author_id) === selectedBonusUser.id
+    || (selectedBonusUser.role === "EDITOR" && Number(post.reviewer_id) === selectedBonusUser.id)
+  )) : [];
+
+  const awardBonus = async (event) => {
+    event.preventDefault();
+    const [contentType, rawContentId] = bonus.postKey.split(":");
+    setError("");
+    setSuccess("");
+    setAwardingBonus(true);
+    try {
+      const data = await walletApi.awardBonus({
+        userId: Number(bonus.userId),
+        contentType,
+        contentId: Number(rawContentId),
+        points: Number(bonus.points),
+        reason: bonus.reason.trim(),
+      });
+      setWallets((current) => current.map((wallet) => wallet.id === data.bonus.userId ? {
+        ...wallet,
+        availablePoints: data.bonus.balanceAfter,
+        availableValueInr: Number((data.bonus.balanceAfter * wallet.rupeesPerPoint).toFixed(2)),
+        lifetimeEarnedPoints: wallet.lifetimeEarnedPoints + data.bonus.points,
+      } : wallet));
+      setBonus({ userId: "", postKey: "", points: "", reason: "" });
+      setSuccess(data.message);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAwardingBonus(false);
     }
   };
 
@@ -237,6 +276,76 @@ export default function WalletAdminClient() {
               </section>
               <button type="submit" disabled={savingRates} className="mt-5 min-h-11 rounded-lg bg-primary px-5 font-label-md text-sm font-semibold text-on-primary disabled:opacity-60">
                 {savingRates ? "Saving..." : "Save point settings"}
+              </button>
+            </form>
+          )}
+
+          {isAdmin && (
+            <form onSubmit={awardBonus} className="rounded-xl border border-amber-500/30 bg-amber-50/40 p-5">
+              <div className="mb-5">
+                <p className="mb-1 font-label-md text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700">Admin bonus</p>
+                <h2 className="font-display-lg text-2xl text-primary">Award bonus points</h2>
+                <p className="mt-1 font-body-md text-xs text-on-surface-variant">Credit an Author or Editor for approved content. The content title and your reason will appear in their Wallet points history.</p>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1.5 block font-label-md text-xs font-semibold text-on-surface">Recipient</span>
+                  <select
+                    required
+                    value={bonus.userId}
+                    onChange={(event) => setBonus((current) => ({ ...current, userId: event.target.value, postKey: "" }))}
+                    className="min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface px-3 py-2 font-body-md text-on-surface outline-none focus:border-primary"
+                  >
+                    <option value="">Select Author or Editor</option>
+                    {wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} ({wallet.role})</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block font-label-md text-xs font-semibold text-on-surface">Related approved content</span>
+                  <select
+                    required
+                    disabled={!selectedBonusUser}
+                    value={bonus.postKey}
+                    onChange={(event) => setBonus((current) => ({ ...current, postKey: event.target.value }))}
+                    className="min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface px-3 py-2 font-body-md text-on-surface outline-none focus:border-primary disabled:opacity-60"
+                  >
+                    <option value="">{selectedBonusUser ? "Select article, blog, or video" : "Select a recipient first"}</option>
+                    {eligibleBonusPosts.map((post) => {
+                      const relationship = Number(post.author_id) === selectedBonusUser.id ? "Created" : "Approved";
+                      return <option key={`${post.type}:${post.id}`} value={`${post.type}:${post.id}`}>{relationship}: {post.title} ({post.type})</option>;
+                    })}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block font-label-md text-xs font-semibold text-on-surface">Bonus points</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000000"
+                    step="1"
+                    required
+                    value={bonus.points}
+                    onChange={(event) => setBonus((current) => ({ ...current, points: event.target.value }))}
+                    className="min-h-11 w-full rounded-lg border border-outline-variant/40 bg-surface px-3 py-2 font-body-md text-on-surface outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="block lg:row-span-2">
+                  <span className="mb-1.5 block font-label-md text-xs font-semibold text-on-surface">Reason for bonus</span>
+                  <textarea
+                    required
+                    minLength={5}
+                    maxLength={500}
+                    rows={4}
+                    value={bonus.reason}
+                    onChange={(event) => setBonus((current) => ({ ...current, reason: event.target.value }))}
+                    placeholder="Explain why this content earned a bonus..."
+                    className="w-full resize-y rounded-lg border border-outline-variant/40 bg-surface px-3 py-2.5 font-body-md text-on-surface outline-none focus:border-primary"
+                  />
+                  <span className="mt-1 block text-right font-label-md text-[10px] text-on-surface-variant">{bonus.reason.length}/500</span>
+                </label>
+              </div>
+              <button type="submit" disabled={awardingBonus} className="mt-5 min-h-11 rounded-lg bg-amber-600 px-5 font-label-md text-sm font-semibold text-white hover:bg-amber-700 disabled:cursor-wait disabled:opacity-60">
+                <i className="fa-solid fa-gift mr-2" aria-hidden="true" />{awardingBonus ? "Awarding..." : "Award bonus points"}
               </button>
             </form>
           )}

@@ -236,12 +236,14 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
                   >
                     Edit
                   </Link>
+                  {post.status !== "APPROVED" && (
                   <button
                     onClick={() => setDeleteTarget(post)}
                     className="px-2 py-2 text-center text-xs font-label-md border border-error/40 text-error rounded hover:bg-error hover:text-on-error transition-colors sm:px-3 sm:py-1.5"
                   >
                     Delete
                   </button>
+                  )}
                 </div>
                 {["DRAFT", "REJECTED"].includes(post.status) && (
                   <button
@@ -263,7 +265,7 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Delete this post?"
-        description="This cannot be undone."
+        description="This post will move to Deleted Items and can be restored by an Admin."
         confirmLabel="Delete"
         placeholder="Why is this being deleted?"
         danger

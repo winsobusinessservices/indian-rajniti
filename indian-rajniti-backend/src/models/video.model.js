@@ -28,7 +28,7 @@ function runAiCheck({ title, description, videoUrl }) {
 const Video = {
   async findCategories() {
     const [rows] = await pool.query(
-      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
     );
     return rows.map((row) => row.category);
   },
@@ -61,7 +61,7 @@ const Video = {
   // check in particular — can see the author's role without a second query.
   async findById(id) {
     const [rows] = await pool.query(
-      `SELECT v.*, u.role AS author_role FROM ${TABLE} v LEFT JOIN users u ON u.id = v.author_id WHERE v.id = ?`,
+      `SELECT v.*, u.role AS author_role FROM ${TABLE} v LEFT JOIN users u ON u.id = v.author_id WHERE v.id = ? AND v.deleted_at IS NULL`,
       [id]
     );
     return parseRow(rows[0]);
@@ -71,7 +71,7 @@ const Video = {
   // findPublished for the category-substring-match rationale. No slug on
   // videos (see file header), so no findPublishedBySlug here.
   async findPublished({ category, orderBy = "recent", limit = 20 } = {}) {
-    const conditions = ["v.status = 'APPROVED'"];
+    const conditions = ["v.deleted_at IS NULL", "v.status = 'APPROVED'"];
     const params = [];
     if (category) {
       conditions.push("v.category LIKE ?");
@@ -99,7 +99,7 @@ const Video = {
   // Always scoped to the caller's own content — see article.model.js's
   // findForUser for why this no longer branches on role.
   async findForUser(user, { status } = {}) {
-    const conditions = ["v.author_id = ?"];
+    const conditions = ["v.author_id = ?", "v.deleted_at IS NULL"];
     const params = [user.userId];
     if (status) {
       conditions.push("v.status = ?");
@@ -115,7 +115,7 @@ const Video = {
   // Moderator-only — every author, every status. See article.model.js's
   // findAll for the full rationale.
   async findAll({ status } = {}) {
-    const conditions = [];
+    const conditions = ["v.deleted_at IS NULL"];
     const params = [];
     if (status) {
       conditions.push("v.status = ?");
@@ -203,6 +203,11 @@ const Video = {
 
   async remove(id) {
     await pool.query(`DELETE FROM ${TABLE} WHERE id = ?`, [id]);
+  },
+
+  async setCommentsEnabled(id, enabled) {
+    await pool.query(`UPDATE ${TABLE} SET comments_enabled = ? WHERE id = ?`, [enabled ? 1 : 0, id]);
+    return Video.findById(id);
   },
 };
 

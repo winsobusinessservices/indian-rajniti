@@ -1,4 +1,5 @@
 const Policy = require("../../models/policy.model");
+const DeletionAudit = require("../../models/deletionAudit.model");
 
 const VALID_STATUS = new Set(["DRAFT", "PUBLISHED"]);
 
@@ -94,9 +95,9 @@ const updatePolicy = async (req, res) => {
 
 const deletePolicy = async (req, res) => {
   try {
-    const removed = await Policy.remove(req.params.id);
+    const removed = await DeletionAudit.softDelete({ entityType: "POLICY", entityId: req.params.id, deletedBy: req.user.userId, reason: req.body?.reason });
     if (!removed) return res.status(404).json({ success: false, message: "Policy not found" });
-    return res.status(200).json({ success: true, message: "Policy deleted" });
+    return res.status(200).json({ success: true, message: "Policy moved to deleted items" });
   } catch (error) {
     console.error("Delete policy error:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });

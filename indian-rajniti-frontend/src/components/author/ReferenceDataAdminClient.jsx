@@ -7,6 +7,7 @@ import { DEFAULT_PARLIAMENT } from "@/features/parliament/parliament.api";
 import { DEFAULT_PAGE_PROFILES } from "@/features/events/pageProfiles";
 import { useAuth } from "@/context/AuthContext";
 import { PERMISSIONS, hasPermission } from "@/lib/permissions";
+import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
 
 const HOME_WIDGET_PERMISSIONS = [
   PERMISSIONS.SITE_HOME_WIDGETS,
@@ -477,15 +478,17 @@ const SOCIAL_PLATFORMS = {
   instagram: { label: "Instagram", icon: "fa-brands fa-instagram" },
   youtube: { label: "YouTube", icon: "fa-brands fa-youtube" },
   linkedin: { label: "LinkedIn", icon: "fa-brands fa-linkedin" },
+  website: { label: "Website", icon: "fa-solid fa-globe" },
 };
 
 function socialPlatform(item) {
   const source = `${item.label || ""} ${item.icon || ""}`.toLowerCase();
-  return (
-    Object.keys(SOCIAL_PLATFORMS).find((key) =>
-      source.includes(key === "x" ? "twitter" : key),
-    ) || "facebook"
+  const platform = Object.keys(SOCIAL_PLATFORMS).find((key) =>
+    source.includes(key === "x" ? "twitter" : key),
   );
+  if (platform) return platform;
+  if (source.includes("globe") || source.includes("external-link")) return "website";
+  return "facebook";
 }
 
 function prepareWidget(key, data) {
@@ -500,21 +503,20 @@ function prepareWidget(key, data) {
     });
   }
   if (key === "follow_us" && Array.isArray(copy))
-    return copy.map((item) => ({
-      id: item.id,
-      platform: socialPlatform(item),
-      url: item.url || item.link || "",
-    }));
+    return copy.map((item) => {
+      const platform = socialPlatform(item);
+      return {
+        id: item.id,
+        platform,
+        name: platform === "website" && item.label !== "Website" ? item.label || "" : "",
+        url: item.url || item.link || "",
+      };
+    });
   return copy;
 }
 
-function confirmItemDelete(label = "this item") {
-  return window.confirm(
-    `Are you sure you want to delete ${label}? This action cannot be undone.`,
-  );
-}
-
 function SocialPostLinksEditor({ platform, value, onChange }) {
+  const confirmDelete = useConfirmDialog();
   const label = platform === "x_feed" ? "X post" : "Facebook post";
   return (
     <fieldset className="space-y-3 rounded-md border border-outline-variant/30 p-4">
@@ -555,10 +557,10 @@ function SocialPostLinksEditor({ platform, value, onChange }) {
           </label>
           <button
             type="button"
-            onClick={() =>
-              confirmItemDelete(label) &&
-              onChange(value.filter((_, itemIndex) => itemIndex !== index))
-            }
+            onClick={async () => {
+              const confirmed = await confirmDelete({ title: `Delete ${label}?`, description: `This ${label.toLowerCase()} URL will be removed from the list.` });
+              if (confirmed) onChange(value.filter((_, itemIndex) => itemIndex !== index));
+            }}
             className="rounded-md border border-error/40 px-3 py-2.5 text-xs text-error"
           >
             Delete
@@ -577,6 +579,7 @@ function SocialPostLinksEditor({ platform, value, onChange }) {
 }
 
 function FollowUsEditor({ value, onChange }) {
+  const confirmDelete = useConfirmDialog();
   return (
     <fieldset className="space-y-3 rounded-md border border-outline-variant/30 p-4">
       <legend className="px-1 text-sm font-label-md text-primary">
@@ -589,7 +592,7 @@ function FollowUsEditor({ value, onChange }) {
       {value.map((item, index) => (
         <div
           key={item.id || index}
-          className="grid gap-3 rounded-md bg-surface-container-low p-3 sm:grid-cols-[180px_1fr_auto] sm:items-end"
+          className={`grid gap-3 rounded-md bg-surface-container-low p-3 sm:items-end ${item.platform === "website" ? "sm:grid-cols-[160px_180px_1fr_auto]" : "sm:grid-cols-[180px_1fr_auto]"}`}
         >
           <label className="text-xs font-label-md text-on-surface-variant">
             Platform
@@ -613,8 +616,30 @@ function FollowUsEditor({ value, onChange }) {
               ))}
             </select>
           </label>
+          {item.platform === "website" && (
+            <label className="text-xs font-label-md text-on-surface-variant">
+              Website name
+              <input
+                type="text"
+                required
+                maxLength={100}
+                placeholder="Example News"
+                value={item.name || ""}
+                onChange={(event) =>
+                  onChange(
+                    value.map((entry, itemIndex) =>
+                      itemIndex === index
+                        ? { ...entry, name: event.target.value }
+                        : entry,
+                    ),
+                  )
+                }
+                className={`${inputClass} mt-1.5`}
+              />
+            </label>
+          )}
           <label className="text-xs font-label-md text-on-surface-variant">
-            Profile or channel URL
+            {item.platform === "website" ? "Website URL" : "Profile or channel URL"}
             <input
               type="url"
               required
@@ -634,10 +659,10 @@ function FollowUsEditor({ value, onChange }) {
           </label>
           <button
             type="button"
-            onClick={() =>
-              confirmItemDelete("this social link") &&
-              onChange(value.filter((_, itemIndex) => itemIndex !== index))
-            }
+            onClick={async () => {
+              const confirmed = await confirmDelete({ title: "Delete social link?", description: "This social profile or channel link will be removed from the list." });
+              if (confirmed) onChange(value.filter((_, itemIndex) => itemIndex !== index));
+            }}
             className="rounded-md border border-error/40 px-3 py-2.5 text-xs text-error"
           >
             Delete
@@ -727,6 +752,7 @@ function emptyLike(value) {
 }
 
 function WidgetValueEditor({ label, value, onChange, depth = 0 }) {
+  const confirmDelete = useConfirmDialog();
   if (Array.isArray(value)) {
     const objects =
       value.length > 0 &&
@@ -762,10 +788,10 @@ function WidgetValueEditor({ label, value, onChange, depth = 0 }) {
               </span>
               <button
                 type="button"
-                onClick={() =>
-                  confirmItemDelete(`item ${index + 1}`) &&
-                  onChange(value.filter((_, itemIndex) => itemIndex !== index))
-                }
+                onClick={async () => {
+                  const confirmed = await confirmDelete({ title: `Delete item ${index + 1}?`, description: "This widget item will be removed. This action cannot be undone after saving." });
+                  if (confirmed) onChange(value.filter((_, itemIndex) => itemIndex !== index));
+                }}
                 className="text-xs text-error"
               >
                 Delete item
@@ -901,12 +927,15 @@ function HomeWidgetsAdmin({ widgets, onReload, user }) {
       if (selected === "follow_us")
         payload = value
           .filter((item) => item.url?.trim())
-          .map((item) => ({
-            id: item.id || `${Date.now()}`,
-            label: SOCIAL_PLATFORMS[item.platform].label,
-            icon: SOCIAL_PLATFORMS[item.platform].icon,
-            url: item.url.trim(),
-          }));
+          .map((item) => {
+            const platform = SOCIAL_PLATFORMS[item.platform] || SOCIAL_PLATFORMS.website;
+            return {
+              id: item.id || `${Date.now()}`,
+              label: item.platform === "website" ? item.name?.trim() || "Website" : platform.label,
+              icon: platform.icon,
+              url: item.url.trim(),
+            };
+          });
       if (selected === "poll_of_the_day")
         payload = {
           question: value.question?.trim(),
@@ -1209,6 +1238,7 @@ function PageContentAdmin({ profiles, onReload }) {
 
 export default function ReferenceDataAdminClient() {
   const { user } = useAuth();
+  const confirmDelete = useConfirmDialog();
   const allowedTabs = useMemo(() => TABS.filter((item) =>
     item.key === "homeWidgets"
       ? HOME_WIDGET_PERMISSIONS.some((permission) => hasPermission(user, permission))
@@ -1352,7 +1382,12 @@ export default function ReferenceDataAdminClient() {
     }
   };
   const remove = async (item) => {
-    if (!window.confirm(`Delete ${item.name || item.title}?`)) return;
+    const label = item.name || item.title || "this item";
+    const confirmed = await confirmDelete({
+      title: `Delete ${label}?`,
+      description: "This Site Data item will be moved to Deleted Items and can be restored by an Admin.",
+    });
+    if (!confirmed) return;
     try {
       const next = (data[tab] || []).filter((entry) => entry.id !== item.id);
       if (tab === "vidhanSabhas")

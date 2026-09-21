@@ -18,6 +18,7 @@ const {
   listContent,
   listAllContent,
   getContentById,
+  updateCommentSetting,
   updateContent,
   deleteContent,
   submitContent,
@@ -25,7 +26,7 @@ const {
   reviewContent,
   bulkModerateContent,
 } = require("../controllers/content/content.controller");
-const { authenticate, authorizePermission, authorizeRoleOrPermission } = require("../middleware/auth.middleware");
+const { authenticate, authorize, authorizePermission, authorizeRoleOrPermission } = require("../middleware/auth.middleware");
 const { PERMISSIONS } = require("../config/permissions");
 const { uploadFields } = require("../middleware/upload.middleware");
 const { enforceDailyContentLimit } = require("../middleware/contentLimit.middleware");
@@ -68,6 +69,7 @@ function buildResourceRoutes(resource, type) {
   // Must come before /:id — otherwise Express would match "history" as the
   // :id param and this route would never be reached.
   router.get(`/${resource}/history`, authenticate, authorizeRoleOrPermission(["INVESTOR"], PERMISSIONS.CONTENT_HISTORY, PERMISSIONS.REVIEW_CONTENT), withType, listAllContent);
+  router.patch(`/${resource}/:id/comments`, authenticate, authorize("ADMIN"), withType, updateCommentSetting);
   router.get(`/${resource}/:id`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT, PERMISSIONS.REVIEW_CONTENT, PERMISSIONS.CONTENT_HISTORY), withType, getContentById);
   router.put(`/${resource}/:id`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT), withType, withUpload, updateContent);
   router.delete(`/${resource}/:id`, authenticate, authorizePermission(PERMISSIONS.MY_CONTENT, PERMISSIONS.REVIEW_CONTENT), withType, deleteContent);
