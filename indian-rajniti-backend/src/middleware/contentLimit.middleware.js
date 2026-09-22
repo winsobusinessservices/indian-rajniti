@@ -1,11 +1,4 @@
-const pool = require("../config/db");
 const { ContentLimit } = require("../models/contentLimit.model");
-
-const TABLE_BY_TYPE = {
-  ARTICLE: "articles",
-  BLOG: "blogs",
-  VIDEO: "videos",
-};
 
 const TYPE_LABEL = {
   ARTICLE: "articles",
@@ -22,17 +15,7 @@ async function enforceDailyContentLimit(req, res, next) {
 
   try {
     const limit = await ContentLimit.get(req.user.role, type);
-    const table = TABLE_BY_TYPE[type];
-    const [rows] = await pool.query(
-      `SELECT COUNT(*) AS total
-       FROM ${table}
-       WHERE author_id = ?
-         AND created_at >= CURRENT_DATE
-         AND created_at < CURRENT_DATE + INTERVAL 1 DAY`,
-      [req.user.userId]
-    );
-
-    const used = Number(rows[0]?.total || 0);
+    const used = await ContentLimit.getUsage(req.user.userId, type);
     if (used >= limit) {
       return res.status(429).json({
         success: false,

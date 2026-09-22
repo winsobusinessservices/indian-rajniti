@@ -49,6 +49,8 @@ const ROLE_DEFAULT_PERMISSIONS = Object.freeze({
   INVESTOR: [PERMISSIONS.DASHBOARD],
   SUBADMIN: [
     PERMISSIONS.DASHBOARD,
+    PERMISSIONS.REVIEW_CONTENT,
+    PERMISSIONS.CONTENT_HISTORY,
     PERMISSIONS.TEAM_MEMBERS,
     PERMISSIONS.MANAGE_WALLETS,
     PERMISSIONS.MANAGE_POINT_RATES,
@@ -77,7 +79,11 @@ function normalizePermissions(value, role) {
     try { parsed = JSON.parse(parsed); } catch { parsed = []; }
   }
   if (!Array.isArray(parsed)) return [];
-  return [...new Set(parsed.filter((permission) => ALL_PERMISSIONS.includes(permission)))];
+  const permissions = parsed.filter((permission) => ALL_PERMISSIONS.includes(permission));
+  if (role === "SUBADMIN") {
+    permissions.push(PERMISSIONS.REVIEW_CONTENT, PERMISSIONS.CONTENT_HISTORY);
+  }
+  return [...new Set(permissions)];
 }
 
 module.exports = { PERMISSIONS, ALL_PERMISSIONS, ROLE_DEFAULT_PERMISSIONS, normalizePermissions };

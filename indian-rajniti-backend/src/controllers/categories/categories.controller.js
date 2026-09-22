@@ -2,6 +2,7 @@ const Category = require("../../models/category.model");
 const DeletionAudit = require("../../models/deletionAudit.model");
 const UiSection = require("../../models/uiSection.model");
 const { slugify } = require("../../utils/slugify");
+const { sanitizeRichText } = require("../../utils/richText");
 
 function withRouteOwners(categories, reservedRoutes) {
   return categories.map((category) => ({ ...category, route_owner: reservedRoutes.get(category.slug) || null }));
@@ -70,10 +71,11 @@ const getCategoryContent = async (req, res) => {
 
 const updateCategoryContent = async (req, res) => {
   try {
-    const content = String(req.body.content || "").trim();
-    if (content.length > 50000) {
+    const rawContent = String(req.body.content || "").trim();
+    if (rawContent.length > 50000) {
       return res.status(400).json({ success: false, message: "Category content cannot exceed 50,000 characters" });
     }
+    const content = sanitizeRichText(rawContent);
     const existing = await Category.findById(req.params.id);
     if (!existing) return res.status(404).json({ success: false, message: "Category not found" });
     const routeOwner = (await Category.findReservedRoutes()).get(existing.slug);
@@ -108,11 +110,12 @@ const updateSectionVisibility = async (req, res) => {
 const createCategory = async (req, res) => {
   try {
     const name = String(req.body.name || "").trim();
-    const content = String(req.body.content || "").trim();
+    const rawContent = String(req.body.content || "").trim();
     const isVisible = req.body.isVisible !== false;
     if (!name) return res.status(400).json({ success: false, message: "Category name is required" });
     if (name.length > 120) return res.status(400).json({ success: false, message: "Category name is too long" });
-    if (content.length > 50000) return res.status(400).json({ success: false, message: "Category content cannot exceed 50,000 characters" });
+    if (rawContent.length > 50000) return res.status(400).json({ success: false, message: "Category content cannot exceed 50,000 characters" });
+    const content = sanitizeRichText(rawContent);
     if (await Category.findByName(name)) {
       return res.status(409).json({ success: false, message: "That category already exists" });
     }

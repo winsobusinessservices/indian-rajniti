@@ -2,6 +2,7 @@ const Politician = require("../../models/politician.model");
 const Party = require("../../models/party.model");
 const State = require("../../models/state.model");
 const HomeWidget = require("../../models/homeWidget.model");
+const UiSection = require("../../models/uiSection.model");
 const DeletionAudit = require("../../models/deletionAudit.model");
 
 const POLITICIAN_CATEGORIES = ["KEY_FIGURE", "FORMER_PM", "CHIEF_MINISTER", "PARTY_LEADER"];
@@ -258,6 +259,40 @@ async function updateHomeWidget(req, res) {
   return res.json({ success: true, message: "Home widget updated", key: widgetKey, data });
 }
 
+async function getSiteManagement(req, res) {
+  const [widgets, sections] = await Promise.all([HomeWidget.getAll(), UiSection.findAll()]);
+  return res.json({ success: true, widgets, sections });
+}
+
+async function updateSiteHeader(req, res) {
+  const input = req.body?.header;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return res.status(400).json({ success: false, message: "Header settings are required" });
+  }
+  const targetAt = text(input.countdown?.targetAt, 100) || "";
+  if (input.countdown?.enabled && (!targetAt || Number.isNaN(new Date(targetAt).getTime()))) {
+    return res.status(400).json({ success: false, message: "Choose a valid countdown date and time" });
+  }
+  const navItems = input.navItems && typeof input.navItems === "object" && !Array.isArray(input.navItems)
+    ? Object.fromEntries(Object.entries(input.navItems).map(([key, value]) => [String(key).slice(0, 200), Boolean(value)]))
+    : {};
+  const header = {
+    showUpcomingRallies: input.showUpcomingRallies !== false,
+    showWeather: input.showWeather !== false,
+    showUpcomingEvents: input.showUpcomingEvents !== false,
+    navItems,
+    countdown: {
+      enabled: Boolean(input.countdown?.enabled),
+      title: text(input.countdown?.title, 150) || "Election Results",
+      targetAt,
+      link: text(input.countdown?.link, 500) || "/elections",
+      buttonLabel: text(input.countdown?.buttonLabel, 100) || "View results",
+    },
+  };
+  await HomeWidget.upsert("site_header", header);
+  return res.json({ success: true, message: "Header settings updated", header });
+}
+
 async function updatePageProfiles(req, res) {
   const profiles = req.body.profiles;
   if (!profiles || typeof profiles !== "object" || Array.isArray(profiles)) {
@@ -310,4 +345,4 @@ async function getParliament(req, res) {
   return res.json({ success: true, parliament: widgets.parliament_data || null });
 }
 
-module.exports = { listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles };
+module.exports = { listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, getSiteManagement, updateSiteHeader, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles };

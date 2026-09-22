@@ -13,11 +13,15 @@ export default function ChangePasswordModal({ open, onClose }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Portals can only be rendered after the browser document is available.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
   useEffect(() => {
     if (open) {
+      // Each opening starts with a clean password form and feedback state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm({ currentPassword: "", newPassword: "" });
       setError("");
       setSuccess("");

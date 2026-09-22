@@ -337,7 +337,7 @@ routes.patch("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TE
  * @openapi
  * /api/auth/users/{id}/editor:
  *   patch:
- *     summary: Assign or unassign an editor for an author
+ *     summary: Assign or unassign an Editor/Subadmin reviewer for an Author/Editor creator
  *     tags: [Auth]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -361,7 +361,7 @@ routes.patch("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TE
  *       403: { description: Insufficient permission }
  *       500: { description: Unable to update assignment }
  */
-routes.patch("/auth/users/:id/editor", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), assignAuthorEditor);
+routes.patch("/auth/users/:id/editor", authenticate, authorize("ADMIN", "SUBADMIN"), assignAuthorEditor);
 
 /**
  * @openapi

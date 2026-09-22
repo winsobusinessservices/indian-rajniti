@@ -13,6 +13,7 @@ const Category = require("../../models/category.model");
 const UiSection = require("../../models/uiSection.model");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { splitContentMedia } = require("../../utils/contentMedia");
+const { isRichTextHtml, richTextToPlainText } = require("../../utils/richText");
 
 const POOL_LIMIT = 60;
 const TRENDING_WINDOW_DAYS = 14;
@@ -75,7 +76,7 @@ function wordsOf(text) {
 }
 
 function readTimeOf(content) {
-  const words = wordsOf(content).length;
+  const words = wordsOf(isRichTextHtml(content) ? richTextToPlainText(content) : content).length;
   return `${Math.max(1, Math.round(words / 200))} min read`;
 }
 
@@ -83,6 +84,7 @@ function readTimeOf(content) {
 // array of paragraphs — split on blank lines so the detail page can render
 // it the same way a structured paragraph array would be rendered.
 function paragraphsOf(content) {
+  if (isRichTextHtml(content)) return content;
   const parts = (content || "")
     .split(/\n\s*\n|\r\n\r\n/)
     .map((p) => p.trim())

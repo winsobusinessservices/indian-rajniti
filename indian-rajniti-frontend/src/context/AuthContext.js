@@ -21,6 +21,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    // Hydrate the client auth context from the backend session cookie.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshUser();
   }, [refreshUser]);
 

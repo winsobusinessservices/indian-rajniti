@@ -82,6 +82,10 @@ export async function getSectionVisibility() {
   const { sectionVisibility } = await getHomeData();
   return sectionVisibility || {};
 }
+export async function getSiteHeaderSettings() {
+  const { widgets } = await getHomeData();
+  return widgets.site_header || {};
+}
 export async function getHeroSlides() {
   const { news } = await getHomeData();
   return news.heroSlides.map(withDisplayFields);

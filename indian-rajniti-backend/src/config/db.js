@@ -373,6 +373,24 @@ pool.verifyConnection = async () => {
         UNIQUE KEY uq_bonus_transaction (wallet_transaction_id)
       ) ENGINE=InnoDB`
     );
+    await connection.query(
+      `CREATE TABLE IF NOT EXISTS home_widgets (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        widget_key VARCHAR(64) NOT NULL UNIQUE,
+        data JSON NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB`
+    );
+    await connection.query(
+      `INSERT IGNORE INTO home_widgets (widget_key, data) VALUES (?, ?)`,
+      ["site_header", JSON.stringify({
+        showUpcomingRallies: true,
+        showWeather: true,
+        showUpcomingEvents: true,
+        navItems: {},
+        countdown: { enabled: false, title: "Election Results", targetAt: "", link: "/elections", buttonLabel: "View results" },
+      })]
+    );
     const [bonusAcknowledgementColumns] = await connection.query(
       `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'wallet_bonus_awards'

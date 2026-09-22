@@ -10,6 +10,34 @@ const getContentLimits = async (req, res) => {
   }
 };
 
+const getMyContentLimitStatus = async (req, res) => {
+  try {
+    if (!ROLES.includes(req.user.role)) {
+      return res.status(200).json({ success: true, limited: false, dailyLimits: {} });
+    }
+
+    const dailyLimits = {};
+    await Promise.all(CONTENT_TYPES.map(async (contentType) => {
+      const [limit, used] = await Promise.all([
+        ContentLimit.get(req.user.role, contentType),
+        ContentLimit.getUsage(req.user.userId, contentType),
+      ]);
+      dailyLimits[contentType] = {
+        type: contentType,
+        limit,
+        used,
+        remaining: Math.max(0, limit - used),
+        reached: used >= limit,
+      };
+    }));
+
+    return res.status(200).json({ success: true, limited: true, dailyLimits });
+  } catch (error) {
+    console.error("Get personal content limit status error:", error);
+    return res.status(500).json({ success: false, message: "Your posting limit could not be checked" });
+  }
+};
+
 const updateContentLimits = async (req, res) => {
   try {
     const requested = req.body?.limits;
@@ -36,5 +64,4 @@ const updateContentLimits = async (req, res) => {
   }
 };
 
-module.exports = { getContentLimits, updateContentLimits };
-
+module.exports = { getContentLimits, getMyContentLimitStatus, updateContentLimits };

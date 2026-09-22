@@ -22,6 +22,20 @@ const OTP_RESEND_DELAY_MS = 60 * 1000;
 const MAX_OTP_ATTEMPTS = 5;
 const otpSendTimes = new Map();
 const otpAttempts = new Map();
+const configuredClientOrigins = String(process.env.CLIENT_ORIGIN || "https://indianrajniti.in")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+const PUBLIC_CLIENT_ORIGIN = configuredClientOrigins[0] || "https://indianrajniti.in";
+const PANEL_CLIENT_ORIGIN = String(process.env.PANEL_ORIGIN || "https://indianrajneeti.com")
+  .split(",")[0]
+  .trim()
+  .replace(/\/$/, "");
+const STAFF_ROLES = new Set(["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"]);
+
+function clientOriginForRole(role) {
+  return STAFF_ROLES.has(role) ? PANEL_CLIENT_ORIGIN : PUBLIC_CLIENT_ORIGIN;
+}
 
 function normalizedEmailOf(value) {
   return String(value || "").trim().toLowerCase();
@@ -492,7 +506,7 @@ const listUsers = async (req, res) => {
     const assignmentByAuthor = new Map(assignments.map((assignment) => [Number(assignment.author_id), assignment]));
     const visibleUsers = ["ADMIN", "INVESTOR"].includes(req.user.role)
       ? allUsers
-      : allUsers.filter((user) => MEMBER_ASSIGNABLE_ROLES.includes(user.role));
+      : allUsers.filter((user) => [...MEMBER_ASSIGNABLE_ROLES, "SUBADMIN"].includes(user.role));
     const users = visibleUsers.map((user) => {
       const assignment = assignmentByAuthor.get(Number(user.id));
       return {
@@ -813,26 +827,29 @@ const assignAuthorEditor = async (req, res) => {
     const editorId = rawEditorId === null || rawEditorId === "" ? null : Number(rawEditorId);
 
     if (!Number.isInteger(authorId) || authorId <= 0 || (editorId !== null && (!Number.isInteger(editorId) || editorId <= 0))) {
-      return res.status(400).json({ success: false, message: "Author and editor IDs must be valid" });
+      return res.status(400).json({ success: false, message: "Creator and reviewer IDs must be valid" });
     }
 
     const author = await User.findById(authorId);
-    if (!author || author.role !== "AUTHOR") {
-      return res.status(400).json({ success: false, message: "The selected team member must be an author" });
+    if (!author || !["AUTHOR", "EDITOR"].includes(author.role)) {
+      return res.status(400).json({ success: false, message: "A reviewer can only be assigned to an Author or Editor" });
     }
 
     let editor = null;
     if (editorId !== null) {
       editor = await User.findById(editorId);
-      if (!editor || editor.role !== "EDITOR" || editor.status !== "ACTIVE") {
-        return res.status(400).json({ success: false, message: "Select an active editor" });
+      if (!editor || !["EDITOR", "SUBADMIN"].includes(editor.role) || editor.status !== "ACTIVE") {
+        return res.status(400).json({ success: false, message: "Select an active Editor or Subadmin reviewer" });
+      }
+      if (editor.id === author.id) {
+        return res.status(400).json({ success: false, message: "An Editor cannot review their own content" });
       }
     }
 
     await User.setAssignedEditor({ authorId, editorId, assignedBy: req.user.userId });
     return res.status(200).json({
       success: true,
-      message: editor ? `${author.name} assigned to ${editor.name}` : `${author.name} is now unassigned`,
+      message: editor ? `${editor.name} will review ${author.name}'s content` : `${author.name} is now unassigned`,
       assignment: editor ? { authorId, editorId, editorName: editor.name } : null,
     });
   } catch (error) {
@@ -925,7 +942,7 @@ const forgotPassword = async (req, res) => {
 
 
     const resetUrl =
-      `${process.env.CLIENT_ORIGIN}/reset-password?token=${encodeURIComponent(resetToken)}`;
+      `${clientOriginForRole(user.role)}/reset-password?token=${encodeURIComponent(resetToken)}`;
 
     await sendPasswordResetEmail(
       user.email,

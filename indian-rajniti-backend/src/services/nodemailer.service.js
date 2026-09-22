@@ -18,7 +18,9 @@ const transporter = nodemailer.createTransport({
 const BRAND_COLOR = "#002068";
 const BRAND_CONTAINER = "#003399";
 const BRAND_LIGHT = "#dce1ff";
-const SITE_URL = (process.env.CLIENT_ORIGIN || "https://indianrajneeti.com").split(",")[0].replace(/\/$/, "");
+const SITE_URL = (process.env.CLIENT_ORIGIN || "https://indianrajniti.in").split(",")[0].replace(/\/$/, "");
+const PANEL_URL = (process.env.PANEL_ORIGIN || "https://indianrajneeti.com").trim().replace(/\/$/, "");
+const STAFF_ROLES = new Set(["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"]);
 
 function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (character) => ({
@@ -136,7 +138,7 @@ Congratulations!`,
 }
 
 async function sendRoleChangedEmail(to, name, oldRole, newRole) {
-  const loginUrl = `${process.env.CLIENT_ORIGIN}/login`;
+  const loginUrl = `${STAFF_ROLES.has(newRole) ? PANEL_URL : SITE_URL}/login`;
 
   await transporter.sendMail({
     from: `"Indian Rajneeti" <${process.env.EMAIL_HOST_USER}>`,

@@ -7,6 +7,8 @@ export default function ProfileMenu({ open, anchorRect, onClose, user, onChangeP
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Portals can only be rendered after the browser document is available.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

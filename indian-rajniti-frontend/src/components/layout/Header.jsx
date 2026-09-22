@@ -7,7 +7,7 @@ import Link from "next/link";
 import { NAV_LINKS } from "@/lib/constants";
 import { useAuth } from "@/context/AuthContext";
 import { useIsClient } from "@/hooks/useIsClient";
-import { getPoliticalCalendar, getPoliticalRallys, getWeatherSnapshot } from "@/features/news/news.api";
+import { getPoliticalCalendar, getPoliticalRallys, getSiteHeaderSettings } from "@/features/news/news.api";
 import SearchBox from "@/components/search/SearchBox";
 import MobileMenu from "./MobileMenu";
 import ProfileMenu from "./ProfileMenu";
@@ -80,6 +80,41 @@ function UpcomingRallies() {
   );
 }
 
+function HeaderCountdown({ countdown, showRalliesFallback, mobile = false }) {
+  const mounted = useIsClient();
+  const [now, setNow] = useState(null);
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const initialTimer = window.setTimeout(update, 0);
+    const timer = window.setInterval(update, 1000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
+  }, []);
+  if (!mounted || now === null || !countdown?.enabled || !countdown.targetAt) return null;
+  const remaining = new Date(countdown.targetAt).getTime() - now;
+  if (!Number.isFinite(remaining) || remaining <= 0) return showRalliesFallback && !mobile ? <UpcomingRallies /> : null;
+  const totalSeconds = Math.floor(remaining / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const units = [["Days", days], ["Hrs", hours], ["Min", minutes], ["Sec", seconds]];
+  return (
+    <Link href={countdown.link || "/elections"} className={`group w-full rounded-lg border border-primary/10 bg-surface-container-low p-2.5 transition-colors hover:border-primary/10 hover:bg-primary/5 ${mobile ? "flex md:hidden" : "hidden max-w-[19rem] md:block"} flex-col`}>
+      <span className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate font-headline-md text-sm text-primary"><i className="fa-solid fa-hourglass-half mr-2" />{countdown.title || "Election Results"}</span>
+        <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-white">Live</span>
+      </span>
+      <span className="mt-2 grid grid-cols-4 gap-1.5">
+        {units.map(([label, value]) => <span key={label} className="rounded border border-outline-variant/25 bg-surface px-1 py-1.5 text-center"><strong className="block text-sm leading-none text-on-surface">{String(value).padStart(2, "0")}</strong><small className="mt-1 block text-[7px] uppercase tracking-wide text-on-surface-variant">{label}</small></span>)}
+      </span>
+      <span className="mt-2 flex items-center justify-end text-[9px] font-bold uppercase tracking-wide text-primary">{countdown.buttonLabel || "View results"}<i className="fa-solid fa-arrow-right ml-1.5 transition-transform group-hover:translate-x-0.5" /></span>
+    </Link>
+  );
+}
+
 
 
 export default function Header() {
@@ -91,8 +126,14 @@ export default function Header() {
   const [anchorRect, setAnchorRect] = useState(null);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [headerSettings, setHeaderSettings] = useState({ showUpcomingRallies: true, showWeather: true, showUpcomingEvents: true, navItems: {}, countdown: { enabled: false } });
   const profileButtonRef = useRef(null);
-  const hasWorkspaceSidebar = Boolean(user) && (["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"].includes(user.role) || user.permissions?.length > 0);
+
+  useEffect(() => {
+    getSiteHeaderSettings().then((settings) => setHeaderSettings((current) => ({ ...current, ...settings, navItems: settings.navItems || {}, countdown: { ...current.countdown, ...(settings.countdown || {}) } }))).catch(() => {});
+  }, []);
+
+  const visibleNavLinks = NAV_LINKS.filter((link) => headerSettings.navItems?.[link.href] !== false);
 
   const openProfileMenu = () => {
     setAnchorRect(profileButtonRef.current.getBoundingClientRect());
@@ -104,12 +145,6 @@ export default function Header() {
     router.push("/");
   };
 
-  const openWorkspaceMenu = () => {
-    window.dispatchEvent(new Event("open-workspace-menu"));
-  };
-
-
-
   return (
     <>
     <header
@@ -119,8 +154,8 @@ export default function Header() {
       <div className="w-full bg-surface border-b border-outline-variant/30 py-4">
         <div className="max-w-full mx-auto px-4 md:px-16 grid grid-cols-3 items-center">
           <div className=" flex flex-col items-start">
-            <UpcomingRallies />
-             <HeaderWeather />
+            {headerSettings.countdown?.enabled ? <HeaderCountdown countdown={headerSettings.countdown} showRalliesFallback={headerSettings.showUpcomingRallies} /> : headerSettings.showUpcomingRallies && <UpcomingRallies />}
+            {headerSettings.showWeather && <HeaderWeather />}
 
           </div>
 
@@ -129,9 +164,14 @@ export default function Header() {
             <Image src="/images/logo.png" alt="Indian Rajneeti" width={160} height={64} className="h-20 md:h-30 w-auto object-contain" priority />
           </Link>
           <div className="justify-self-end">
-            <UpcomingEvents />
+            {headerSettings.showUpcomingEvents && <UpcomingEvents />}
           </div>
         </div>
+        {headerSettings.countdown?.enabled && (
+          <div className="px-4 pt-3 md:hidden">
+            <HeaderCountdown countdown={headerSettings.countdown} mobile />
+          </div>
+        )}
       </div>
     </header>
 
@@ -139,28 +179,18 @@ export default function Header() {
         className="sticky top-0 z-[190] isolate border-b border-outline-variant/30 bg-surface py-2 shadow-sm"
         style={{ position: "sticky", top: 0, zIndex: 190, backgroundColor: "#faf9f7" }}
       >
-        <div className={`max-w-full mx-auto px-4  ${hasWorkspaceSidebar?"md:px-2":"md:px-16 gap-10"}  flex min-w-0 items-center justify-between gap-2`}>
-          {hasWorkspaceSidebar ? (
-            <button
-              type="button"
-              onClick={openWorkspaceMenu}
-              aria-label="Open workspace menu"
-              className="flex h-10 w-10 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary active:scale-95 lg:invisible"
-            >
-              <i className="fa-solid fa-bars text-lg" aria-hidden="true" />
-            </button>
-          ) : (
-            <button
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open menu"
-              className="text-on-surface-variant hover:text-primary transition-colors hover:scale-110 active:scale-95"
-            >
-              <i className="fa-solid fa-bars text-lg" />
-            </button>
-          )}
+        <div className="max-w-full mx-auto px-4 md:px-16 gap-10 flex min-w-0 items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open menu"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-on-surface-variant transition-colors hover:bg-surface-container hover:text-primary active:scale-95"
+          >
+            <i className="fa-solid fa-bars text-lg" aria-hidden="true" />
+          </button>
 
           <div className="hidden min-w-0 flex-1 items-center gap-2 overflow-x-auto whitespace-nowrap lg:flex">
-            {NAV_LINKS.map((link) => {
+            {visibleNavLinks.map((link) => {
               const isActive = pathname === link.href;
               return (
                 <Link
@@ -227,7 +257,7 @@ export default function Header() {
         </div>
       </nav>
 
-      {!hasWorkspaceSidebar && <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} />}
+      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} navLinks={visibleNavLinks} />
 
       {user && (
         <>

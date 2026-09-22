@@ -12,14 +12,14 @@ import { slugify } from "@/lib/slugify";
 const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
 const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 
-function NavLinks({ pathname, onClose }) {
+function NavLinks({ pathname, onClose, links = NAV_LINKS }) {
   return (
     <section className=" mb-8 bg-surface-container-low p-4 rounded-lg ">
       <h3 className="font-headline-md text-primary text-lg mb-4 border-b border-outline-variant/30 pb-2 tracking-wide">
         Menu
       </h3>
       <ul className="space-y-3 font-body-md text-on-surface-variant">
-        {NAV_LINKS.map((link) => {
+        {links.map((link) => {
           const isActive = pathname === link.href;
           return (
             <li key={link.label}>
@@ -86,7 +86,7 @@ function InvestorLink({ onClose }) {
       <ul className="space-y-3 font-body-md text-on-surface-variant">
         <li>
           <Link
-            href="/author/dashboard"
+            href="/investor/dashboard"
             onClick={onClose}
             className="group text-primary font-label-sm flex items-center gap-1 hover:underline"
           >
@@ -232,7 +232,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
   );
 }
 
-export default function MobileMenu({ open, onClose }) {
+export default function MobileMenu({ open, onClose, navLinks = NAV_LINKS }) {
   const mounted = useIsClient();
   const pathname = usePathname();
   const { user } = useAuth();
@@ -279,7 +279,7 @@ export default function MobileMenu({ open, onClose }) {
             inputClassName="w-full pr-3 py-2 border border-outline-variant/40 rounded-full bg-surface-container-low text-on-surface text-sm focus:border-primary focus:outline-none font-body-md"
           />
 
-          <NavLinks pathname={pathname} onClose={onClose} />
+          <NavLinks pathname={pathname} onClose={onClose} links={navLinks} />
 
           {canManageContent && (
             <AuthorTools onClose={onClose} isModerator={isModerator} isAdmin={isAdmin} canUseWallet={canUseWallet} roleLabel={roleLabel} />

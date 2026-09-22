@@ -39,6 +39,8 @@ export default function ApplyToJobClient({ job }) {
 
   useEffect(() => {
     if (user) {
+      // Seed the application fields once the asynchronous user session resolves.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm((prev) => ({
         ...prev,
         name: prev.name || user.name || "",

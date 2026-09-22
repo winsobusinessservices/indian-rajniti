@@ -3,7 +3,6 @@ import { AuthProvider } from "@/context/AuthContext";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import { DEFAULT_SOCIAL_IMAGE, serializeJsonLd } from "@/lib/seo";
 import ToastProvider from "@/components/common/ToastProvider";
-import AuthorWorkspaceShell from "@/components/author/AuthorWorkspaceShell";
 import ConfirmDialogProvider from "@/components/common/ConfirmDialogProvider";
 
 export const dynamic = "force-dynamic";
@@ -110,7 +109,7 @@ export default async function RootLayout({ children }) {
         <ToastProvider />
         <ConfirmDialogProvider>
           <AuthProvider>
-            <AuthorWorkspaceShell>{children}</AuthorWorkspaceShell>
+            {children}
           </AuthProvider>
         </ConfirmDialogProvider>
       </body>

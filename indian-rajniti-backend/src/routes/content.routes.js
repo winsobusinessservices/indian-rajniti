@@ -319,7 +319,7 @@ routes.post(
  * /api/articles/{id}/review:
  *   post:
  *     summary: Approve, reject, or update-and-decide an article (editor/admin only)
- *     description: Editors can only review AUTHOR-submitted articles — content from an editor or admin requires admin review. UPDATE also accepts the same fields as create/edit and re-validates required fields.
+ *     description: Editors can review assigned Author or Editor articles. Admin and Subadmin content requires an Admin or Subadmin reviewer. UPDATE also accepts the same fields as create/edit and re-validates required fields.
  *     tags: [Articles]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -550,7 +550,7 @@ routes.use(buildResourceRoutes("articles", "ARTICLE"));
  * /api/blogs/{id}/review:
  *   post:
  *     summary: Approve, reject, or update-and-decide a blog post (editor/admin only)
- *     description: Editors can only review AUTHOR-submitted posts — content from an editor or admin requires admin review. UPDATE also accepts the same fields as create/edit and re-validates required fields.
+ *     description: Editors can review assigned Author or Editor posts. Admin and Subadmin content requires an Admin or Subadmin reviewer. UPDATE also accepts the same fields as create/edit and re-validates required fields.
  *     tags: [Blogs]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -787,7 +787,7 @@ routes.use(buildResourceRoutes("blogs", "BLOG"));
  * /api/videos/{id}/review:
  *   post:
  *     summary: Approve, reject, or update-and-decide a video (editor/admin only)
- *     description: Editors can only review AUTHOR-submitted videos — content from an editor or admin requires admin review. UPDATE also accepts the same fields as create/edit and re-validates required fields.
+ *     description: Editors can review assigned Author or Editor videos. Admin and Subadmin content requires an Admin or Subadmin reviewer. UPDATE also accepts the same fields as create/edit and re-validates required fields.
  *     tags: [Videos]
  *     security: [{ bearerAuth: [] }]
  *     parameters:

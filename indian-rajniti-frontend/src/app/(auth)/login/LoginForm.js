@@ -12,7 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 
 export default function LoginForm() {
   const router = useRouter();
-  const { refreshUser } = useAuth();
+  const { setUser } = useAuth();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,14 +21,22 @@ export default function LoginForm() {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const completeLogin = useCallback((data) => {
+    const role = data?.user?.role;
+    setUser(data.user);
+    // Signing in on the public website keeps every role on the public
+    // website. Staff reach their workspace only by explicitly opening the
+    // separate panel.
+    router.replace(role === "INVESTOR" ? "/investor/dashboard" : "/");
+  }, [router, setUser]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await authApi.login(form);
-      await refreshUser();
-      router.push("/");
+      const data = await authApi.login(form);
+      await completeLogin(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -40,15 +48,14 @@ export default function LoginForm() {
     setError("");
     setLoading(true);
     try {
-      await authApi.googleAuth({ credential, intent: "login" });
-      await refreshUser();
-      router.push("/");
+      const data = await authApi.googleAuth({ credential, intent: "login" });
+      await completeLogin(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [refreshUser, router]);
+  }, [completeLogin]);
 
   return (
     <AuthShell

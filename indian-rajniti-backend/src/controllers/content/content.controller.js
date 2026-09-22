@@ -10,6 +10,7 @@ const User = require("../../models/user.model");
 const { fileUrl } = require("../../middleware/upload.middleware");
 const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { joinContentMedia } = require("../../utils/contentMedia");
+const { sanitizeRichText } = require("../../utils/richText");
 const { creditContentReward, creditEditorReviewReward } = require("../../services/walletRewards.service");
 
 const { PERMISSIONS } = require("../../config/permissions");
@@ -76,7 +77,7 @@ function extractFields(type, body, files = {}) {
     return {
       title,
       excerpt,
-      content: joinContentMedia(content, [
+      content: joinContentMedia(sanitizeRichText(content), [
         ...parseImageUrls(body.existingAdditionalImages),
         ...(files.additionalImages || []).map((file) => fileUrl(type, file)),
       ]),
@@ -95,7 +96,7 @@ function extractFields(type, body, files = {}) {
     return {
       title,
       excerpt: orUndefined(body.excerpt),
-      content: joinContentMedia(content, [
+      content: joinContentMedia(sanitizeRichText(content), [
         ...parseImageUrls(body.existingAdditionalImages),
         ...(files.additionalImages || []).map((file) => fileUrl(type, file)),
       ]),
@@ -117,7 +118,7 @@ function extractFields(type, body, files = {}) {
   const thumbnail = thumbnailFile ? fileUrl(type, thumbnailFile) : body.thumbnail || deriveExternalThumbnail(videoUrl);
   return {
     title,
-    description,
+    description: sanitizeRichText(description),
     videoSource,
     videoUrl,
     thumbnail,
@@ -156,7 +157,7 @@ async function loadOwnedContent(req, res) {
     return null;
   }
   if (item.author_id !== req.user.userId && !(await canAccessAuthor(req.user, item.author_id))) {
-    res.status(403).json({ success: false, message: "This author is assigned to another editor" });
+    res.status(403).json({ success: false, message: "This creator is assigned to another reviewer" });
     return null;
   }
   return item;
@@ -370,12 +371,12 @@ const getContentStatus = async (req, res) => {
   }
 };
 
-// Editors can only review AUTHOR-submitted content — content from an editor
-// or admin (including an editor's own) requires an admin's review instead.
-// Admins are never restricted here; they review everything. `findById` joins
-// in the author's role, so this needs no extra lookup.
+// Admins and Subadmins can review every creator. Editors can review content
+// from Authors or other Editors only when the creator is assigned to them;
+// canAccessAuthor enforces that assignment.
 function canReview(reviewerRole, authorRole) {
-  return reviewerRole !== "EDITOR" || authorRole === "AUTHOR";
+  if (["ADMIN", "SUBADMIN"].includes(reviewerRole)) return true;
+  return reviewerRole === "EDITOR" && ["AUTHOR", "EDITOR"].includes(authorRole);
 }
 
 const reviewContent = async (req, res) => {
@@ -389,11 +390,11 @@ const reviewContent = async (req, res) => {
     if (!canReview(req.user.role, item.author_role)) {
       return res.status(403).json({
         success: false,
-        message: "Editors can only review content submitted by authors — content from an editor or admin requires admin review.",
+        message: "Editors can review only assigned Author or Editor content. Admin and Subadmin content requires an Admin or Subadmin reviewer.",
       });
     }
     if (!(await canAccessAuthor(req.user, item.author_id))) {
-      return res.status(403).json({ success: false, message: "This author is assigned to another editor" });
+      return res.status(403).json({ success: false, message: "This creator is assigned to another reviewer" });
     }
 
     const { action, notes } = req.body;
@@ -499,7 +500,7 @@ const bulkModerateContent = async (req, res) => {
       if (!(await canAccessAuthor(req.user, item.post.author_id))) {
         return res.status(403).json({
           success: false,
-          message: "One or more selected items belong to an author assigned to another editor.",
+          message: "One or more selected items belong to a creator assigned to another reviewer.",
         });
       }
       if (
@@ -515,7 +516,7 @@ const bulkModerateContent = async (req, res) => {
       if (action !== "DELETE" && !canReview(req.user.role, item.post.author_role)) {
         return res.status(403).json({
           success: false,
-          message: "Editors can only approve or reject content submitted by authors. Remove restricted items from the selection.",
+          message: "Editors can approve or reject only assigned Author or Editor content. Remove restricted items from the selection.",
         });
       }
     }

@@ -1,8 +1,8 @@
 const express = require("express");
-const { authenticate, authorizePermission } = require("../middleware/auth.middleware");
+const { authenticate, authorize, authorizePermission } = require("../middleware/auth.middleware");
 const { PERMISSIONS } = require("../config/permissions");
 const {
-  listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles,
+  listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, getSiteManagement, updateSiteHeader, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles,
 } = require("../controllers/admin/referenceData.controller");
 
 const router = express.Router();
@@ -13,8 +13,13 @@ const widgetPermission = (key) => ({
   poll_of_the_day: PERMISSIONS.SITE_WIDGET_POLL,
   election_results: PERMISSIONS.SITE_WIDGET_ELECTION_RESULTS,
 }[key] || PERMISSIONS.SITE_WIDGET_OTHER);
-const authorizeWidget = (req, res, next) =>
-  authorizePermission(PERMISSIONS.SITE_HOME_WIDGETS, widgetPermission(req.params.key))(req, res, next);
+const authorizeWidget = (req, res, next) => {
+  if (["ADMIN", "SUBADMIN"].includes(req.user?.role)) return next();
+  return authorizePermission(PERMISSIONS.SITE_HOME_WIDGETS, widgetPermission(req.params.key))(req, res, next);
+};
+
+router.get("/admin/site-management", authenticate, authorize("ADMIN", "SUBADMIN"), getSiteManagement);
+router.put("/admin/site-management/header", authenticate, authorize("ADMIN", "SUBADMIN"), updateSiteHeader);
 
 /**
  * @openapi

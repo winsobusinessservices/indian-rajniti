@@ -7,6 +7,11 @@ const DEFAULT_LIMITS = Object.freeze({
 
 const ROLES = ["AUTHOR", "EDITOR"];
 const CONTENT_TYPES = ["ARTICLE", "BLOG", "VIDEO"];
+const TABLE_BY_TYPE = Object.freeze({
+  ARTICLE: "articles",
+  BLOG: "blogs",
+  VIDEO: "videos",
+});
 
 function defaultsCopy() {
   return Object.fromEntries(
@@ -37,6 +42,20 @@ const ContentLimit = {
     return rows.length ? Number(rows[0].daily_limit) : DEFAULT_LIMITS[role]?.[contentType];
   },
 
+  async getUsage(userId, contentType) {
+    const table = TABLE_BY_TYPE[contentType];
+    if (!table) throw new Error(`Unsupported content type: ${contentType}`);
+    const [rows] = await pool.query(
+      `SELECT COUNT(*) AS total
+       FROM ${table}
+       WHERE author_id = ?
+         AND created_at >= CURRENT_DATE
+         AND created_at < CURRENT_DATE + INTERVAL 1 DAY`,
+      [userId]
+    );
+    return Number(rows[0]?.total || 0);
+  },
+
   async setAll(limits, updatedBy) {
     const connection = await pool.getConnection();
     try {
@@ -63,4 +82,3 @@ const ContentLimit = {
 };
 
 module.exports = { ContentLimit, DEFAULT_LIMITS, ROLES, CONTENT_TYPES };
-

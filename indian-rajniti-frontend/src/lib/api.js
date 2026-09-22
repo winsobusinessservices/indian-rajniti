@@ -147,6 +147,7 @@ export const commentsApi = {
 };
 
 export const contentLimitsApi = {
+  getMine: () => request("/content-limits/me", { notifyError: false }),
   get: () => request("/admin/content-limits"),
   update: (limits) => request("/admin/content-limits", { method: "PUT", body: { limits } }),
 };

@@ -37,7 +37,12 @@ if (process.env.NODE_ENV === "production" && missingProductionEnv.length) {
 
 const allowedOrigins = new Set([
   process.env.CLIENT_ORIGIN || "",
+  process.env.PANEL_ORIGIN || "https://indianrajneeti.com",
   process.env.API_PUBLIC_URL || "",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
   `http://localhost:${PORT}`,
   `http://127.0.0.1:${PORT}`,
 ]
