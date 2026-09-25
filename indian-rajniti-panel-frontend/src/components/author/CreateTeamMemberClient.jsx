@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AuthTextField from "@/components/auth/AuthTextField";
-import { authApi } from "@/lib/api";
+import { authApi, sitesApi } from "@/lib/api";
 import { PERMISSIONS, PERMISSION_GROUPS, ROLE_DEFAULT_PERMISSIONS } from "@/lib/permissions";
 import { useAuth } from "@/context/AuthContext";
 
@@ -91,7 +91,7 @@ function DocumentUploadField({ name, icon, label, required, selectedFile, onChan
   );
 }
 
-const initialForm = { email: "", role: "AUTHOR", permissions: ROLE_DEFAULT_PERMISSIONS.AUTHOR };
+const initialForm = { email: "", role: "AUTHOR", siteId: "", permissions: ROLE_DEFAULT_PERMISSIONS.AUTHOR };
 
 export default function CreateTeamMemberClient({ onCreated }) {
   const { user } = useAuth();
@@ -101,6 +101,15 @@ export default function CreateTeamMemberClient({ onCreated }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sites, setSites] = useState([]);
+
+  useEffect(() => {
+    sitesApi.list().then((data) => {
+      const available = data.sites || [];
+      setSites(available);
+      setForm((current) => ({ ...current, siteId: current.siteId || String(available[0]?.id || "") }));
+    }).catch((err) => setError(err.message));
+  }, []);
 
   const requiredDocs = REQUIRED_DOCS_BY_ROLE[form.role];
 
@@ -132,11 +141,12 @@ export default function CreateTeamMemberClient({ onCreated }) {
       const fd = new FormData();
       fd.append("email", form.email.trim());
       fd.append("role", form.role);
+      fd.append("siteId", form.siteId);
       fd.append("permissions", JSON.stringify(form.permissions));
       requiredDocs.forEach((field) => fd.append(field, files[field]));
       const data = await authApi.assignRole(fd);
       setSuccess(`${data.message}. They've been emailed about the change.`);
-      setForm(initialForm);
+      setForm({ ...initialForm, siteId: String(sites[0]?.id || "") });
       setFiles({});
       onCreated?.();
     } catch (err) {
@@ -193,7 +203,8 @@ export default function CreateTeamMemberClient({ onCreated }) {
         </div>
 
         <div className={sectionClass}>
-          <SectionTitle icon="fa-user-tag">Role</SectionTitle>
+          <SectionTitle icon="fa-user-tag">Role &amp; Website</SectionTitle>
+          <div className="grid gap-4 sm:grid-cols-2">
           <select
             name="role"
             value={form.role}
@@ -206,6 +217,11 @@ export default function CreateTeamMemberClient({ onCreated }) {
               </option>
             ))}
           </select>
+          <input type="hidden" name="siteId" value={form.siteId} />
+          <div className="w-full rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2.5 font-body-md text-on-surface">
+            {sites[0]?.name || "Indian Rajneeti"}
+          </div>
+          </div>
           <p className="mt-3 text-xs font-body-md text-on-surface-variant">
             {form.role === "AUTHOR" && "Authors need a PAN and Aadhar document on file."}
             {form.role === "EDITOR" && "Editors need PAN, Aadhar, and a graduation certificate on file."}

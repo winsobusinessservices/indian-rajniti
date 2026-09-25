@@ -50,7 +50,7 @@ const router = express.Router();
  *       409:
  *         description: An account or pending application already exists for this email
  */
-router.post("/applications", uploadApplicationDocuments, submitApplication);
+router.post("/applications", authenticate, uploadApplicationDocuments, submitApplication);
 
 /**
  * @openapi

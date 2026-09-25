@@ -12,12 +12,19 @@ const { deriveExternalThumbnail } = require("../../utils/videoThumbnail");
 const { joinContentMedia } = require("../../utils/contentMedia");
 const { sanitizeRichText } = require("../../utils/richText");
 const { creditContentReward, creditEditorReviewReward } = require("../../services/walletRewards.service");
+const { sendError } = require("../../utils/httpError");
 
 const { PERMISSIONS } = require("../../config/permissions");
 const isModerator = (user) => user.role === "ADMIN" || user.permissions?.includes(PERMISSIONS.REVIEW_CONTENT);
 
 const MODEL = { ARTICLE: Article, BLOG: Blog, VIDEO: Video };
 const TYPE_LABEL = { ARTICLE: "Article", BLOG: "Blog", VIDEO: "Video" };
+
+function managedContentSiteId(req) {
+  if (req.user.role !== "ADMIN") return Number(req.user.siteId);
+  const requested = Number(req.get("x-management-site-id") || req.query?.siteId || req.body?.siteId || req.user.siteId);
+  return Number.isInteger(requested) && requested > 0 ? requested : Number(req.user.siteId);
+}
 
 async function canAccessAuthor(user, authorId) {
   if (user.role !== "EDITOR") return true;
@@ -138,6 +145,11 @@ function validateRequired(type, fields) {
   return null;
 }
 
+function requiredFieldErrors(type, fields) {
+  const labels = { title: "Title", excerpt: "Excerpt", content: "Content", featuredImage: "Featured image", category: "Category", description: "Description", videoSource: "Video source", videoUrl: "Video URL or file", thumbnail: "Thumbnail" };
+  return Object.fromEntries(REQUIRED_FIELDS[type].filter((key) => !fields[key]).map((key) => [key, `${labels[key] || key} is required.`]));
+}
+
 // The `type` isn't a column — each table IS a type — but the frontend needs
 // it to know which resource a row came from once articles/blogs/videos are
 // merged into one list, or which endpoint to hit next for edit/delete/etc.
@@ -150,6 +162,10 @@ async function loadOwnedContent(req, res) {
   const item = await Model.findById(req.params.id);
   if (!item) {
     res.status(404).json({ success: false, message: `${TYPE_LABEL[req.contentType]} not found` });
+    return null;
+  }
+  if (Number(item.site_id || 1) !== managedContentSiteId(req)) {
+    res.status(403).json({ success: false, message: "This content belongs to another website" });
     return null;
   }
   if (item.author_id !== req.user.userId && !isModerator(req.user)) {
@@ -170,10 +186,10 @@ const createContent = async (req, res) => {
 
     const validationError = validateRequired(req.contentType, fields);
     if (validationError) {
-      return res.status(400).json({ success: false, message: validationError });
+      return res.status(400).json({ success: false, message: validationError, code: "VALIDATION_ERROR", fieldErrors: requiredFieldErrors(req.contentType, fields) });
     }
 
-    const item = await Model.create({ authorId: req.user.userId, ...fields });
+    const item = await Model.create({ authorId: req.user.userId, siteId: managedContentSiteId(req), ...fields });
     return res.status(201).json({
       success: true,
       message: `${TYPE_LABEL[req.contentType]} draft created`,
@@ -181,7 +197,7 @@ const createContent = async (req, res) => {
     });
   } catch (error) {
     console.error(`Create ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} could not be created. Please try again.`);
   }
 };
 
@@ -189,11 +205,11 @@ const listContent = async (req, res) => {
   try {
     const Model = MODEL[req.contentType];
     const { status } = req.query;
-    const posts = await Model.findForUser(req.user, { status });
+    const posts = await Model.findForUser({ ...req.user, siteId: managedContentSiteId(req) }, { status });
     return res.status(200).json({ success: true, posts: tagType(req.contentType, posts) });
   } catch (error) {
     console.error(`List ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} content could not be loaded.`);
   }
 };
 
@@ -203,7 +219,7 @@ const listAllContent = async (req, res) => {
   try {
     const Model = MODEL[req.contentType];
     const { status } = req.query;
-    const posts = await Model.findAll({ status });
+    const posts = await Model.findAll({ status, siteId: managedContentSiteId(req) });
     let visiblePosts = posts;
     if (req.user.role === "EDITOR") {
       const assignedAuthorIds = new Set(await User.getAssignedAuthorIds(req.user.userId));
@@ -213,7 +229,7 @@ const listAllContent = async (req, res) => {
     return res.status(200).json({ success: true, posts: tagType(req.contentType, visiblePosts) });
   } catch (error) {
     console.error(`List all ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} review content could not be loaded.`);
   }
 };
 
@@ -224,7 +240,7 @@ const getContentById = async (req, res) => {
     return res.status(200).json({ success: true, post: tagType(req.contentType, item) });
   } catch (error) {
     console.error(`Get ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} could not be opened.`);
   }
 };
 
@@ -272,7 +288,7 @@ const updateContent = async (req, res) => {
     const fields = extractFields(req.contentType, req.body, req.files);
     const validationError = validateRequired(req.contentType, fields);
     if (validationError) {
-      return res.status(400).json({ success: false, message: validationError });
+      return res.status(400).json({ success: false, message: validationError, code: "VALIDATION_ERROR", fieldErrors: requiredFieldErrors(req.contentType, fields) });
     }
 
     const updated = await Model.update(item.id, fields);
@@ -283,7 +299,7 @@ const updateContent = async (req, res) => {
     });
   } catch (error) {
     console.error(`Update ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} could not be updated. Please try again.`);
   }
 };
 
@@ -314,7 +330,7 @@ const deleteContent = async (req, res) => {
     return res.status(200).json({ success: true, message: `${TYPE_LABEL[req.contentType]} moved to deleted items` });
   } catch (error) {
     console.error(`Delete ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} could not be moved to deleted items.`);
   }
 };
 
@@ -337,7 +353,7 @@ const submitContent = async (req, res) => {
     });
   } catch (error) {
     console.error(`Submit ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} could not be submitted for review.`);
   }
 };
 
@@ -367,7 +383,7 @@ const getContentStatus = async (req, res) => {
     });
   } catch (error) {
     console.error(`Get ${req.contentType} status error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} status could not be loaded.`);
   }
 };
 
@@ -413,7 +429,7 @@ const reviewContent = async (req, res) => {
     if (action === "UPDATE") {
       const validationError = validateRequired(req.contentType, { ...item, ...fields });
       if (validationError) {
-        return res.status(400).json({ success: false, message: validationError });
+        return res.status(400).json({ success: false, message: validationError, code: "VALIDATION_ERROR", fieldErrors: requiredFieldErrors(req.contentType, { ...item, ...fields }) });
       }
     }
 
@@ -454,7 +470,7 @@ const reviewContent = async (req, res) => {
     });
   } catch (error) {
     console.error(`Review ${req.contentType} error:`, error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return sendError(res, error, `${TYPE_LABEL[req.contentType]} review could not be saved.`);
   }
 };
 

@@ -1,6 +1,11 @@
 import { showToast } from "@/lib/toast";
+import { withSiteHeaders } from "@/lib/siteRequest";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+export const AUTH_SESSION_EXPIRED_EVENT = "auth:session-expired";
+
+const AUTH_ENTRY_PATHS = new Set(["/auth/login", "/auth/google"]);
+let lastSessionExpiredToastAt = 0;
 
 // React Strict Mode mounts effects twice in development to expose unsafe side
 // effects. Keep one promise per in-flight GET so both mounts share the same
@@ -42,10 +47,32 @@ export function isOptimizableImageHost(src) {
   }
 }
 
-async function handleResponse(res, { notifySuccess = false, notifyError = true } = {}) {
+function handleExpiredSession(notifyError) {
+  const error = new Error("Your session has expired. Please sign in again.");
+  error.status = 401;
+  error.toastShown = true;
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+  }
+
+  const now = Date.now();
+  if (notifyError && now - lastSessionExpiredToastAt > 1500) {
+    lastSessionExpiredToastAt = now;
+    showToast(error.message, "error");
+  }
+
+  throw error;
+}
+
+async function handleResponse(res, { path = "", notifySuccess = false, notifyError = true } = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    if (res.status === 401 && !AUTH_ENTRY_PATHS.has(path)) {
+      handleExpiredSession(notifyError);
+    }
     const error = new Error(data.message || "Something went wrong. Please try again.");
+    error.status = res.status;
     error.toastShown = notifyError;
     if (notifyError) showToast(error.message, "error");
     throw error;
@@ -63,17 +90,19 @@ async function request(path, { method = "GET", body, notifyError = true } = {}) 
   const url = `${API_BASE_URL}${path}`;
   const normalizedMethod = method.toUpperCase();
 
-  if (normalizedMethod === "GET" && pendingGetRequests.has(url)) {
-    return pendingGetRequests.get(url);
-  }
-
-  const responsePromise = fetch(url, {
+  const fetchOptions = await withSiteHeaders({
     method: normalizedMethod,
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-  })
-    .then((res) => handleResponse(res, { notifySuccess: normalizedMethod !== "GET", notifyError }))
+  });
+  const siteDomain = fetchOptions.headers?.["X-Site-Domain"] || "default";
+  const requestKey = `${url}::site=${siteDomain}`;
+  if (normalizedMethod === "GET" && pendingGetRequests.has(requestKey)) {
+    return pendingGetRequests.get(requestKey);
+  }
+  const responsePromise = fetch(url, fetchOptions)
+    .then((res) => handleResponse(res, { path, notifySuccess: normalizedMethod !== "GET", notifyError }))
     .catch((error) => {
       if (!notifyError) throw error;
       return handleNetworkError(error);
@@ -81,11 +110,11 @@ async function request(path, { method = "GET", body, notifyError = true } = {}) 
 
   if (normalizedMethod !== "GET") return responsePromise;
 
-  pendingGetRequests.set(url, responsePromise);
+  pendingGetRequests.set(requestKey, responsePromise);
   try {
     return await responsePromise;
   } finally {
-    pendingGetRequests.delete(url);
+    pendingGetRequests.delete(requestKey);
   }
 }
 
@@ -93,12 +122,13 @@ async function request(path, { method = "GET", body, notifyError = true } = {}) 
 // browser sets the correct multipart boundary itself.
 async function requestForm(path, { method = "POST", formData } = {}) {
   try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
+    const fetchOptions = await withSiteHeaders({
       method,
       credentials: "include",
       body: formData,
     });
-    return await handleResponse(res, { notifySuccess: true });
+    const res = await fetch(`${API_BASE_URL}${path}`, fetchOptions);
+    return await handleResponse(res, { path, notifySuccess: true });
   } catch (error) {
     return handleNetworkError(error);
   }
@@ -288,6 +318,10 @@ export const referenceAdminApi = {
 
 export const pollApi = {
   vote: (optionIndex) => request("/poll/vote", { method: "POST", body: { optionIndex } }),
+};
+
+export const applicationsApi = {
+  submit: (formData) => requestForm("/applications", { formData }),
 };
 
 // Job postings the site is hiring for — admin creates/manages, any logged-in

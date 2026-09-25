@@ -113,7 +113,7 @@ export default function CommentModerationClient() {
   const removeComment = async (comment) => {
     const confirmed = await confirmDelete({
       title: "Delete comment?",
-      description: `The comment by ${comment.author} will be moved to Deleted Items and can be restored by an Admin.`,
+      description: `The comment by ${comment.author} will be moved to Deleted Items. It can be restored later from Deleted Items.`,
     });
     if (!confirmed) return;
     try {

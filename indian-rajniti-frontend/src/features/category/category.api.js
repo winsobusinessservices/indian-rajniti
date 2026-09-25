@@ -7,6 +7,7 @@ import {
   getKeyFigures,
 } from "@/features/politicians/politician.api";
 import { getAllStatesAndUTs, getStateProfile } from "@/features/geography/geography.api";
+import { getSectionVisibility } from "@/features/news/news.api";
 
 // Fallback figures used whenever a page needs to show "the PM" or "the
 // Leader of Opposition" without a more specific match (party counterpart,
@@ -32,7 +33,7 @@ function findPartyByReference(parties, reference) {
 }
 
 async function buildRegistry() {
-  const [labels, categories, chiefMinisters, parties, formerPMs, keyFigures, statesAndUTs] = await Promise.all([
+  const [labels, categories, chiefMinisters, parties, formerPMs, keyFigures, statesAndUTs, visibility] = await Promise.all([
     getAllCategoryLabels(),
     getCategoryDefinitions(),
     getChiefMinisters(),
@@ -40,6 +41,7 @@ async function buildRegistry() {
     getFormerPMs(),
     getKeyFigures(),
     getAllStatesAndUTs(),
+    getSectionVisibility(),
   ]);
 
   const NATIONAL_RULING = findNationalFigure(keyFigures, "prime minister", "Prime Minister");
@@ -55,20 +57,24 @@ async function buildRegistry() {
   // Register the complete database State/UT record before politician/topic
   // aliases. Previously a minimal `{ name }` CM-derived entry claimed the
   // state slug first, which discarded capital, history and achievements.
-  statesAndUTs.forEach((place) => {
-    add(place.name, "state", place);
-    add(`Election in ${place.name}`, "topic");
-  });
-  chiefMinisters.forEach((cm) => {
-    add(cm.name, "politician", { subtype: "cm", ...cm });
-  });
-  formerPMs.forEach((pm) => add(pm.name, "politician", { subtype: "former-pm", ...pm }));
-  keyFigures.forEach((figure) => add(figure.name, "politician", { subtype: "key-figure", ...figure }));
-  parties.forEach((party) => {
-    if (party.slug && !registry.has(party.slug)) registry.set(party.slug, { label: party.name, type: "party", data: party });
-    add(party.abbreviation, "party", party);
-    add(party.name, "party", party);
-  });
+  if (visibility.feature_states !== false) {
+    statesAndUTs.forEach((place) => {
+      add(place.name, "state", place);
+      add(`Election in ${place.name}`, "topic");
+    });
+  }
+  if (visibility.feature_leaders !== false) {
+    chiefMinisters.forEach((cm) => add(cm.name, "politician", { subtype: "cm", ...cm }));
+    formerPMs.forEach((pm) => add(pm.name, "politician", { subtype: "former-pm", ...pm }));
+    keyFigures.forEach((figure) => add(figure.name, "politician", { subtype: "key-figure", ...figure }));
+  }
+  if (visibility.feature_parties !== false) {
+    parties.forEach((party) => {
+      if (party.slug && !registry.has(party.slug)) registry.set(party.slug, { label: party.name, type: "party", data: party });
+      add(party.abbreviation, "party", party);
+      add(party.name, "party", party);
+    });
+  }
   // Dedicated state, politician and party records are registered first, so
   // a generic category can never replace their richer existing route data.
   categories.forEach((category) => {
@@ -79,7 +85,7 @@ async function buildRegistry() {
   });
   labels.forEach((label) => add(label, "topic"));
 
-  return { registry, chiefMinisters, parties, NATIONAL_RULING, NATIONAL_OPPOSITION };
+  return { registry, categories, chiefMinisters, parties, NATIONAL_RULING, NATIONAL_OPPOSITION };
 }
 
 // Flat, search-friendly view of the same registry /category/[slug] resolves
@@ -97,18 +103,26 @@ export async function getAllCategoryEntries() {
 export async function getStandaloneCategoryInfo(slug) {
   const categories = await getCategoryDefinitions();
   const category = categories.find((item) => item.slug === slug && !item.route_owner);
-  if (!category) return null;
+  if (!category || category.canonical_slug) return null;
   const info = await getCategoryInfo(slug);
   return info?.managedCategorySlug === category.slug ? info : null;
 }
 
 export async function getCategoryInfo(slug) {
-  const { registry, chiefMinisters, parties, NATIONAL_RULING, NATIONAL_OPPOSITION } = await buildRegistry();
+  const { registry, categories, chiefMinisters, parties, NATIONAL_RULING, NATIONAL_OPPOSITION } = await buildRegistry();
   const aliases = {
     westbangal: "west-bengal",
     "west-bangal": "west-bengal",
   };
-  const entry = registry.get(aliases[slug] || slug);
+  let resolvedSlug = aliases[slug] || slug;
+  const visited = new Set();
+  while (!visited.has(resolvedSlug)) {
+    visited.add(resolvedSlug);
+    const aliasCategory = categories.find((item) => item.slug === resolvedSlug);
+    if (!aliasCategory?.canonical_slug) break;
+    resolvedSlug = aliasCategory.canonical_slug;
+  }
+  const entry = registry.get(resolvedSlug);
   if (!entry) return null;
 
   const { label, type, data } = entry;
@@ -250,7 +264,7 @@ export async function getCategoryInfo(slug) {
   const relatedNews = (await getPostsForTopics([...new Set(topicTerms.filter(Boolean))])).slice(0, 12);
 
   const relatedSlugs = new Set(relatedNews.map((story) => story.slug));
-  const recommendedNews = allTeasers()
+  const recommendedNews = (await allTeasers())
     .filter((story) => story.slug && !relatedSlugs.has(story.slug))
     .slice(0, 4);
 
@@ -264,6 +278,7 @@ export async function getCategoryInfo(slug) {
     type,
     subtype: data?.subtype ?? null,
     managedCategorySlug: type === "topic" ? data?.categorySlug ?? null : null,
+    canonicalSlug: resolvedSlug,
     description,
     current,
     opposition,

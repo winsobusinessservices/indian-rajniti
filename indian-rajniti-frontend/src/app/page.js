@@ -10,6 +10,7 @@ import PoliticianCard from "@/components/politician/PoliticianCard";
 import CMCard from "@/components/politician/CMCard";
 import PartyCard from "@/components/politician/PartyCard";
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
+import EmptyState from "@/components/common/EmptyState";
 import AdSlot from "@/components/common/AdSlot";
 import { slugify } from "@/lib/slugify";
 import { formatViews } from "@/lib/formatViews";
@@ -32,7 +33,7 @@ import {
   getTheBriefing,
   getElectionResults,
   getPopularTags,
-  getExtraKeywords,
+  getCategoryDefinitions,
   getLegislativeTracker,
   getPoliticalKeywords,
   getPartyPulse,
@@ -47,13 +48,16 @@ import {
   getBlogs,
   getLatestPosts,
   getAllVideos,
+  getVoicesOfNation,
+  getOpinionLeaders,
+  getHomepageLabels,
+  getHomepageSections,
+  getHomepageServices,
 } from "@/features/news/news.api";
 import {
   getKeyFigures,
   getFormerPMs,
   getChiefMinisters,
-  getVoicesOfNation,
-  getOpinionLeaders,
   getParties,
 } from "@/features/politicians/politician.api";
 import { getParliamentSummary } from "@/features/parliament/parliament.api";
@@ -93,6 +97,7 @@ function KeywordTagGroup({ title, icon, tags }) {
             {tag}
           </Link>
         ))}
+        {!tags.length && <p className="text-sm text-on-surface-variant">No items are available for this website yet.</p>}
       </div>
     </div>
   );
@@ -117,9 +122,30 @@ function SocialPostCard({ post, children }) {
   return <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={className}>Open social post</a>;
 }
 
+function AddedHomepageSection({ section, sources, order }) {
+  if (!section?.enabled) return null;
+  const limit = Math.min(12, Math.max(1, Number(section.limit) || 3));
+  const items = (sources[section.type] || []).slice(0, limit);
+
+  return (
+    <section className="border-t border-outline-variant/30 pt-6" style={Number.isFinite(order) ? { order } : undefined}>
+      <SectionHeader title={section.title} viewAllHref={section.viewAllHref || undefined} />
+      {!items.length && <EmptyState compact icon="fa-box-open" title={`${section.title} is not available yet`} description="Content added for this website will appear here automatically." />}
+      {section.type === "leaders" && <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">{items.map((leader) => <PoliticianCard key={leader.id} name={leader.name} subtitle={leader.position} photo={leader.photo} photoFallback={leader.photoFallback} href={`/category/${slugify(leader.name)}`} />)}</div>}
+      {section.type === "parties" && <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5">{items.map((party) => <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} photoFallback={party.photoFallback} href={`/category/${party.slug}`} />)}</div>}
+      {section.type === "services" && <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">{items.map((service) => <Link key={service.id} href={`/services/${service.slug}`} className="group flex min-h-56 flex-col rounded-xl border border-outline-variant/25 bg-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"><span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary"><i className={`fa-solid ${service.icon || "fa-briefcase"}`} /></span><h3 className="mt-4 font-headline-md text-lg text-on-surface group-hover:text-primary">{service.title}</h3>{service.summary && <p className="mt-2 line-clamp-3 text-sm leading-6 text-on-surface-variant">{service.summary}</p>}<span className="mt-auto inline-flex items-center gap-2 pt-5 text-sm font-semibold text-primary">Learn more <i className="fa-solid fa-arrow-right text-xs transition-transform group-hover:translate-x-1" /></span></Link>)}</div>}
+      {section.type === "videos" && <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">{items.map((video) => <a key={video.id} href={video.videoUrl || "/videos"} target={video.videoUrl ? "_blank" : undefined} rel={video.videoUrl ? "noopener noreferrer" : undefined} className="group rounded-xl border border-outline-variant/25 bg-surface p-4"><ImagePlaceholder image={video.image} alt={video.title} icon="fa-solid fa-video" className="aspect-video w-full rounded-lg" /><h3 className="mt-3 font-headline-md text-base text-on-surface group-hover:text-primary">{video.title}</h3></a>)}</div>}
+      {["top_news", "latest_news", "blogs"].includes(section.type) && <div className="grid grid-cols-1 gap-6 md:grid-cols-3">{items.map((story) => <NewsCard key={`${section.id}-${story.id}`} variant="stacked" story={story} />)}</div>}
+    </section>
+  );
+}
+
 export default async function Home() {
   const [
     sectionVisibility,
+    homepageLabels,
+    homepageSections,
+    homepageServices,
     breakingNews,
     heroSlides,
     topStories,
@@ -136,7 +162,7 @@ export default async function Home() {
     theBriefing,
     electionResults,
     popularTags,
-    extraKeywords,
+    siteCategories,
     legislativeTracker,
     politicalKeywords,
     partyPulse,
@@ -162,6 +188,9 @@ export default async function Home() {
     allVideos,
   ] = await Promise.all([
     getSectionVisibility(),
+    getHomepageLabels(),
+    getHomepageSections(),
+    getHomepageServices(),
     getBreakingNews(),
     getHeroSlides(),
     getTopStories(),
@@ -178,7 +207,7 @@ export default async function Home() {
     getTheBriefing(),
     getElectionResults(),
     getPopularTags(),
-    getExtraKeywords(),
+    getCategoryDefinitions(),
     getLegislativeTracker(),
     getPoliticalKeywords(),
     getPartyPulse(),
@@ -204,7 +233,44 @@ export default async function Home() {
     getAllVideos(),
   ]);
 
-  const sectionClass = (key, base = "") => `${base}${sectionVisibility[key] === false ? " hidden" : ""}`.trim();
+  const featureForSection = {
+    latest_blogs: "feature_blogs",
+    multimedia_hub: "feature_videos",
+    press_conferences: "feature_videos",
+    key_figures: "feature_leaders",
+    former_prime_ministers: "feature_leaders",
+    state_leadership: "feature_states",
+    regional_focus: "feature_states",
+    political_parties: "feature_parties",
+  };
+  const sectionClass = (key, base = "") => {
+    const feature = featureForSection[key];
+    const hidden = sectionVisibility[key] === false || (feature && sectionVisibility[feature] === false);
+    return `${base}${hidden ? " hidden" : ""}`.trim();
+  };
+  const isSectionVisible = (key) => {
+    const feature = featureForSection[key];
+    return sectionVisibility[key] !== false && (!feature || sectionVisibility[feature] !== false);
+  };
+  const sectionLabel = (key) => homepageLabels[key] || { title: key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) };
+  const addedFeatureForType = { leaders: "feature_leaders", blogs: "feature_blogs", videos: "feature_videos", parties: "feature_parties" };
+  const homepageSectionSources = { top_news: topStories, latest_news: latestPosts, leaders: keyFigures, services: homepageServices, blogs, videos: allVideos, parties };
+  const visibleHomepageSections = homepageSections.filter((section) => section.type !== "builtin" && (!addedFeatureForType[section.type] || sectionVisibility[addedFeatureForType[section.type]] !== false));
+  const afterHeroSections = visibleHomepageSections.filter((section) => section.placement === "after_hero");
+  const mainContentSections = visibleHomepageSections.filter((section) => section.placement !== "after_hero");
+  const defaultMainSectionOrder = ["top_stories", "editorial_opinion", "latest_blogs", "regional_focus", "in_depth_analysis", "multimedia_hub", "main_ad", "key_figures", "former_prime_ministers", "voices_of_nation", "state_leadership", "political_parties", "parliament", "digital_dispatches", "pm_corner", "press_conferences"];
+  const savedMainOrder = homepageSections
+    .filter((section) => section.placement !== "after_hero")
+    .map((section) => section.type === "builtin" ? section.sectionKey : section.id)
+    .filter(Boolean);
+  const configuredMainOrder = homepageSections.some((section) => section.type === "builtin")
+    ? savedMainOrder
+    : [...defaultMainSectionOrder, ...savedMainOrder];
+  const mainSectionOrder = [...configuredMainOrder, ...defaultMainSectionOrder.filter((key) => !configuredMainOrder.includes(key))];
+  const homepageOrder = (key) => {
+    const index = mainSectionOrder.indexOf(key);
+    return index < 0 ? mainSectionOrder.length : index;
+  };
 
   return (
     <>
@@ -216,44 +282,51 @@ export default async function Home() {
           <HeroNews slides={heroSlides} />
         </div>
 
+        {afterHeroSections.length > 0 && <div className="mx-auto flex max-w-full flex-col gap-6 px-4 pb-6 md:px-16">
+          {afterHeroSections.map((section) => <AddedHomepageSection key={section.id} section={section} sources={homepageSectionSources} />)}
+        </div>}
+
         <div className="max-w-full mx-auto px-4 md:px-16 flex flex-col lg:flex-row gap-6 py-6">
           {/* Main column */}
           <div className="flex-grow flex flex-col gap-6 lg:w-2/3">
 
             {/* Top Stories */}
-            <section className={sectionClass("top_stories")}>
-              <SectionHeader title="Top Stories" viewAllHref="/top-news" />
+            <section className={sectionClass("top_stories")} style={{ order: homepageOrder("top_stories") }}>
+              <SectionHeader title={sectionLabel("top_stories").title} viewAllHref={sectionLabel("top_stories").viewAllHref} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {topStories.map((story) => (
                   <NewsCard key={story.id} variant="stacked" story={story} />
                 ))}
+                {!topStories.length && <div className="md:col-span-3"><EmptyState compact icon="fa-newspaper" title="No top stories yet" description="Approved stories for this website will appear here." /></div>}
               </div>
             </section>
 
             {/* Editorial Opinion */}
-            <section className={sectionClass("editorial_opinion", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Editorial Opinion" viewAllHref="#" />
+            <section className={sectionClass("editorial_opinion", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("editorial_opinion") }}>
+              <SectionHeader title={sectionLabel("editorial_opinion").title} viewAllHref={sectionLabel("editorial_opinion").viewAllHref} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {editorialOpinion.map((story) => (
                   <NewsCard key={story.id} variant="horizontal" story={story} />
                 ))}
+                {!editorialOpinion.length && <div className="md:col-span-2"><EmptyState compact icon="fa-pen-nib" title="No editorial stories yet" description="Published opinion and analysis will appear here." /></div>}
               </div>
             </section>
 
             {/* Latest Blogs */}
-            <section className={sectionClass("latest_blogs", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Latest Blogs" viewAllHref="/blogs" />
+            <section className={sectionClass("latest_blogs", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("latest_blogs") }}>
+              <SectionHeader title={sectionLabel("latest_blogs").title} viewAllHref={sectionLabel("latest_blogs").viewAllHref} />
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {blogs.slice(0, 3).map((blog) => (
                   <NewsCard key={blog.id} variant="stacked" story={blog} />
                 ))}
+                {!blogs.length && <div className="md:col-span-3"><EmptyState compact icon="fa-blog" title="No blogs published yet" description="Approved blogs for this website will appear here." /></div>}
               </div>
             </section>
 
             {/* Regional Focus */}
-            <section className={sectionClass("regional_focus", "border-t border-outline-variant/30 pt-6")}>
+            <section className={sectionClass("regional_focus", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("regional_focus") }}>
               <div className="flex items-center justify-between mb-6 border-b border-outline-variant/30 pb-2 flex-wrap gap-3">
-                <h2 className="font-display-lg text-2xl md:text-3xl text-primary tracking-tight w-full sm:w-auto">Regional Focus</h2>
+                <h2 className="font-display-lg text-2xl md:text-3xl text-primary tracking-tight w-full sm:w-auto">{sectionLabel("regional_focus").title}</h2>
                 <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                   {regionalFocus.states.map((state, index) => (
                     <Link
@@ -274,13 +347,14 @@ export default async function Home() {
                 {regionalFocus.stories.map((story) => (
                   <NewsCard key={story.id} variant="compact" story={story} />
                 ))}
+                {!regionalFocus.stories.length && <div className="md:col-span-3"><EmptyState compact icon="fa-map-location-dot" title="No regional stories yet" description="Stories connected to states and regions will appear here." /></div>}
               </div>
             </section>
 
             {/* In-Depth Analysis */}
             {inDepthAnalysis && (
-              <section className={sectionClass("in_depth_analysis", "border-t border-outline-variant/30 pt-6")}>
-                <SectionHeader title="In-Depth Analysis" />
+              <section className={sectionClass("in_depth_analysis", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("in_depth_analysis") }}>
+                <SectionHeader title={sectionLabel("in_depth_analysis").title} />
                 <article className="group flex flex-col md:flex-row gap-6 cursor-pointer">
                   <ImagePlaceholder
                     icon={inDepthAnalysis.icon}
@@ -305,12 +379,18 @@ export default async function Home() {
                 </article>
               </section>
             )}
+            {!inDepthAnalysis && isSectionVisible("in_depth_analysis") && (
+              <section className="border-t border-outline-variant/30 pt-6" style={{ order: homepageOrder("in_depth_analysis") }}>
+                <SectionHeader title={sectionLabel("in_depth_analysis").title} />
+                <EmptyState compact icon="fa-newspaper" title="No in-depth analysis yet" description="Published analysis for this website will appear here." />
+              </section>
+            )}
 
             {/* Multimedia Hub */}
-            <section className={sectionClass("multimedia_hub", "bg-inverse-surface text-inverse-on-surface py-6 rounded-xl px-6")}>
+            <section className={sectionClass("multimedia_hub", "bg-inverse-surface text-inverse-on-surface py-6 rounded-xl px-6")} style={{ order: homepageOrder("multimedia_hub") }}>
               <div className="flex items-center justify-between mb-6 border-b border-white/20 pb-2">
-                <h2 className="font-display-lg text-2xl md:text-3xl tracking-tight text-white">Multimedia Hub</h2>
-                <Link href="/videos" className="font-label-md text-inverse-primary hover:underline flex items-center gap-1 text-sm">
+                <h2 className="font-display-lg text-2xl md:text-3xl tracking-tight text-white">{sectionLabel("multimedia_hub").title}</h2>
+                <Link href={sectionLabel("multimedia_hub").viewAllHref} className="font-label-md text-inverse-primary hover:underline flex items-center gap-1 text-sm">
                   MORE VIDEOS <i className="fa-solid fa-arrow-right text-xs" />
                 </Link>
               </div>
@@ -338,42 +418,45 @@ export default async function Home() {
                     </span>
                   </a>
                 ))}
+                {!multimediaHub.length && <div className="md:col-span-2"><EmptyState compact icon="fa-video" title="No videos available" description="Published videos for this website will appear here." /></div>}
               </div>
             </section>
 
             {/* Ad banner */}
-            <div className="w-full border-y border-outline-variant/30">
-              <div className="w-full flex justify-center py-4 md:hidden">
-                <AdSlot width="320px" height="50px" label="Mobile Leaderboard Ad" orientation="horizontal" />
+            {isSectionVisible("main_ad") && <div className="w-full" style={{ order: homepageOrder("main_ad") }}>
+              <div className="empty:hidden w-full justify-center border-y border-outline-variant/30 py-4 md:hidden">
+                <AdSlot placement="home_leaderboard_mobile" width="320px" height="50px" label="Mobile Leaderboard Ad" orientation="horizontal" />
               </div>
-              <div className="hidden md:flex w-full justify-center py-4">
-                <AdSlot width="728px" height="90px" label="728x90 Leaderboard Ad" orientation="horizontal" />
+              <div className="empty:hidden hidden w-full justify-center border-y border-outline-variant/30 py-4 md:flex">
+                <AdSlot placement="home_leaderboard_desktop" width="728px" height="90px" label="728x90 Leaderboard Ad" orientation="horizontal" />
               </div>
-            </div>
+            </div>}
 
             {/* Key Political Figures */}
-            <section className={sectionClass("key_figures")}>
-              <SectionHeader title="Key Political Figures" viewAllHref="/key-political-figures" />
+            <section className={sectionClass("key_figures")} style={{ order: homepageOrder("key_figures") }}>
+              <SectionHeader title={sectionLabel("key_figures").title} viewAllHref={sectionLabel("key_figures").viewAllHref} />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {keyFigures.map((figure) => (
                   <PoliticianCard key={figure.id} name={figure.name} subtitle={figure.position} photo={figure.photo} photoFallback={figure.photoFallback} href={`/category/${slugify(figure.name)}`} />
                 )).slice(0, 5)}
+                {!keyFigures.length && <div className="col-span-full"><EmptyState compact icon="fa-user-tie" title="No leaders available" description="Add visible political leaders for this website from Site Data." /></div>}
               </div>
             </section>
 
             {/* Former Prime Ministers */}
-            <section className={sectionClass("former_prime_ministers", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Former Prime Ministers" viewAllHref="/former-prime-ministers" />
+            <section className={sectionClass("former_prime_ministers", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("former_prime_ministers") }}>
+              <SectionHeader title={sectionLabel("former_prime_ministers").title} viewAllHref={sectionLabel("former_prime_ministers").viewAllHref} />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {formerPMs.map((pm) => (
                   <CMCard key={pm.id} name={pm.name} subtitle={pm.tenure} photo={pm.photo} href={`/category/${slugify(pm.name)}`} />
                 )).slice(0, 5)}
+                {!formerPMs.length && <div className="col-span-full"><EmptyState compact icon="fa-users" title="No former prime ministers available" description="Visible records will appear here after they are added." /></div>}
               </div>
             </section>
 
             {/* Voices of the Nation */}
-            <section className={sectionClass("voices_of_nation", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Voices of the Nation" />
+            <section className={sectionClass("voices_of_nation", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("voices_of_nation") }}>
+              <SectionHeader title={sectionLabel("voices_of_nation").title} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {voicesOfNation.map((voice) => (
                   <div key={voice.id} className="bg-surface p-6 rounded-lg border border-outline-variant/20 relative">
@@ -389,32 +472,35 @@ export default async function Home() {
                     </div>
                   </div>
                 )).slice(0, 2)}
+                {!voicesOfNation.length && <div className="md:col-span-2"><EmptyState compact icon="fa-quote-left" title="No featured voices yet" description="Add this widget's content from Site Data." /></div>}
               </div>
             </section>
 
             {/* State Leadership */}
-            <section className={sectionClass("state_leadership", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="State Leadership" viewAllHref="/cm" />
+            <section className={sectionClass("state_leadership", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("state_leadership") }}>
+              <SectionHeader title={sectionLabel("state_leadership").title} viewAllHref={sectionLabel("state_leadership").viewAllHref} />
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {chiefMinisters.map((cm) => (
                   <CMCard key={cm.id} name={cm.name} subtitle={`Chief Minister, ${cm.state}`} photo={cm.photo} photoFallback={cm.photoFallback} href={`/category/${slugify(cm.name)}`} />
                 )).slice(0, 5)}
+                {!chiefMinisters.length && <div className="col-span-full"><EmptyState compact icon="fa-building-columns" title="No state leaders available" description="Visible state leadership records will appear here." /></div>}
               </div>
             </section>
 
             {/* Indian Political Parties */}
-            <section className={sectionClass("political_parties", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Indian Political Parties" viewAllHref="/parties" />
+            <section className={sectionClass("political_parties", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("political_parties") }}>
+              <SectionHeader title={sectionLabel("political_parties").title} viewAllHref={sectionLabel("political_parties").viewAllHref} />
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 {parties.slice(0, 5).map((party) => (
                   <PartyCard key={party.id} name={party.name} abbreviation={party.abbreviation} founded={party.founded} photo={party.photo} photoFallback={party.photoFallback} href={`/category/${party.slug}`} />
                 ))}
+                {!parties.length && <div className="col-span-full"><EmptyState compact icon="fa-people-group" title="No political parties available" description="Add or enable parties for this website from Site Data." /></div>}
               </div>
             </section>
 
             {/* Parliament */}
-            <section className={sectionClass("parliament", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Parliament" />
+            <section className={sectionClass("parliament", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("parliament") }}>
+              <SectionHeader title={sectionLabel("parliament").title} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {parliamentSummary.map((house) => (
                   <Link
@@ -454,17 +540,18 @@ export default async function Home() {
                     </span>
                   </Link>
                 ))}
+                {!parliamentSummary.length && <div className="md:col-span-2"><EmptyState compact icon="fa-landmark" title="Parliament data is not available" description="Parliament details will appear here when they are added." /></div>}
               </div>
             </section>
 
             {/* Digital Dispatches */}
-            <section className={sectionClass("digital_dispatches", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Digital Dispatches" />
+            <section className={sectionClass("digital_dispatches", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("digital_dispatches") }}>
+              <SectionHeader title={sectionLabel("digital_dispatches").title} />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Video Highlights */}
-                <div className="flex flex-col gap-4">
+                {isSectionVisible("video_highlights") && <div className="flex flex-col gap-4">
                   <h3 className="font-headline-md text-base text-secondary border-l-4 border-secondary pl-3">
-                    Video Highlights
+                    {sectionLabel("video_highlights").title}
                   </h3>
                   {videoHighlights.map((video) => (
                     <a
@@ -488,11 +575,12 @@ export default async function Home() {
                       </div>
                     </a>
                   )).slice(0, 2)}
-                </div>
+                  {!videoHighlights.length && <EmptyState compact icon="fa-video" title="No video highlights" description="New video highlights will appear here." />}
+                </div>}
 
                 {/* X Feed */}
-                <div className="flex flex-col gap-4">
-                  <h3 className="font-headline-md text-base text-primary border-l-4 border-primary pl-3">X Feed</h3>
+                {isSectionVisible("x_feed") && <div className="flex flex-col gap-4">
+                  <h3 className="font-headline-md text-base text-primary border-l-4 border-primary pl-3">{sectionLabel("x_feed").title}</h3>
                   {xFeed.map((post) => (
                     <SocialPostCard key={post.id} post={post}>
                       <div className="flex items-center gap-2">
@@ -524,12 +612,13 @@ export default async function Home() {
                       </div>
                     </SocialPostCard>
                   ))}
-                </div>
+                  {!xFeed.length && <EmptyState compact icon="fa-message" title="No X updates" description="Social updates will appear here when available." />}
+                </div>}
 
                 {/* Facebook Updates */}
-                <div className="flex flex-col gap-4">
+                {isSectionVisible("facebook_updates") && <div className="flex flex-col gap-4">
                   <h3 className="font-headline-md text-base text-surface-tint border-l-4 border-surface-tint pl-3">
-                    Facebook Updates
+                    {sectionLabel("facebook_updates").title}
                   </h3>
                   {facebookUpdates.map((post) => (
                     <SocialPostCard key={post.id} post={post}>
@@ -559,13 +648,14 @@ export default async function Home() {
                       </div>
                     </SocialPostCard>
                   ))}
-                </div>
+                  {!facebookUpdates.length && <EmptyState compact icon="fa-message" title="No Facebook updates" description="Social updates will appear here when available." />}
+                </div>}
               </div>
             </section>
 
             {/* Prime Minister's Corner */}
-            <section className={sectionClass("pm_corner", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Prime Minister's Corner" />
+            <section className={sectionClass("pm_corner", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("pm_corner") }}>
+              <SectionHeader title={sectionLabel("pm_corner").title} />
               <article className="group flex flex-col md:flex-row gap-8">
                 <ImagePlaceholder
                   icon="fa-solid fa-user-tie"
@@ -588,6 +678,7 @@ export default async function Home() {
                         <p className="text-xs text-on-surface-variant">{initiative.excerpt}</p>
                       </div>
                     ))}
+                    {!pmCorner.initiatives.length && <EmptyState compact icon="fa-list-check" title="No initiatives available" description="Initiative details will appear here when added." />}
                   </div>
                   <Link href="/speeches" className="mt-8 font-label-sm text-primary hover:underline flex items-center gap-1">
                     VIEW ALL SPEECHES <i className="fa-solid fa-arrow-right text-xs" />
@@ -597,8 +688,8 @@ export default async function Home() {
             </section>
 
             {/* Press Conference Archive */}
-            <section className={sectionClass("press_conferences", "border-t border-outline-variant/30 pt-6")}>
-              <SectionHeader title="Press Conference Archive" viewAllHref="/press-conferences" />
+            <section className={sectionClass("press_conferences", "border-t border-outline-variant/30 pt-6")} style={{ order: homepageOrder("press_conferences") }}>
+              <SectionHeader title={sectionLabel("press_conferences").title} viewAllHref={sectionLabel("press_conferences").viewAllHref} />
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {pressConference.map((item) => (
                   <a
@@ -620,18 +711,21 @@ export default async function Home() {
                     </h3>
                   </a>
                 )).slice(0, 4)}
+                {!pressConference.length && <div className="col-span-full"><EmptyState compact icon="fa-microphone" title="No press conferences yet" description="Published press conference videos will appear here." /></div>}
               </div>
             </section>
+
+            {mainContentSections.map((section) => <AddedHomepageSection key={section.id} section={section} sources={homepageSectionSources} order={homepageOrder(section.id)} />)}
           </div>
 
           {/* Sidebar */}
           <aside className={sectionClass("home_sidebar", "self-stretch lg:w-1/4 flex flex-col bg-surface-container rounded-xl p-4 border border-outline-variant/30 gap-6")}>
-            <TrendingNews items={trending} viewAllHref="/trending" />
+            <div className={sectionClass("trending_news")}><TrendingNews items={trending} viewAllHref="/trending" title={sectionLabel("trending_news").title} /></div>
 
-            {Array.isArray(followUs) && followUs.length > 0 && (
+            {isSectionVisible("follow_us") && Array.isArray(followUs) && followUs.length > 0 && (
               <div className="pt-4 border-t border-outline-variant/30">
                 <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                  <h3 className="font-headline-md text-primary tracking-tight text-lg">Follow Us</h3>
+                  <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("follow_us").title}</h3>
                   <i className="fa-solid fa-share-nodes text-secondary text-lg" aria-hidden="true" />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -652,11 +746,11 @@ export default async function Home() {
               </div>
             )}
 
-            <PollOfTheDay initialPoll={pollOfTheDay} />
+            <div className={sectionClass("poll_of_the_day")}><PollOfTheDay initialPoll={pollOfTheDay} title={sectionLabel("poll_of_the_day").title} /></div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("legislative_tracker", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Legislative Tracker</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("legislative_tracker").title}</h3>
                 <i className="fa-solid fa-file-lines text-secondary text-lg" />
               </div>
               <ul className="space-y-4">
@@ -673,12 +767,13 @@ export default async function Home() {
                     </div>
                   </li>
                 ))}
+                {!legislativeTracker.length && <li><EmptyState compact icon="fa-file-lines" title="No legislative updates" description="New bills and legislative activity will appear here." /></li>}
               </ul>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("parliament_strength", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Parliament Strength</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("parliament_strength").title}</h3>
                 <i className="fa-solid fa-landmark text-secondary text-lg" />
               </div>
               <div className="flex flex-col gap-3">
@@ -699,12 +794,13 @@ export default async function Home() {
                     </p>
                   </Link>
                 ))}
+                {!parliamentSummary.length && <EmptyState compact icon="fa-landmark" title="No Parliament data" description="Parliament strength data is not available yet." />}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("political_calendar", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Political Calendar</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("political_calendar").title}</h3>
                 <i className="fa-solid fa-calendar-days text-secondary text-lg" />
               </div>
               <ul className="space-y-3">
@@ -718,12 +814,13 @@ export default async function Home() {
                     </p>
                   </li>
                 ))}
+                {!politicalCalendar.length && <li><EmptyState compact icon="fa-calendar" title="No upcoming events" description="Political events will appear here when scheduled." /></li>}
               </ul>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("rti_corner", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">RTI Corner</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("rti_corner").title}</h3>
                 <i className="fa-solid fa-file-circle-question text-secondary text-lg" />
               </div>
               <ul className="space-y-3">
@@ -735,12 +832,13 @@ export default async function Home() {
                     <span className="text-outline text-[10px]">{item.date}</span>
                   </li>
                 ))}
+                {!rtiCorner.length && <li><EmptyState compact icon="fa-file-circle-question" title="No RTI updates" description="RTI information will appear here when available." /></li>}
               </ul>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("digital_pulse", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Digital Pulse</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("digital_pulse").title}</h3>
                 <i className="fa-solid fa-bolt text-secondary text-lg" />
               </div>
               <div className="flex flex-col gap-3">
@@ -752,12 +850,13 @@ export default async function Home() {
                     <p className="font-body-md text-sm text-on-surface">{item.text}</p>
                   </div>
                 ))}
+                {!digitalPulse.length && <EmptyState compact icon="fa-bolt" title="No digital updates" description="Digital pulse updates will appear here." />}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("opinion_leaders", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Opinion Leaders</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("opinion_leaders").title}</h3>
               </div>
               <div className="flex flex-col gap-4">
                 {opinionLeaders.map((leader) => (
@@ -770,12 +869,13 @@ export default async function Home() {
                     </h4>
                   </div>
                 ))}
+                {!opinionLeaders.length && <EmptyState compact icon="fa-quote-left" title="No opinions available" description="Featured opinions will appear here when published." />}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("party_pulse", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Party Pulse</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("party_pulse").title}</h3>
                 <i className="fa-solid fa-people-group text-secondary text-lg" />
               </div>
               <div className="group cursor-pointer">
@@ -786,9 +886,9 @@ export default async function Home() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("fact_check", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Fact Check</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("fact_check").title}</h3>
                 <i className="fa-solid fa-magnifying-glass text-secondary text-lg" />
               </div>
               <div className="bg-surface-container-low p-3 rounded border border-outline-variant/20">
@@ -800,9 +900,9 @@ export default async function Home() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("the_briefing", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">The Briefing</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("the_briefing").title}</h3>
               </div>
               <ul className="space-y-2">
                 {theBriefing.map((item) => (
@@ -811,12 +911,13 @@ export default async function Home() {
                     <p className="font-body-md text-xs text-on-surface-variant">{item}</p>
                   </li>
                 ))}
+                {!theBriefing.length && <li><EmptyState compact icon="fa-list" title="No briefing available" description="The latest briefing will appear here." /></li>}
               </ul>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("from_the_archives", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">From the Archives</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("from_the_archives").title}</h3>
                 <i className="fa-solid fa-landmark-flag text-secondary text-lg" />
               </div>
               <div className="bg-surface-container-low p-3 rounded border border-outline-variant/20">
@@ -825,9 +926,9 @@ export default async function Home() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("election_results", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Election Results</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("election_results").title}</h3>
               </div>
               <div className="bg-surface-container-low rounded p-2 border border-outline-variant/20">
                 <table className="w-full text-[10px] font-label-md">
@@ -848,40 +949,41 @@ export default async function Home() {
                     ))}
                   </tbody>
                 </table>
+                {!electionResults.length && <div className="py-2"><EmptyState compact icon="fa-chart-column" title="No election results" description="Results will appear here when available." /></div>}
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30 flex flex-col items-center">
-              <AdSlot width="300px" height="250px" label="300x250 Rectangle Ad" />
+            <div className={sectionClass("sidebar_ad", "empty:hidden pt-4 border-t border-outline-variant/30 flex flex-col items-center")}>
+              <AdSlot placement="home_sidebar_rectangle" width="300px" height="250px" label="300x250 Rectangle Ad" />
             </div>
 
-            <KeywordTagGroup
-              title="Political Keywords"
+            {isSectionVisible("political_keywords") && <KeywordTagGroup
+              title={sectionLabel("political_keywords").title}
               icon="fa-solid fa-tag"
               tags={[...politicalKeywords.parties, ...politicalKeywords.states, ...politicalKeywords.categories]}
-            />
+            />}
 
-            <KeywordTagGroup title="States" icon="fa-solid fa-map" tags={states.map((s) => s.name)} />
+            {isSectionVisible("states_keywords") && sectionVisibility.feature_states !== false && <KeywordTagGroup title={sectionLabel("states_keywords").title} icon="fa-solid fa-map" tags={states.map((s) => s.name)} />}
 
-            <KeywordTagGroup
-              title="Union Territories"
+            {isSectionVisible("union_territories") && sectionVisibility.feature_states !== false && <KeywordTagGroup
+              title={sectionLabel("union_territories").title}
               icon="fa-solid fa-map-pin"
               tags={unionTerritories.map((ut) => ut.name)}
-            />
+            />}
 
-            <KeywordTagGroup
-              title="Elections by State"
+            {isSectionVisible("elections_by_state") && sectionVisibility.feature_states !== false && <KeywordTagGroup
+              title={sectionLabel("elections_by_state").title}
               icon="fa-solid fa-box-ballot"
               tags={[...states, ...unionTerritories].map((place) => `Election in ${place.name}`)}
-            />
+            />}
 
-            <KeywordTagGroup title="Political Parties" icon="fa-solid fa-people-group" tags={parties.map((p) => p.abbreviation)} />
+            {isSectionVisible("parties_keywords") && sectionVisibility.feature_parties !== false && <KeywordTagGroup title={sectionLabel("parties_keywords").title} icon="fa-solid fa-people-group" tags={parties.map((p) => p.abbreviation)} />}
 
-            <KeywordTagGroup title="Categories" icon="fa-solid fa-list" tags={extraKeywords} />
+            {isSectionVisible("category_keywords") && <KeywordTagGroup title={sectionLabel("category_keywords").title} icon="fa-solid fa-list" tags={siteCategories.map((category) => category.name)} />}
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("constituency_spotlight", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Constituency Spotlight</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("constituency_spotlight").title}</h3>
                 <i className="fa-solid fa-location-dot text-secondary text-lg" />
               </div>
               <div className="bg-surface-container-low p-3 rounded border border-outline-variant/20 group cursor-pointer">
@@ -892,9 +994,9 @@ export default async function Home() {
               </div>
             </div>
 
-            <div className="pt-4 border-t border-outline-variant/30">
+            <div className={sectionClass("latest_updates", "pt-4 border-t border-outline-variant/30")}>
               <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                <h3 className="font-headline-md text-primary tracking-tight text-lg">Latest Updates</h3>
+                <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("latest_updates").title}</h3>
                 <Link href="/top-news" className="text-[10px] font-label-md text-secondary hover:underline">VIEW ALL</Link>
               </div>
               <div className="flex flex-col gap-4">
@@ -919,13 +1021,14 @@ export default async function Home() {
                     </div>
                   </Link>
                 ))}
+                {!latestPosts.length && <EmptyState compact icon="fa-newspaper" title="No latest updates" description="Published content for this website will appear here." />}
               </div>
             </div>
 
-            {blogs.length > 3 && (
-              <div className="pt-4 border-t border-outline-variant/30">
+            {sectionVisibility.feature_blogs !== false && blogs.length > 3 && (
+              <div className={sectionClass("more_blogs", "pt-4 border-t border-outline-variant/30")}>
                 <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-                  <h3 className="font-headline-md text-primary tracking-tight text-lg">More Blogs</h3>
+                  <h3 className="font-headline-md text-primary tracking-tight text-lg">{sectionLabel("more_blogs").title}</h3>
                   <Link href="/blogs" className="text-[10px] font-label-md text-secondary hover:underline">VIEW ALL</Link>
                 </div>
                 <div className="space-y-3">
@@ -949,7 +1052,7 @@ export default async function Home() {
       <section className={sectionClass("popular_tags", "w-full bg-surface py-6 border-t border-outline-variant/30")}>
         <div className="max-w-[1280px] mx-auto px-4 md:px-16">
           <div className="flex items-center gap-4 mb-4">
-            <h2 className="font-label-md text-primary tracking-widest uppercase text-xs">Popular Tags</h2>
+            <h2 className="font-label-md text-primary tracking-widest uppercase text-xs">{sectionLabel("popular_tags").title}</h2>
             <div className="h-px flex-grow bg-outline-variant/30" />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -962,6 +1065,7 @@ export default async function Home() {
                 {tag}
               </Link>
             ))}
+            {!popularTags.length && <EmptyState compact icon="fa-tags" title="No popular tags" description="Popular topics will appear here as content is published." />}
           </div>
         </div>
       </section>

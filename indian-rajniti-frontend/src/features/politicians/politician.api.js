@@ -8,6 +8,7 @@
  */
 import { mediaUrl } from "@/lib/api";
 import { createJsonResource } from "@/lib/jsonResource";
+import { withSiteHeaders } from "@/lib/siteRequest";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -24,12 +25,12 @@ const PARTY_UPLOAD_ALIASES = { "jd-u": "jdu", "cpi-m": "cpim" };
 
 const getPoliticiansData = createJsonResource(`${API_BASE_URL}/politicians`, {
   ttl: 30_000,
-  fetchOptions: { next: { revalidate: 30 } },
+  fetchOptions: () => withSiteHeaders({ next: { revalidate: 30 } }),
 });
 
 const getPartiesData = createJsonResource(`${API_BASE_URL}/parties`, {
   ttl: 0,
-  fetchOptions: { cache: "no-store" },
+  fetchOptions: () => withSiteHeaders({ cache: "no-store" }),
 });
 
 function normalizeCareerTimeline(value) {
@@ -101,36 +102,6 @@ export async function getChiefMinisters() {
     oppositionParty: row.opposition_party,
     since: row.since_year,
   }));
-}
-
-// Voices of the Nation / Opinion Leaders remain anonymized "man on the
-// street" style quotes, not real named politicians — kept as static
-// editorial widgets rather than fake attributed data.
-const VOICES_OF_NATION = [
-  {
-    id: 1,
-    quote:
-      "The true measure of our progress is not just in economic numbers, but in the empowerment of our most vulnerable citizens.",
-    attribution: "Senior Leader, National Address",
-  },
-  {
-    id: 2,
-    quote:
-      "We must prioritize sustainable development to ensure a thriving future for the next generation, regardless of political affiliations.",
-    attribution: "Opposition Spokesperson, Press Meet",
-  },
-];
-
-const OPINION_LEADERS = [
-  { id: 1, quote: "Why the current fiscal policy is a gamble for the middle class." },
-  { id: 2, quote: "The silent revolution in rural connectivity and its political cost." },
-];
-
-export async function getVoicesOfNation() {
-  return VOICES_OF_NATION;
-}
-export async function getOpinionLeaders() {
-  return OPINION_LEADERS;
 }
 
 export async function getParties() {

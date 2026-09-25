@@ -21,11 +21,11 @@ const TRENDING_WINDOW_DAYS = 14;
 const getCategories = async (req, res) => {
   try {
     const [articleCategories, blogCategories, videoCategories, widgets, hiddenCategoryNames] = await Promise.all([
-      Article.findCategories(),
-      Blog.findCategories(),
-      Video.findCategories(),
-      HomeWidget.getAll(),
-      Category.findHiddenNames(),
+      Article.findCategories(req.site.id),
+      Blog.findCategories(req.site.id),
+      Video.findCategories(req.site.id),
+      HomeWidget.getAll(req.site.id),
+      Category.findHiddenNames(req.site.id),
     ]);
 
     const hiddenCategories = new Set(hiddenCategoryNames.map((name) => name.trim().toLowerCase()));
@@ -53,9 +53,9 @@ const getTopicPosts = async (req, res) => {
     if (!terms.length) return res.status(400).json({ success: false, message: "At least one topic term is required" });
 
     const [articles, blogs, hiddenCategoryNames] = await Promise.all([
-      Article.findPublishedForTopics(terms),
-      Blog.findPublishedForTopics(terms),
-      Category.findHiddenNames(),
+      Article.findPublishedForTopics(terms, 60, req.site.id),
+      Blog.findPublishedForTopics(terms, 60, req.site.id),
+      Category.findHiddenNames(req.site.id),
     ]);
     const hiddenCategories = new Set(hiddenCategoryNames.map((name) => name.trim().toLowerCase()));
     const categoryIsVisible = (row) => !hiddenCategories.has(String(row.category || "").trim().toLowerCase());
@@ -192,13 +192,13 @@ function distinctStates(articles) {
 const getHome = async (req, res) => {
   try {
     const [nativeArticles, wordpressArticles, rawBlogsPool, rawVideosPool, widgets, hiddenCategoryNames, sectionVisibility] = await Promise.all([
-      Article.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
-      WpPost.findPublished({ limit: POOL_LIMIT }),
-      Blog.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
-      Video.findPublished({ orderBy: "recent", limit: POOL_LIMIT }),
-      HomeWidget.getAll(),
-      Category.findHiddenNames(),
-      UiSection.visibilityMap(),
+      Article.findPublished({ siteId: req.site.id, orderBy: "recent", limit: POOL_LIMIT }),
+      Number(req.site.id) === 1 ? WpPost.findPublished({ limit: POOL_LIMIT }) : Promise.resolve([]),
+      Blog.findPublished({ siteId: req.site.id, orderBy: "recent", limit: POOL_LIMIT }),
+      Video.findPublished({ siteId: req.site.id, orderBy: "recent", limit: POOL_LIMIT }),
+      HomeWidget.getAll(req.site.id),
+      Category.findHiddenNames(req.site.id),
+      UiSection.visibilityMap(req.site.id),
     ]);
 
     const hiddenCategories = new Set(hiddenCategoryNames.map((name) => name.trim().toLowerCase()));
@@ -318,14 +318,14 @@ const getHome = async (req, res) => {
 const getPostBySlug = async (req, res) => {
   try {
     const { slug } = req.params;
-    let row = await Article.findPublishedBySlug(slug);
+    let row = await Article.findPublishedBySlug(slug, req.site.id);
     let kind = "ARTICLE";
     if (!row) {
-      row = await Blog.findPublishedBySlug(slug);
+      row = await Blog.findPublishedBySlug(slug, req.site.id);
       kind = "BLOG";
     }
     if (!row) {
-      row = await WpPost.findPublishedBySlug(slug);
+      row = Number(req.site.id) === 1 ? await WpPost.findPublishedBySlug(slug) : null;
       kind = "WORDPRESS";
     }
     if (!row) {

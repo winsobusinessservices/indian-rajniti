@@ -5,6 +5,12 @@ const isLocalMediaOrigin = ["localhost", "127.0.0.1", "::1"].includes(mediaOrigi
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactCompiler: true,
+  async redirects() {
+    return [{ source: "/author/:path*", destination: "/panel/:path*", permanent: false }];
+  },
+  async rewrites() {
+    return [{ source: "/panel/:path*", destination: "/author/:path*" }];
+  },
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 60 * 60 * 24 * 30,

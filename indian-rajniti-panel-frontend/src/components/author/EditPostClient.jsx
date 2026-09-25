@@ -31,7 +31,7 @@ export default function EditPostClient({ type, id }) {
         <i className="fa-solid fa-triangle-exclamation text-4xl text-error mb-4" />
         <h1 className="font-display-lg text-2xl text-primary mb-2">Post Not Found</h1>
         <p className="font-body-md text-on-surface-variant mb-6">{error || "This post doesn't exist or you don't have access to it."}</p>
-        <Link href="/author/dashboard" className="inline-block bg-primary text-on-primary px-6 py-2 font-label-md uppercase tracking-widest hover:bg-primary-container transition-colors">
+        <Link href="/panel/dashboard" className="inline-block bg-primary text-on-primary px-6 py-2 font-label-md uppercase tracking-widest hover:bg-primary-container transition-colors">
           Back to Dashboard
         </Link>
       </div>
@@ -41,7 +41,7 @@ export default function EditPostClient({ type, id }) {
   const label = post.type.charAt(0) + post.type.slice(1).toLowerCase();
 
   return (
-    <div className="max-w-5xl mx-auto px-4 md:px-16 py-10">
+    <div className="max-w-full mx-auto px-4 md:px-16 py-10">
       <h1 className="font-display-lg text-3xl text-primary mb-2">Edit {label}</h1>
       <p className="font-body-md text-on-surface-variant mb-8">
         Editing resets this post to Draft status until it&apos;s resubmitted.

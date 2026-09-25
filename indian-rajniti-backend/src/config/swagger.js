@@ -1,4 +1,5 @@
 const swaggerJsdoc = require("swagger-jsdoc");
+const { paths: additionalPaths, schemas: additionalSchemas } = require("./swagger.additional");
 
 const options = {
   definition: {
@@ -15,12 +16,19 @@ const options = {
       },
     ],
 
+    paths: additionalPaths,
+
     components: {
       securitySchemes: {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
+        },
+        cookieAuth: {
+          type: "apiKey",
+          in: "cookie",
+          name: "token",
         },
       },
       schemas: {
@@ -131,6 +139,7 @@ const options = {
             achievements: { type: "string" },
           },
         },
+        ...additionalSchemas,
       },
     },
   },

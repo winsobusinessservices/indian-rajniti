@@ -108,7 +108,7 @@ export default function RichTextEditor({ value, onChange, placeholder = "Start w
       className="relative rounded-lg border border-outline-variant/40 bg-surface focus-within:border-primary"
       style={{ "--editor-min-height": minHeight, "--editor-max-height": maxHeight }}
     >
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-outline-variant/40 bg-surface-container-low px-2 py-2" role="toolbar" aria-label="Rich text formatting">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1.5 rounded-t-lg border-b border-outline-variant/40 bg-surface-container-low px-2 py-2 shadow-sm" role="toolbar" aria-label="Rich text formatting">
         <ToolbarButton label="Paragraph" active={editor.isActive("paragraph")} onClick={() => editor.chain().focus().setParagraph().run()}>P</ToolbarButton>
         <ToolbarButton label="Heading 2" active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}><strong>H2</strong></ToolbarButton>
         <ToolbarButton label="Heading 3" active={editor.isActive("heading", { level: 3 })} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}><strong>H3</strong></ToolbarButton>

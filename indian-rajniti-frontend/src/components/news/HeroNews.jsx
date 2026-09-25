@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 import { formatViews } from "@/lib/formatViews";
+import EmptyState from "@/components/common/EmptyState";
 
 const BADGE_CLASS = {
   primary: "bg-primary text-on-primary",
@@ -25,7 +26,7 @@ export default function HeroNews({ slides }) {
 
   // No approved articles yet — nothing to feature. Real content, so unlike
   // the old dummy data (always exactly 3 slides), this can genuinely happen.
-  if (slides.length === 0) return null;
+  if (slides.length === 0) return <EmptyState icon="fa-newspaper" title="No featured stories yet" description="Approved stories selected for this website will appear here." />;
 
   return (
     <div className="relative isolate z-0 w-full aspect-[16/9] md:aspect-[21/9] overflow-hidden shadow-lg group" style={{ zIndex: 0, isolation: "isolate" }}>

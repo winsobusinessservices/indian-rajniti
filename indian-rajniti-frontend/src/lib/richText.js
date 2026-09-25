@@ -21,3 +21,10 @@ export function isRichTextHtml(value) {
 export function sanitizeRichText(value) {
   return sanitizeHtml(String(value || ""), SANITIZE_OPTIONS);
 }
+
+export function richTextToPlainText(value) {
+  return sanitizeHtml(String(value || ""), { allowedTags: [], allowedAttributes: {} })
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}

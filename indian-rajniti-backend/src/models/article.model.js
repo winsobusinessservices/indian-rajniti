@@ -111,9 +111,9 @@ async function runAiCheck({
 const Article = {
   runAiCheck,
 
-  async findCategories() {
+  async findCategories(siteId = 1) {
     const [rows] = await pool.query(
-      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND site_id = ? AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`, [siteId]
     );
     return rows.map((row) => row.category);
   },
@@ -124,6 +124,7 @@ const Article = {
    */
   async create({
     authorId,
+    siteId,
     title,
     excerpt,
     content,
@@ -145,6 +146,7 @@ const Article = {
       `INSERT INTO ${TABLE}
         (
           author_id,
+          site_id,
           title,
           slug,
           excerpt,
@@ -159,9 +161,10 @@ const Article = {
           status,
           ai_status
         )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
       [
         authorId,
+        siteId || 1,
         title,
         slug,
         excerpt,
@@ -218,9 +221,10 @@ const Article = {
   // 'recent' (newest first). `category`/`state` do a case-insensitive
   // substring match since authors free-type both fields in PostForm.jsx —
   // there's no fixed taxonomy to match exactly against.
-  async findPublished({ category, state, sinceDays, orderBy = "recent", limit = 20 } = {}) {
+  async findPublished({ category, state, sinceDays, siteId = 1, orderBy = "recent", limit = 20 } = {}) {
     const conditions = ["a.deleted_at IS NULL", "a.status = 'APPROVED'", "COALESCE(a.published_at, a.created_at) <= NOW()"];
-    const params = [];
+    const params = [siteId];
+    conditions.push("a.site_id = ?");
 
     if (category) {
       conditions.push("a.category LIKE ?");
@@ -251,7 +255,7 @@ const Article = {
     return rows.map(parseRow);
   },
 
-  async findPublishedForTopics(topics, limit = 60) {
+  async findPublishedForTopics(topics, limit = 60, siteId = 1) {
     if (!topics.length) return [];
     const topicCondition = topics.map(() => `(
       LOWER(a.category) = LOWER(?) OR LOWER(a.state) = LOWER(?) OR
@@ -262,20 +266,20 @@ const Article = {
     const params = topics.flatMap((topic) => [topic, topic, topic, topic, topic, `%${topic}%`]);
     const [rows] = await pool.query(
       `SELECT a.*, u.name AS author_name FROM ${TABLE} a JOIN users u ON u.id = a.author_id
-       WHERE a.deleted_at IS NULL AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW() AND (${topicCondition})
+       WHERE a.deleted_at IS NULL AND a.status = 'APPROVED' AND a.site_id = ? AND COALESCE(a.published_at, a.created_at) <= NOW() AND (${topicCondition})
        ORDER BY a.published_at DESC, a.views DESC LIMIT ?`,
-      [...params, limit]
+      [siteId, ...params, limit]
     );
     return rows.map(parseRow);
   },
 
-  async findPublishedBySlug(slug) {
+  async findPublishedBySlug(slug, siteId = 1) {
     const [rows] = await pool.query(
       `SELECT a.*, u.name AS author_name
        FROM ${TABLE} a
        JOIN users u ON u.id = a.author_id
-       WHERE a.slug = ? AND a.deleted_at IS NULL AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()`,
-      [slug]
+       WHERE a.slug = ? AND a.site_id = ? AND a.deleted_at IS NULL AND a.status = 'APPROVED' AND COALESCE(a.published_at, a.created_at) <= NOW()`,
+      [slug, siteId]
     );
     return parseRow(rows[0]);
   },
@@ -292,8 +296,8 @@ const Article = {
    * work use findAll() (the review queue / content history) instead.
    */
   async findForUser(user, { status } = {}) {
-    const conditions = ["a.author_id = ?", "a.deleted_at IS NULL"];
-    const params = [user.userId];
+    const conditions = ["a.author_id = ?", "a.deleted_at IS NULL", "a.site_id = ?"];
+    const params = [user.userId, user.siteId || 1];
 
     if (status) {
       conditions.push("a.status = ?");
@@ -323,9 +327,10 @@ const Article = {
    * (no status filter, or any specific one). Never scoped to a single
    * author — that's findForUser()'s job.
    */
-  async findAll({ status } = {}) {
+  async findAll({ status, siteId } = {}) {
     const conditions = ["a.deleted_at IS NULL"];
     const params = [];
+    if (siteId) { conditions.push("a.site_id = ?"); params.push(siteId); }
 
     if (status) {
       conditions.push("a.status = ?");

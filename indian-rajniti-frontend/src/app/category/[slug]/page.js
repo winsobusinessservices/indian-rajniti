@@ -14,7 +14,7 @@ export async function generateMetadata({ params }) {
   return buildPageMetadata({
     title: info.label,
     description: info.description,
-    path: `/category/${slug}`,
+    path: `/category/${info.canonicalSlug || slug}`,
   });
 }
 

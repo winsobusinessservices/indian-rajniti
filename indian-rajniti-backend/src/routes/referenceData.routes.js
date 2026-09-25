@@ -2,8 +2,9 @@ const express = require("express");
 const { authenticate, authorize, authorizePermission } = require("../middleware/auth.middleware");
 const { PERMISSIONS } = require("../config/permissions");
 const {
-  listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, getSiteManagement, updateSiteHeader, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles,
+  listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, uploadAdvertisementPoster, getSiteManagement, updateSiteHeader, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles,
 } = require("../controllers/admin/referenceData.controller");
+const { uploadFields } = require("../middleware/upload.middleware");
 
 const router = express.Router();
 const siteData = [authenticate, authorizePermission(PERMISSIONS.MANAGE_SITE_DATA)];
@@ -15,11 +16,44 @@ const widgetPermission = (key) => ({
 }[key] || PERMISSIONS.SITE_WIDGET_OTHER);
 const authorizeWidget = (req, res, next) => {
   if (["ADMIN", "SUBADMIN"].includes(req.user?.role)) return next();
-  return authorizePermission(PERMISSIONS.SITE_HOME_WIDGETS, widgetPermission(req.params.key))(req, res, next);
+  return authorizePermission(PERMISSIONS.MANAGE_SITE_MANAGEMENT, PERMISSIONS.SITE_HOME_WIDGETS, widgetPermission(req.params.key))(req, res, next);
 };
 
-router.get("/admin/site-management", authenticate, authorize("ADMIN", "SUBADMIN"), getSiteManagement);
-router.put("/admin/site-management/header", authenticate, authorize("ADMIN", "SUBADMIN"), updateSiteHeader);
+router.get("/admin/site-management", authenticate, authorizePermission(PERMISSIONS.MANAGE_SITE_MANAGEMENT), getSiteManagement);
+router.put("/admin/site-management/header", authenticate, authorizePermission(PERMISSIONS.MANAGE_SITE_MANAGEMENT), updateSiteHeader);
+/**
+ * @openapi
+ * /api/admin/reference-data/advertisements/poster:
+ *   post:
+ *     summary: Upload an advertisement poster
+ *     tags: [Reference Data]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required: [poster]
+ *             properties:
+ *               poster:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Poster uploaded
+ *       400:
+ *         description: Poster image is missing or invalid
+ */
+router.post(
+  "/admin/reference-data/advertisements/poster",
+  authenticate,
+  authorizePermission(PERMISSIONS.MANAGE_SITE_MANAGEMENT),
+  (req, res, next) => { req.contentType = "advertisements"; next(); },
+  ...uploadFields([{ name: "poster", maxCount: 1 }]),
+  uploadAdvertisementPoster
+);
 
 /**
  * @openapi

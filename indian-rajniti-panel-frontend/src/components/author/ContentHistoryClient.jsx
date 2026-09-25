@@ -5,6 +5,7 @@ import Link from "next/link";
 import { authorApi } from "@/lib/api";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import { richTextToPlainText } from "@/lib/richText";
+import EmptyState from "@/components/common/EmptyState";
 
 const STATUS_BADGE = {
   DRAFT: "bg-outline-variant text-on-surface",
@@ -132,11 +133,9 @@ export default function ContentHistoryClient() {
       {loading ? (
         <DashboardRowsSkeleton />
       ) : error ? (
-        <p className="text-sm text-error font-body-md" role="alert">
-          {error}
-        </p>
+        <EmptyState icon="fa-triangle-exclamation" title="Content history is unavailable" description={error} />
       ) : filteredPosts.length === 0 ? (
-        <p className="font-body-md text-on-surface-variant">No content matches these filters.</p>
+        <EmptyState icon="fa-clock-rotate-left" title={posts.length ? "No content matches these filters" : "No content history for this website"} description={posts.length ? "Change or clear the type, status, author, or date filters." : "Created and reviewed content will appear here."} />
       ) : (
         <div className="space-y-3">
           {filteredPosts.map((post) => (
@@ -187,7 +186,7 @@ export default function ContentHistoryClient() {
                 )}
               </div>
               <Link
-                href={`/author/view/${post.type.toLowerCase()}/${post.id}?from=history`}
+                href={`/panel/view/${post.type.toLowerCase()}/${post.id}?from=history`}
                 className="px-3 py-1.5 text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors flex-shrink-0"
               >
                 View

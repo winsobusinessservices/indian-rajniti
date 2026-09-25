@@ -4,27 +4,29 @@
  * concurrent consumers from sending duplicate requests.
  */
 export function createJsonResource(url, { ttl = 60_000, fetchOptions = {} } = {}) {
-  let value;
-  let expiresAt = 0;
-  let pending = null;
+  const entries = new Map();
 
   return async function readJsonResource() {
+    const resolvedOptions = typeof fetchOptions === "function" ? await fetchOptions() : fetchOptions;
+    const siteKey = resolvedOptions?.headers?.["X-Site-Domain"] || "default";
+    const entry = entries.get(siteKey) || { value: undefined, expiresAt: 0, pending: null };
     const now = Date.now();
-    if (value !== undefined && now < expiresAt) return value;
-    if (pending) return pending;
+    if (entry.value !== undefined && now < entry.expiresAt) return entry.value;
+    if (entry.pending) return entry.pending;
 
-    pending = fetch(url, fetchOptions)
+    entry.pending = fetch(url, resolvedOptions)
       .then(async (response) => {
         if (!response.ok) throw new Error(`Request failed (${response.status})`);
         const data = await response.json();
-        value = data;
-        expiresAt = Date.now() + ttl;
+        entry.value = data;
+        entry.expiresAt = Date.now() + ttl;
         return data;
       })
       .finally(() => {
-        pending = null;
+        entry.pending = null;
       });
+    entries.set(siteKey, entry);
 
-    return pending;
+    return entry.pending;
   };
 }

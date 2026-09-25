@@ -6,7 +6,7 @@ import AdSlot from "@/components/common/AdSlot";
 import { getTrending, getTopStories, getVideoHighlights } from "@/features/news/news.api";
 import { formatViews } from "@/lib/formatViews";
 
-export default async function NewsAsideLeft() {
+export default async function NewsAsideLeft({ adPlacement = "article_left_rectangle" }) {
   const [trending, topStories, videoHighlights] = await Promise.all([
     getTrending(),
     getTopStories(),
@@ -72,8 +72,8 @@ export default async function NewsAsideLeft() {
         </div>
       </div>
 
-      <div className="pt-4 border-t border-outline-variant/30">
-        <AdSlot width="300px" height="250px" label="300x250 Rectangle Ad" />
+      <div className="empty:hidden pt-4 border-t border-outline-variant/30">
+        <AdSlot placement={adPlacement} width="300px" height="250px" label="300x250 Rectangle Ad" />
       </div>
     </aside>
   );

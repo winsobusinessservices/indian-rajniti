@@ -1,4 +1,5 @@
 const { sendContactEmail } = require("../../services/nodemailer.service");
+const User = require("../../models/user.model");
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const requestsByIp = new Map();
@@ -10,6 +11,7 @@ function clean(value, maxLength) {
 }
 
 async function submitContact(req, res) {
+  try {
   const now = Date.now();
   const ip = req.ip || req.socket.remoteAddress || "unknown";
   const recent = (requestsByIp.get(ip) || []).filter((time) => now - time < WINDOW_MS);
@@ -17,8 +19,9 @@ async function submitContact(req, res) {
     return res.status(429).json({ success: false, message: "Too many messages. Please try again later." });
   }
 
-  const name = clean(req.body?.name, 100);
-  const email = clean(req.body?.email, 254).toLowerCase();
+  const user = req.user ? await User.findById(req.user.userId) : null;
+  const name = clean(user?.name || req.body?.name, 100);
+  const email = clean(user?.email || req.body?.email, 254).toLowerCase();
   const phone = clean(req.body?.phone, 30);
   const subject = clean(req.body?.subject, 150).replace(/[\r\n]+/g, " ");
   const message = clean(req.body?.message, 5000);
@@ -30,12 +33,11 @@ async function submitContact(req, res) {
     return res.status(400).json({ success: false, message: "Please enter a valid email address." });
   }
 
-  try {
     await sendContactEmail({ name, email, phone, subject, message });
     requestsByIp.set(ip, [...recent, now]);
     return res.status(200).json({ success: true, message: "Thanks for contacting us. We will respond shortly." });
   } catch (error) {
-    console.error("Contact email error:", error);
+    console.error("Contact submission error:", error);
     return res.status(500).json({ success: false, message: "We could not send your message. Please try again." });
   }
 }

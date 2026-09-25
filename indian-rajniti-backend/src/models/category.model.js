@@ -12,34 +12,39 @@ const RESERVED_ROOT_SLUGS = [
 ];
 
 const Category = {
-  async findAll({ includeHidden = false } = {}) {
+  async findAll({ includeHidden = false, siteId = 1 } = {}) {
     const [rows] = await pool.query(
-      `SELECT id, name, slug, is_visible, content, created_by, created_at FROM ${TABLE}
-       WHERE deleted_at IS NULL ${includeHidden ? "" : "AND is_visible = 1"} ORDER BY name ASC`
+      `SELECT id, name, slug, is_visible, content, canonical_slug, created_by, created_at FROM ${TABLE}
+       WHERE deleted_at IS NULL AND site_id = ? ${includeHidden ? "" : "AND is_visible = 1"} ORDER BY name ASC`, [siteId]
     );
     return rows;
   },
 
-  async findHiddenNames() {
-    const [rows] = await pool.query(`SELECT name FROM ${TABLE} WHERE is_visible = 0 AND deleted_at IS NULL`);
+  async findHiddenNames(siteId = 1) {
+    const [rows] = await pool.query(`SELECT name FROM ${TABLE} WHERE is_visible = 0 AND site_id = ? AND deleted_at IS NULL`, [siteId]);
     return rows.map((row) => row.name);
   },
 
-  async findById(id) {
-    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
+  async findById(id, siteId = null) {
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL${siteId ? " AND site_id = ?" : ""}`, siteId ? [id, siteId] : [id]);
     return rows[0];
   },
 
-  async findByName(name) {
-    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE LOWER(name) = LOWER(?) AND deleted_at IS NULL`, [name]);
+  async findByName(name, siteId = 1) {
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE LOWER(name) = LOWER(?) AND site_id = ? AND deleted_at IS NULL`, [name, siteId]);
     return rows[0];
   },
 
-  async findReservedRoutes() {
+  async findBySlug(slug, siteId = 1) {
+    const [rows] = await pool.query(`SELECT * FROM ${TABLE} WHERE slug = ? AND site_id = ? AND deleted_at IS NULL`, [slug, siteId]);
+    return rows[0];
+  },
+
+  async findReservedRoutes(siteId = 1) {
     const [[parties], [politicians], [states]] = await Promise.all([
-      pool.query("SELECT slug, name, abbreviation FROM parties WHERE deleted_at IS NULL"),
-      pool.query("SELECT slug, name FROM politicians WHERE deleted_at IS NULL"),
-      pool.query("SELECT slug, name FROM states WHERE deleted_at IS NULL"),
+      pool.query("SELECT slug, name, abbreviation FROM parties WHERE site_id = ? AND deleted_at IS NULL", [siteId]),
+      pool.query("SELECT slug, name FROM politicians WHERE site_id = ? AND deleted_at IS NULL", [siteId]),
+      pool.query("SELECT slug, name FROM states WHERE site_id = ? AND deleted_at IS NULL", [siteId]),
     ]);
     const routes = new Map(RESERVED_ROOT_SLUGS.map((slug) => [slug, {
       type: "existing website page", name: `/${slug}`, section: null,
@@ -57,16 +62,16 @@ const Category = {
     return routes;
   },
 
-  async create({ name, content = null, isVisible = true, createdBy }) {
+  async create({ name, content = null, canonicalSlug = null, isVisible = true, createdBy, siteId = 1 }) {
     const slug = await uniqueSlug(name, async (candidate) => {
-      const [rows] = await pool.query(`SELECT id FROM ${TABLE} WHERE slug = ?`, [candidate]);
+      const [rows] = await pool.query(`SELECT id FROM ${TABLE} WHERE slug = ? AND site_id = ?`, [candidate, siteId]);
       return Boolean(rows[0]);
     });
     const [result] = await pool.query(
-      `INSERT INTO ${TABLE} (name, slug, content, is_visible, created_by) VALUES (?, ?, ?, ?, ?)`,
-      [name, slug, content, isVisible ? 1 : 0, createdBy ?? null]
+      `INSERT INTO ${TABLE} (name, slug, content, canonical_slug, is_visible, created_by, site_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [name, slug, content, canonicalSlug, isVisible ? 1 : 0, createdBy ?? null, siteId]
     );
-    return Category.findById(result.insertId);
+    return Category.findById(result.insertId, siteId);
   },
 
   async remove(id) {
@@ -74,14 +79,14 @@ const Category = {
     return result.affectedRows > 0;
   },
 
-  async setVisibility(id, isVisible) {
-    const [result] = await pool.query(`UPDATE ${TABLE} SET is_visible = ? WHERE id = ?`, [isVisible ? 1 : 0, id]);
-    return result.affectedRows > 0 ? Category.findById(id) : null;
+  async setVisibility(id, isVisible, siteId) {
+    const [result] = await pool.query(`UPDATE ${TABLE} SET is_visible = ? WHERE id = ? AND site_id = ?`, [isVisible ? 1 : 0, id, siteId]);
+    return result.affectedRows > 0 ? Category.findById(id, siteId) : null;
   },
 
-  async updateContent(id, content) {
-    const [result] = await pool.query(`UPDATE ${TABLE} SET content = ? WHERE id = ?`, [content, id]);
-    return result.affectedRows > 0 ? Category.findById(id) : null;
+  async updatePageSettings(id, { content, canonicalSlug }, siteId) {
+    const [result] = await pool.query(`UPDATE ${TABLE} SET content = ?, canonical_slug = ? WHERE id = ? AND site_id = ?`, [content, canonicalSlug, id, siteId]);
+    return result.affectedRows > 0 ? Category.findById(id, siteId) : null;
   },
 };
 

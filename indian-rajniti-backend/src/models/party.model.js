@@ -4,21 +4,21 @@ const pool = require("../config/db");
 
 const TABLE = "parties";
 const COLUMNS =
-  "id, slug, name, abbreviation, photo_url, founded_year, founded_place, founders, ideology, history, achievements, current_status, years_in_power, sort_order";
+  "id, site_id, slug, name, abbreviation, photo_url, founded_year, founded_place, founders, ideology, history, achievements, current_status, years_in_power, sort_order";
 
 const Party = {
-  async findAll() {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE deleted_at IS NULL ORDER BY sort_order ASC, id ASC`);
+  async findAll({ siteId = 1 } = {}) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE site_id = ? AND deleted_at IS NULL ORDER BY sort_order ASC, id ASC`, [siteId]);
     return rows;
   },
 
-  async findBySlug(slug) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ? AND deleted_at IS NULL`, [slug]);
+  async findBySlug(slug, siteId = 1) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ? AND site_id = ? AND deleted_at IS NULL`, [slug, siteId]);
     return rows[0];
   },
 
-  async findById(id) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
+  async findById(id, siteId = 1) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ? AND site_id = ? AND deleted_at IS NULL`, [id, siteId]);
     return rows[0];
   },
 
@@ -28,6 +28,7 @@ const Party = {
   },
 
   async upsert({
+    siteId = 1,
     slug,
     name,
     abbreviation,
@@ -45,8 +46,8 @@ const Party = {
   }) {
     await pool.query(
       `INSERT INTO ${TABLE}
-        (slug, name, abbreviation, photo_url, founded_year, founded_place, founders, ideology, history, achievements, current_status, years_in_power, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (site_id, slug, name, abbreviation, photo_url, founded_year, founded_place, founders, ideology, history, achievements, current_status, years_in_power, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          abbreviation = VALUES(abbreviation),
@@ -61,6 +62,7 @@ const Party = {
          years_in_power = VALUES(years_in_power),
          sort_order = VALUES(sort_order)`,
       [
+        siteId,
         slug,
         name,
         abbreviation,

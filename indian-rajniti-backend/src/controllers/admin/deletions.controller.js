@@ -1,12 +1,18 @@
 const DeletionAudit = require("../../models/deletionAudit.model");
 
+const managedSiteId = (req) => Number(
+  (req.user?.role === "ADMIN" && (req.body?.siteId || req.query?.siteId || req.get("x-management-site-id")))
+  || req.user?.siteId
+  || 1
+);
+
 const listDeletions = async (req, res) => {
   try {
     const requestedState = String(req.query.state || "ACTIVE").toUpperCase();
     const state = ["ACTIVE", "RESTORED", "PERMANENT", "ALL"].includes(requestedState)
       ? requestedState
       : "ACTIVE";
-    const deletions = await DeletionAudit.list({ state });
+    const deletions = await DeletionAudit.list({ state, siteId: managedSiteId(req) });
     return res.status(200).json({ success: true, deletions });
   } catch (error) {
     console.error("List deletions error:", error);
@@ -16,7 +22,7 @@ const listDeletions = async (req, res) => {
 
 const restoreDeletion = async (req, res) => {
   try {
-    const restored = await DeletionAudit.restore(req.params.id, req.user.userId);
+    const restored = await DeletionAudit.restore(req.params.id, req.user.userId, managedSiteId(req));
     if (!restored) return res.status(404).json({ success: false, message: "Deleted item is unavailable" });
     return res.status(200).json({ success: true, message: "Item restored" });
   } catch (error) {
@@ -31,7 +37,7 @@ const restoreDeletion = async (req, res) => {
 
 const permanentlyDelete = async (req, res) => {
   try {
-    const deleted = await DeletionAudit.hardDelete(req.params.id, req.user.userId);
+    const deleted = await DeletionAudit.hardDelete(req.params.id, req.user.userId, managedSiteId(req));
     if (!deleted) return res.status(404).json({ success: false, message: "Deleted item is unavailable" });
     return res.status(200).json({ success: true, message: "Item permanently deleted" });
   } catch (error) {

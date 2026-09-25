@@ -2,8 +2,15 @@ import Link from "next/link";
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import { careersApi } from "@/lib/api";
 import { buildPageMetadata } from "@/lib/seo";
+import { notFound } from "next/navigation";
+import { isSiteFeatureEnabled } from "@/lib/siteFeatures";
+import { getListingPages } from "@/features/news/news.api";
+import { richTextToPlainText } from "@/lib/richText";
 
-export const metadata = buildPageMetadata({ title: "Careers at Indian Rajneeti", description: "Explore journalism, editorial, research, video, and technology opportunities at Indian Rajneeti.", path: "/careers" });
+export async function generateMetadata() {
+  const page = (await getListingPages()).careers || {};
+  return buildPageMetadata({ title: page.title || "Careers", description: page.description || "", path: "/careers" });
+}
 
 const EMPLOYMENT_LABEL = {
   FULL_TIME: "Full-time",
@@ -31,7 +38,7 @@ function JobCard({ job }) {
       <h3 className="font-headline-md text-lg text-on-surface group-hover:text-primary transition-colors leading-snug">
         {job.title}
       </h3>
-      <p className="font-body-md text-on-surface-variant line-clamp-2 text-sm">{job.description}</p>
+      <p className="font-body-md text-on-surface-variant line-clamp-2 text-sm">{richTextToPlainText(job.description)}</p>
       {job.location && (
         <span className="font-label-sm text-xs text-outline flex items-center gap-1.5 mt-1">
           <i className="fa-solid fa-location-dot" /> {job.location}
@@ -42,14 +49,16 @@ function JobCard({ job }) {
 }
 
 export default async function CareersPage() {
-  const { jobs } = await careersApi.list();
+  if (!(await isSiteFeatureEnabled("feature_careers"))) notFound();
+  const [{ jobs }, pages] = await Promise.all([careersApi.list(), getListingPages()]);
+  const page = pages.careers || {};
   const activeJobs = jobs.filter(isOpenForApplications);
 
   return (
-    <CategoryPageShell title="Careers" count={activeJobs.length} gridClassName="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <CategoryPageShell title={page.title || ""} count={activeJobs.length} emptyTitle="No open positions" emptyDescription={page.emptyText} gridClassName="grid grid-cols-1 md:grid-cols-2 gap-6">
       {activeJobs.length === 0 ? (
         <p className="font-body-md text-on-surface-variant col-span-full">
-          There are no open positions right now — check back soon.
+          {page.emptyText}
         </p>
       ) : (
         activeJobs.map((job) => <JobCard key={job.id} job={job} />)

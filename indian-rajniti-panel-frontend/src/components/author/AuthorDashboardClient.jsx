@@ -7,6 +7,8 @@ import { authorApi, authApi, walletApi } from "@/lib/api";
 import { SkeletonBlock, SkeletonText } from "@/components/common/Skeleton";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import { PERMISSIONS, hasPermission } from "@/lib/permissions";
+import { useAdminSite } from "@/context/AdminSiteContext";
+import EmptyState from "@/components/common/EmptyState";
 
 const CREATE_CARDS = [
   { type: "article", label: "Article", icon: "fa-newspaper" },
@@ -114,6 +116,7 @@ const ROLE_LABEL = { AUTHOR: "Author", EDITOR: "Editor", ADMIN: "Admin", SUBADMI
 
 export default function AuthorDashboardClient() {
   const { user } = useAuth();
+  const { activeSite, activeSiteId } = useAdminSite();
   const isAdmin = user?.role === "ADMIN";
   const isInvestor = user?.role === "INVESTOR";
   const roleLabel = ROLE_LABEL[user?.role] || "Author";
@@ -145,34 +148,46 @@ export default function AuthorDashboardClient() {
   // moderator/investor-only history endpoint (every author, every status)
   // instead of the personal one everyone else gets.
   useEffect(() => {
-    const request = !canAccessContent
-      ? Promise.resolve([])
-      : isAdmin || isInvestor || canViewHistory || canReview
-        ? authorApi.listAllHistory()
-        : authorApi.listAllTypes();
-    request
-      .then(setPosts)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [canAccessContent, canReview, canViewHistory, isAdmin, isInvestor]);
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError("");
+      const request = !canAccessContent
+        ? Promise.resolve([])
+        : isAdmin || isInvestor || canViewHistory || canReview
+          ? authorApi.listAllHistory()
+          : authorApi.listAllTypes();
+      request
+        .then((items) => { if (active) setPosts(items); })
+        .catch((err) => { if (active) setError(err.message); })
+        .finally(() => { if (active) setLoading(false); });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [activeSiteId, canAccessContent, canReview, canViewHistory, isAdmin, isInvestor]);
 
   // Investor-only: the site's user totals (total/authors/editors), read-only.
   useEffect(() => {
     if (!isInvestor) return;
-    authApi
-      .listUsers()
-      .then((data) => {
-        const users = data.users || [];
-        setUserCounts({
-          total: users.length,
-          authors: users.filter((u) => u.role === "AUTHOR").length,
-          editors: users.filter((u) => u.role === "EDITOR").length,
-          subadmins: users.filter((u) => u.role === "SUBADMIN").length,
-        });
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setUsersLoading(false));
-  }, [isInvestor]);
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setUsersLoading(true);
+      authApi
+        .listUsers()
+        .then((data) => {
+          if (!active) return;
+          const users = data.users || [];
+          setUserCounts({
+            total: users.length,
+            authors: users.filter((u) => u.role === "AUTHOR").length,
+            editors: users.filter((u) => u.role === "EDITOR").length,
+            subadmins: users.filter((u) => u.role === "SUBADMIN").length,
+          });
+        })
+        .catch((err) => { if (active) setError(err.message); })
+        .finally(() => { if (active) setUsersLoading(false); });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [activeSiteId, isInvestor]);
 
   useEffect(() => {
     if (!["AUTHOR", "EDITOR"].includes(user?.role)) return;
@@ -205,6 +220,7 @@ export default function AuthorDashboardClient() {
   return (
     <div className="max-w-full mx-auto px-4 md:px-16 py-10">
       <h1 className="font-display-lg text-3xl text-primary mb-2">{roleLabel} Dashboard</h1>
+      {activeSite?.name && <p className="mb-2 text-sm font-semibold text-secondary">Showing data for {activeSite.name}</p>}
       <p className="font-body-md text-on-surface-variant mb-8">
         {isInvestor
           ? "A read-only business view of publishing volume, editorial capacity, and content outcomes."
@@ -217,7 +233,7 @@ export default function AuthorDashboardClient() {
 
       {canReview && !loading && (
         <Link
-          href="/author/review"
+          href="/panel/review"
           className={`flex items-center gap-3 p-5 rounded-lg border-2 transition-all mb-8 ${
             statusCounts.PENDING > 0
               ? "border-yellow-500/50 bg-yellow-500/10 hover:border-yellow-500"
@@ -330,7 +346,7 @@ export default function AuthorDashboardClient() {
             {visibleCreateCards.map((card) => (
               <Link
                 key={card.type}
-                href={`/author/create/${card.type}`}
+                href={`/panel/create/${card.type}`}
                 className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container hover:border-primary/50 transition-all"
               >
                 <span className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center flex-shrink-0">
@@ -346,7 +362,7 @@ export default function AuthorDashboardClient() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
             {canViewOwnContent && <Link
-              href="/author/content"
+              href="/panel/content"
               className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
             >
               <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
@@ -362,7 +378,7 @@ export default function AuthorDashboardClient() {
 
             {canViewHistory && (
               <Link
-                href="/author/history"
+                href="/panel/history"
                 className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
               >
                 <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
@@ -379,7 +395,7 @@ export default function AuthorDashboardClient() {
 
             {canManageSiteData && (
                 <Link
-                  href="/author/site-data"
+                  href="/panel/site-data"
                   className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
                 >
                   <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
@@ -393,7 +409,7 @@ export default function AuthorDashboardClient() {
             )}
             {canManageCategories && (
                 <Link
-                  href="/author/categories"
+                  href="/panel/categories"
                   className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
                 >
                   <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
@@ -407,7 +423,7 @@ export default function AuthorDashboardClient() {
             )}
             {canManageTeam && (
                 <Link
-                  href="/author/team"
+                  href="/panel/team"
                   className="flex items-center gap-3 p-5 rounded-lg border-2 border-outline-variant/30 bg-surface-container-low hover:border-primary/50 transition-all"
                 >
                   <span className="w-10 h-10 rounded-full bg-secondary text-on-secondary flex items-center justify-center flex-shrink-0">
@@ -429,7 +445,7 @@ export default function AuthorDashboardClient() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-headline-lg text-primary text-xl">{isAdmin ? "Recent Activity" : "Recent Posts"}</h2>
                 <Link
-                  href={isAdmin ? "/author/history" : "/author/content"}
+                  href={isAdmin ? "/panel/history" : "/panel/content"}
                   className="font-label-sm text-primary hover:underline flex items-center gap-1 text-sm"
                 >
                   VIEW ALL <i className="fa-solid fa-arrow-right text-xs" />
@@ -437,17 +453,13 @@ export default function AuthorDashboardClient() {
               </div>
 
               {recentPosts.length === 0 ? (
-                <p className="font-body-md text-on-surface-variant">
-                  {isAdmin
-                    ? "No content has been submitted by anyone yet."
-                    : "Nothing here yet — create your first article, blog, or video above."}
-                </p>
+                <EmptyState compact icon="fa-layer-group" title="No recent content for this website" description={isAdmin ? "Content created by the selected website's team will appear here." : "Create your first article, blog, or video to get started."} actionHref={!isAdmin && visibleCreateCards.length ? `/panel/create/${visibleCreateCards[0].type}` : undefined} actionLabel={!isAdmin && visibleCreateCards.length ? `Create ${visibleCreateCards[0].label}` : undefined} />
               ) : (
                 <div className="space-y-3">
                   {recentPosts.map((post) => (
                     <Link
                       key={`${post.type}-${post.id}`}
-                      href={`/author/view/${post.type.toLowerCase()}/${post.id}${isAdmin ? "?from=history" : ""}`}
+                      href={`/panel/view/${post.type.toLowerCase()}/${post.id}${isAdmin ? "?from=history" : ""}`}
                       className="flex items-center gap-4 p-4 bg-surface-container rounded-lg border border-outline-variant/20 hover:border-primary/40 transition-colors"
                     >
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">

@@ -1,4 +1,6 @@
 const nodemailer = require("nodemailer");
+const fs = require("fs");
+const path = require("path");
 const emailPort = Number(process.env.EMAIL_PORT);
 const useTls = String(process.env.EMAIL_USE_TLS).toLowerCase() === "true";
 
@@ -19,6 +21,10 @@ const BRAND_COLOR = "#002068";
 const BRAND_CONTAINER = "#003399";
 const BRAND_LIGHT = "#dce1ff";
 const SITE_URL = (process.env.CLIENT_ORIGIN || "https://indianrajniti.in").split(",")[0].replace(/\/$/, "");
+const EMAIL_LOGO_URL = String(process.env.EMAIL_LOGO_URL || `${SITE_URL}/images/logo.png`).trim();
+const LOCAL_LOGO_PATH = path.resolve(__dirname, "../../../indian-rajniti-frontend/public/images/logo.png");
+const EMAIL_LOGO_CID = "indian-rajneeti-logo";
+const EMAIL_LOGO_SRC = fs.existsSync(LOCAL_LOGO_PATH) ? `cid:${EMAIL_LOGO_CID}` : EMAIL_LOGO_URL;
 const PANEL_URL = (process.env.PANEL_ORIGIN || "https://indianrajneeti.com").trim().replace(/\/$/, "");
 const STAFF_ROLES = new Set(["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"]);
 
@@ -26,6 +32,12 @@ function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   })[character]);
+}
+
+function emailBranding() {
+  return fs.existsSync(LOCAL_LOGO_PATH)
+    ? { attachments: [{ filename: "indian-rajneeti-logo.png", path: LOCAL_LOGO_PATH, cid: EMAIL_LOGO_CID }] }
+    : {};
 }
 
 function emailButton(label, href) {
@@ -50,8 +62,10 @@ function emailTemplate({ preheader, eyebrow = "INDIAN RAJNEETI", title, content 
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:620px;background:#ffffff;border:1px solid #d9deed;border-radius:10px;overflow:hidden;">
             <tr>
               <td style="background:${BRAND_CONTAINER};padding:24px 28px;text-align:center;">
-                <a href="${escapeHtml(SITE_URL)}" style="color:#ffffff;text-decoration:none;font-family:Georgia,'Times New Roman',serif;font-size:25px;font-weight:700;letter-spacing:.5px;">Indian Rajneeti</a>
-                <div style="margin-top:5px;color:${BRAND_LIGHT};font-size:10px;letter-spacing:2px;text-transform:uppercase;">Indian political news &amp; analysis</div>
+                <a href="${escapeHtml(SITE_URL)}" style="display:inline-block;max-width:320px;text-decoration:none;">
+                  <img src="${escapeHtml(EMAIL_LOGO_SRC)}" width="300" alt="Indian Rajneeti" style="display:block;width:100%;max-width:300px;max-height:108px;height:auto;box-sizing:border-box;border:0;border-radius:8px;background:#ffffff;padding:8px;object-fit:contain;" />
+                </a>
+                <div style="margin-top:10px;color:${BRAND_LIGHT};font-size:10px;letter-spacing:2px;text-transform:uppercase;">Indian political news &amp; analysis</div>
               </td>
             </tr>
             <tr>
@@ -76,6 +90,7 @@ function emailTemplate({ preheader, eyebrow = "INDIAN RAJNEETI", title, content 
 
 async function sendPasswordResetEmail(to, resetUrl) {
   await transporter.sendMail({
+    ...emailBranding(),
     from: `"Indian Rajneeti" <${process.env.EMAIL_HOST_USER}>`,
     to,
     subject: "Reset your Indian Rajneeti password",
@@ -101,6 +116,7 @@ If you did not request a password reset, you can safely ignore this email.`,
 
 async function sendRegistrationOtpEmail(to, otp) {
   await transporter.sendMail({
+    ...emailBranding(),
     from: `"Indian Rajneeti" <${process.env.EMAIL_HOST_USER}>`,
     to,
     subject: "Verify your Indian Rajneeti email",
@@ -116,6 +132,7 @@ async function sendRegistrationOtpEmail(to, otp) {
 
 async function sendApplicationShortlistedEmail(to, name, jobTitle) {
   await transporter.sendMail({
+    ...emailBranding(),
     from: `"Indian Rajneeti" <${process.env.EMAIL_HOST_USER}>`,
     to,
     subject: `You've been shortlisted — ${jobTitle}`,
@@ -141,6 +158,7 @@ async function sendRoleChangedEmail(to, name, oldRole, newRole) {
   const loginUrl = `${STAFF_ROLES.has(newRole) ? PANEL_URL : SITE_URL}/login`;
 
   await transporter.sendMail({
+    ...emailBranding(),
     from: `"Indian Rajneeti" <${process.env.EMAIL_HOST_USER}>`,
     to,
     subject: "Your Indian Rajneeti account role has changed",
@@ -162,9 +180,27 @@ If you have any questions about this change, please contact an admin.`,
   });
 }
 
+async function sendInvestorApprovedEmail(to, name, { separateAccount = false } = {}) {
+  const dashboardUrl = `${SITE_URL}/investor/dashboard`;
+  await transporter.sendMail({
+    ...emailBranding(),
+    from: `"Indian Rajneeti" <${process.env.EMAIL_HOST_USER}>`,
+    to,
+    subject: "Your investor application has been approved",
+    text: `Hi ${name},\n\nYour investor application has been approved.${separateAccount ? " A separate Investor account has been created for this email. Please use the password-setup email before signing in." : " Your existing Indian Rajneeti account now has Investor access."}\n\nInvestor dashboard: ${dashboardUrl}\n\nIf you have questions, please contact our team.`,
+    html: emailTemplate({
+      preheader: "Your investor application has been approved",
+      eyebrow: "Investor relations",
+      title: "Welcome as an investor",
+      content: `<p style="margin:0 0 14px;">Hi ${escapeHtml(name)},</p><p style="margin:0 0 14px;">Your investor application has been approved.</p><p style="margin:0;">${separateAccount ? "A separate Investor account has been created for this email. Please use the password-setup email before signing in." : "Your existing Indian Rajneeti account now has Investor access."}</p>${emailButton("Open investor dashboard", dashboardUrl)}<p style="margin:0;color:#697086;font-size:13px;">If you have questions, please contact our team.</p>`,
+    }),
+  });
+}
+
 async function sendContactEmail({ name, email, phone, subject, message }) {
   const recipient = process.env.CONTACT_EMAIL || process.env.EMAIL_HOST_USER;
   await transporter.sendMail({
+    ...emailBranding(),
     from: `"Indian Rajneeti Contact" <${process.env.EMAIL_HOST_USER}>`,
     replyTo: email,
     to: recipient,
@@ -184,5 +220,6 @@ module.exports = {
   sendPasswordResetEmail,
   sendApplicationShortlistedEmail,
   sendRoleChangedEmail,
+  sendInvestorApprovedEmail,
   sendContactEmail,
 };

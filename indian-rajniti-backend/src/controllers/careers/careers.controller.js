@@ -8,14 +8,22 @@ const { careerDocumentUrl } = require("../../middleware/upload.middleware");
 const { sendApplicationShortlistedEmail } = require("../../services/nodemailer.service");
 const User = require("../../models/user.model");
 const DeletionAudit = require("../../models/deletionAudit.model");
+const { sanitizeRichText, richTextToPlainText } = require("../../utils/richText");
 
 const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"];
+
+const siteIdFor = (req) => Number(
+  (req.user?.role === "ADMIN" && (req.get("X-Management-Site-Id") || req.query.siteId || req.body?.siteId))
+  || req.user?.siteId
+  || req.site?.id
+  || 1
+);
 
 const createJob = async (req, res) => {
   try {
     const { title, department, location, employmentType, description, requirements, responsibilities, closesAt } = req.body;
 
-    if (!title || !description) {
+    if (!title || !richTextToPlainText(description)) {
       return res.status(400).json({ success: false, message: "Title and description are required" });
     }
     if (employmentType && !EMPLOYMENT_TYPES.includes(employmentType)) {
@@ -23,13 +31,14 @@ const createJob = async (req, res) => {
     }
 
     const job = await CareerJob.create({
+      siteId: siteIdFor(req),
       title: title.trim(),
       department: department?.trim(),
       location: location?.trim(),
       employmentType: employmentType || "FULL_TIME",
-      description: description.trim(),
-      requirements: requirements?.trim(),
-      responsibilities: responsibilities?.trim(),
+      description: sanitizeRichText(description),
+      requirements: requirements ? sanitizeRichText(requirements) : null,
+      responsibilities: responsibilities ? sanitizeRichText(responsibilities) : null,
       postedBy: req.user.userId,
       closesAt: closesAt || null,
     });
@@ -44,7 +53,7 @@ const createJob = async (req, res) => {
 // Public — no auth, always OPEN-only (what members should browse/apply to).
 const listJobs = async (req, res) => {
   try {
-    const jobs = await CareerJob.findAll({ status: "OPEN" });
+    const jobs = await CareerJob.findAll({ status: "OPEN", siteId: siteIdFor(req) });
     return res.status(200).json({ success: true, jobs });
   } catch (error) {
     console.error("List career jobs error:", error);
@@ -56,7 +65,7 @@ const listJobs = async (req, res) => {
 const listAllJobsForAdmin = async (req, res) => {
   try {
     const { status } = req.query;
-    const jobs = await CareerJob.findAll({ status: status || undefined });
+    const jobs = await CareerJob.findAll({ status: status || undefined, siteId: siteIdFor(req) });
     return res.status(200).json({ success: true, jobs });
   } catch (error) {
     console.error("List all career jobs error:", error);
@@ -66,7 +75,7 @@ const listAllJobsForAdmin = async (req, res) => {
 
 const getJobBySlug = async (req, res) => {
   try {
-    const job = await CareerJob.findBySlug(req.params.slug);
+    const job = await CareerJob.findBySlug(req.params.slug, siteIdFor(req));
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
@@ -81,26 +90,27 @@ const updateJob = async (req, res) => {
   try {
     const { title, department, location, employmentType, description, requirements, responsibilities, closesAt } = req.body;
 
-    if (!title || !description) {
+    if (!title || !richTextToPlainText(description)) {
       return res.status(400).json({ success: false, message: "Title and description are required" });
     }
     if (employmentType && !EMPLOYMENT_TYPES.includes(employmentType)) {
       return res.status(400).json({ success: false, message: `employmentType must be one of: ${EMPLOYMENT_TYPES.join(", ")}` });
     }
 
-    const job = await CareerJob.findById(req.params.id);
+    const siteId = siteIdFor(req);
+    const job = await CareerJob.findById(req.params.id, siteId);
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
 
-    const updated = await CareerJob.update(req.params.id, {
+    const updated = await CareerJob.update(req.params.id, siteId, {
       title: title.trim(),
       department: department?.trim(),
       location: location?.trim(),
       employmentType: employmentType || job.employment_type,
-      description: description.trim(),
-      requirements: requirements?.trim(),
-      responsibilities: responsibilities?.trim(),
+      description: sanitizeRichText(description),
+      requirements: requirements ? sanitizeRichText(requirements) : null,
+      responsibilities: responsibilities ? sanitizeRichText(responsibilities) : null,
       closesAt: closesAt || null,
     });
 
@@ -117,11 +127,12 @@ const setJobStatus = async (req, res) => {
     if (!["OPEN", "CLOSED"].includes(status)) {
       return res.status(400).json({ success: false, message: "status must be OPEN or CLOSED" });
     }
-    const job = await CareerJob.findById(req.params.id);
+    const siteId = siteIdFor(req);
+    const job = await CareerJob.findById(req.params.id, siteId);
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
-    const updated = await CareerJob.setStatus(req.params.id, status);
+    const updated = await CareerJob.setStatus(req.params.id, status, siteId);
     return res.status(200).json({ success: true, job: updated });
   } catch (error) {
     console.error("Set career job status error:", error);
@@ -131,7 +142,7 @@ const setJobStatus = async (req, res) => {
 
 const deleteJob = async (req, res) => {
   try {
-    const job = await CareerJob.findById(req.params.id);
+    const job = await CareerJob.findById(req.params.id, siteIdFor(req));
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
@@ -147,7 +158,7 @@ const deleteJob = async (req, res) => {
 // identity for applicant_id, regardless of what the form sends.
 const applyToJob = async (req, res) => {
   try {
-    const job = await CareerJob.findById(req.params.id);
+    const job = await CareerJob.findById(req.params.id, siteIdFor(req));
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
@@ -162,9 +173,9 @@ const applyToJob = async (req, res) => {
 
 
 
-    const { name, email, phone, pan, aadhaar, coverLetter } = req.body;
+    const { phone, pan, aadhaar, coverLetter } = req.body;
     
-    const existingUser = await User.findByEmail(email);
+    const existingUser = await User.findById(req.user.userId);
     if (!existingUser) {
       return res.status(404).json({
         success: false,
@@ -173,9 +184,6 @@ const applyToJob = async (req, res) => {
     }
 
 
-    if (!name || !email) {
-      return res.status(400).json({ success: false, message: "Name and email are required" });
-    }
     if (!pan || !aadhaar) {
       return res.status(400).json({ success: false, message: "PAN and Aadhaar numbers are required" });
     }
@@ -191,8 +199,8 @@ const applyToJob = async (req, res) => {
     const application = await CareerApplication.create({
       careerId: job.id,
       applicantId: req.user.userId,
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
+      name: existingUser.name,
+      email: existingUser.email,
       phone: phone?.trim(),
       pan: pan.trim().toUpperCase(),
       aadhaar: aadhaar.trim(),
@@ -212,7 +220,7 @@ const applyToJob = async (req, res) => {
 // this posting and see the details of their own submission.
 const getMyApplication = async (req, res) => {
   try {
-    const job = await CareerJob.findById(req.params.id);
+    const job = await CareerJob.findById(req.params.id, siteIdFor(req));
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
@@ -227,7 +235,7 @@ const getMyApplication = async (req, res) => {
 // Admin-only — every applicant for one posting.
 const listApplicationsForJob = async (req, res) => {
   try {
-    const job = await CareerJob.findById(req.params.id);
+    const job = await CareerJob.findById(req.params.id, siteIdFor(req));
     if (!job) {
       return res.status(404).json({ success: false, message: "Job posting not found" });
     }
@@ -259,7 +267,7 @@ const reviewApplication = async (req, res) => {
     // successful review action into a 500, so this is never awaited inline
     // with the response.
     if (status === "ACCEPTED") {
-      const job = await CareerJob.findById(updated.career_id);
+      const job = await CareerJob.findById(updated.career_id, siteIdFor(req));
       sendApplicationShortlistedEmail(updated.email, updated.name, job?.title || "the position").catch((error) => {
         console.error("Send shortlisted email error:", error);
       });

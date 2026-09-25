@@ -58,21 +58,21 @@ async function runAiCheck({ title, excerpt, content }) {
 const Blog = {
   runAiCheck,
 
-  async findCategories() {
+  async findCategories(siteId = 1) {
     const [rows] = await pool.query(
-      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND site_id = ? AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`, [siteId]
     );
     return rows.map((row) => row.category);
   },
 
-  async create({ authorId, title, excerpt, content, featuredImage, category, tags, relatedArticleId, scheduledPublishAt }) {
+  async create({ authorId, siteId, title, excerpt, content, featuredImage, category, tags, relatedArticleId, scheduledPublishAt }) {
     const slug = await uniqueSlug(title, async (candidate) => Boolean(await Blog.findBySlug(candidate)));
 
     const [result] = await pool.query(
       `INSERT INTO ${TABLE}
-        (author_id, title, slug, excerpt, content, featured_image, category, tags, related_article_id, scheduled_publish_at, status, ai_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
-      [authorId, title, slug, excerpt ?? null, content, featuredImage, category, tags ? JSON.stringify(tags) : null, relatedArticleId ?? null, scheduledPublishAt ?? null]
+        (author_id, site_id, title, slug, excerpt, content, featured_image, category, tags, related_article_id, scheduled_publish_at, status, ai_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
+      [authorId, siteId || 1, title, slug, excerpt ?? null, content, featuredImage, category, tags ? JSON.stringify(tags) : null, relatedArticleId ?? null, scheduledPublishAt ?? null]
     );
     return Blog.findById(result.insertId);
   },
@@ -94,9 +94,10 @@ const Blog = {
 
   // Public reads — no auth, APPROVED only. See article.model.js's
   // findPublished for the category-substring-match rationale.
-  async findPublished({ category, orderBy = "recent", limit = 20 } = {}) {
+  async findPublished({ category, siteId = 1, orderBy = "recent", limit = 20 } = {}) {
     const conditions = ["b.deleted_at IS NULL", "b.status = 'APPROVED'", "COALESCE(b.published_at, b.created_at) <= NOW()"];
-    const params = [];
+    const params = [siteId];
+    conditions.push("b.site_id = ?");
     if (category) {
       conditions.push("b.category LIKE ?");
       params.push(`%${category}%`);
@@ -116,7 +117,7 @@ const Blog = {
     return rows.map(parseRow);
   },
 
-  async findPublishedForTopics(topics, limit = 60) {
+  async findPublishedForTopics(topics, limit = 60, siteId = 1) {
     if (!topics.length) return [];
     const topicCondition = topics.map(() => `(
       LOWER(b.category) = LOWER(?) OR JSON_CONTAINS(COALESCE(b.tags, JSON_ARRAY()), JSON_QUOTE(?)) OR
@@ -125,17 +126,17 @@ const Blog = {
     const params = topics.flatMap((topic) => [topic, topic, `%${topic}%`]);
     const [rows] = await pool.query(
       `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id
-       WHERE b.deleted_at IS NULL AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW() AND (${topicCondition})
+       WHERE b.deleted_at IS NULL AND b.status = 'APPROVED' AND b.site_id = ? AND COALESCE(b.published_at, b.created_at) <= NOW() AND (${topicCondition})
        ORDER BY b.published_at DESC, b.views DESC LIMIT ?`,
-      [...params, limit]
+      [siteId, ...params, limit]
     );
     return rows.map(parseRow);
   },
 
-  async findPublishedBySlug(slug) {
+  async findPublishedBySlug(slug, siteId = 1) {
     const [rows] = await pool.query(
-      `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id WHERE b.slug = ? AND b.deleted_at IS NULL AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()`,
-      [slug]
+      `SELECT b.*, u.name AS author_name FROM ${TABLE} b JOIN users u ON u.id = b.author_id WHERE b.slug = ? AND b.site_id = ? AND b.deleted_at IS NULL AND b.status = 'APPROVED' AND COALESCE(b.published_at, b.created_at) <= NOW()`,
+      [slug, siteId]
     );
     return parseRow(rows[0]);
   },
@@ -147,8 +148,8 @@ const Blog = {
   // Always scoped to the caller's own content — see article.model.js's
   // findForUser for why this no longer branches on role.
   async findForUser(user, { status } = {}) {
-    const conditions = ["b.author_id = ?", "b.deleted_at IS NULL"];
-    const params = [user.userId];
+    const conditions = ["b.author_id = ?", "b.deleted_at IS NULL", "b.site_id = ?"];
+    const params = [user.userId, user.siteId || 1];
     if (status) {
       conditions.push("b.status = ?");
       params.push(status);
@@ -162,9 +163,10 @@ const Blog = {
 
   // Moderator-only — every author, every status. See article.model.js's
   // findAll for the full rationale.
-  async findAll({ status } = {}) {
+  async findAll({ status, siteId } = {}) {
     const conditions = ["b.deleted_at IS NULL"];
     const params = [];
+    if (siteId) { conditions.push("b.site_id = ?"); params.push(siteId); }
     if (status) {
       conditions.push("b.status = ?");
       params.push(status);

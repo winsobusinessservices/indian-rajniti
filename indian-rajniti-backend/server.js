@@ -4,6 +4,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
 const path = require("path");
+const crypto = require("crypto");
 
 dotenv.config();
 const pool = require("./src/config/db");
@@ -27,7 +28,11 @@ const policiesRoutes = require("./src/routes/policies.routes.js")
 const commentsRoutes = require("./src/routes/comments.routes.js")
 const contentLimitsRoutes = require("./src/routes/contentLimits.routes.js")
 const deletionsRoutes = require("./src/routes/deletions.routes.js")
+const sitesRoutes = require("./src/routes/sites.routes.js")
+const servicesRoutes = require("./src/routes/services.routes.js")
+const { resolveSite } = require("./src/middleware/site.middleware.js");
 const { publishDueScheduledContent } = require("./src/services/scheduledPublishing.service.js");
+const { sendError } = require("./src/utils/httpError.js");
 
 const REQUIRED_PRODUCTION_ENV = ["CLIENT_ORIGIN", "JWT_SECRET", "DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"];
 const missingProductionEnv = REQUIRED_PRODUCTION_ENV.filter((name) => !process.env[name]);
@@ -50,9 +55,16 @@ const allowedOrigins = new Set([
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean));
 
+app.use((req, res, next) => {
+  const requestId = crypto.randomUUID();
+  res.locals.requestId = requestId;
+  res.setHeader("X-Request-Id", requestId);
+  next();
+});
+
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: async (origin, callback) => {
       // Allow server-to-server requests / health checks
       if (!origin) {
         return callback(null, true);
@@ -68,6 +80,7 @@ app.use(
       return callback(new Error("Origin is not allowed by CORS"));
     },
     credentials: true,
+    exposedHeaders: ["X-Request-Id"],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -80,6 +93,22 @@ app.use(express.json({
   },
 }));
 app.use(cookieParser());
+app.use(resolveSite);
+app.use((req, res, next) => {
+  const siteId = Number(req.site?.id || 1);
+  req.headers["x-management-site-id"] = String(siteId);
+  if (req.query && Object.prototype.hasOwnProperty.call(req.query, "siteId")) {
+    Object.defineProperty(req, "query", {
+      configurable: true,
+      enumerable: true,
+      value: { ...req.query, siteId: String(siteId) },
+    });
+  }
+  if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body) && Object.prototype.hasOwnProperty.call(req.body, "siteId")) {
+    req.body.siteId = siteId;
+  }
+  next();
+});
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "uploads"), {
@@ -109,6 +138,8 @@ app.use("/api", policiesRoutes)
 app.use("/api", commentsRoutes)
 app.use("/api", contentLimitsRoutes)
 app.use("/api", deletionsRoutes)
+app.use("/api", sitesRoutes)
+app.use("/api", servicesRoutes)
 
 app.get("/", (req, res) => {
   res.send("API is running...");
@@ -141,8 +172,8 @@ app.use((err, req, res, next) => {
   if (err && /^Unsupported file type/.test(err.message || "")) {
     return res.status(400).json({ success: false, message: err.message });
   }
-  console.error(err);
-  return res.status(500).json({ success: false, message: "Internal server error" });
+  console.error(`[${res.locals.requestId}]`, err);
+  return sendError(res, err, "The server could not complete this request. Please try again.");
 });
 
 async function startServer() {

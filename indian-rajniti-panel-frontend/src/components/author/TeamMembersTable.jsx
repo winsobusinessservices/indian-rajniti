@@ -6,6 +6,7 @@ import { authApi } from "@/lib/api";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import ReasonModal from "@/components/common/ReasonModal";
 import { PERMISSIONS, PERMISSION_GROUPS, ROLE_DEFAULT_PERMISSIONS } from "@/lib/permissions";
+import EmptyState from "@/components/common/EmptyState";
 
 // Only these roles count as "the team" — plain USER accounts (public
 // self-signups/readers) aren't something an admin manages here.
@@ -20,10 +21,20 @@ const ROLE_BADGE = {
   INVESTOR: "bg-green-500 text-white",
 };
 
+const ROLE_LABEL = {
+  ADMIN: "Administrator",
+  SUBADMIN: "Subadmin",
+  EDITOR: "Editor",
+  AUTHOR: "Author",
+  INVESTOR: "Investor",
+};
+
 const STATUS_BADGE = {
   ACTIVE: "bg-green-600 text-white",
-  SUSPENDED: "bg-error text-on-error",
+  INACTIVE: "bg-amber-500 text-white",
+  DELETED: "bg-error text-on-error",
 };
+const statusOf = (member) => member.deleted_at ? "DELETED" : (member.status || "ACTIVE");
 
 // Mirrors EMAIL_REGEX in the backend's auth.controller.js.
 const EMAIL_REGEX = /^[a-zA-Z0-9](?!.*\.\.)[a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
@@ -41,6 +52,8 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState("ALL");
+  const [updatingId, setUpdatingId] = useState(null);
 
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", email: "", role: "", permissions: [], assignedEditorId: "" });
@@ -48,8 +61,9 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const editableRoles = user?.role === "ADMIN" ? TEAM_ROLES : SUBADMIN_MANAGEABLE_ROLES;
+  const filteredMembers = filter === "ALL" ? members : members.filter((member) => statusOf(member) === filter);
   const reviewers = members.filter(
-    (member) => ["EDITOR", "SUBADMIN"].includes(member.role) && member.status === "ACTIVE"
+    (member) => ["EDITOR", "SUBADMIN"].includes(member.role) && statusOf(member) === "ACTIVE"
   );
   const canHaveReviewer = (role) => ["AUTHOR", "EDITOR"].includes(role);
 
@@ -58,7 +72,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     authApi
-      .listUsers()
+      .listUsers({ includeDeleted: true })
       .then((data) => setMembers((data.users || []).filter((m) => TEAM_ROLES.includes(m.role))))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -172,13 +186,33 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
     if (!deleteTarget) return;
 
     await authApi.deleteUser(deleteTarget.id, reason);
-    setMembers((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+    setMembers((prev) => prev.map((member) => member.id === deleteTarget.id ? { ...member, status: "INACTIVE", deleted_at: new Date().toISOString(), delete_reason: reason } : member));
     setDeleteTarget(null);
+  };
+
+  const handleStatus = async (member) => {
+    const status = member.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    setUpdatingId(member.id); setError("");
+    try {
+      const data = await authApi.updateUser(member.id, { status });
+      setMembers((current) => current.map((item) => item.id === member.id ? { ...item, ...data.user } : item));
+    } catch (requestError) {
+      setError(requestError.message || "Unable to update account status");
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   return (
     <div>
       <h2 className="font-headline-lg text-primary text-xl mb-4">Team Members</h2>
+
+      {!loading && <div className="mb-5 flex flex-wrap gap-2" aria-label="Filter team members by status">
+        {["ALL", "ACTIVE", "INACTIVE", "DELETED"].map((status) => {
+          const count = status === "ALL" ? members.length : members.filter((member) => statusOf(member) === status).length;
+          return <button key={status} type="button" onClick={() => { setFilter(status); setEditingId(null); }} className={`rounded-full px-3 py-2 text-xs font-bold ${filter === status ? "bg-primary text-on-primary" : "border border-outline-variant/35 bg-surface text-on-surface-variant hover:border-primary"}`}>{status === "ALL" ? "All" : status.charAt(0) + status.slice(1).toLowerCase()} ({count})</button>;
+        })}
+      </div>}
 
       {error && (
         <p className="text-sm text-error font-body-md mb-4" role="alert">
@@ -188,8 +222,8 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
 
       {loading ? (
         <DashboardRowsSkeleton count={4} />
-      ) : members.length === 0 ? (
-        <p className="font-body-md text-on-surface-variant mb-8">No team members yet.</p>
+      ) : filteredMembers.length === 0 ? (
+        <EmptyState icon="fa-users" title="No team members found" description={filter === "ALL" ? "Add an Indian Rajneeti team member to see them here." : `No ${filter.toLowerCase()} team members found.`} />
       ) : (
         <div className="mb-10 max-h-[70vh] overflow-auto rounded-lg border border-outline-variant/20">
           <table className="w-full text-sm border-collapse">
@@ -198,6 +232,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Website</th>
                 <th className="px-4 py-3">Assigned reviewer</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Joined</th>
@@ -205,10 +240,12 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/15 ">
-              {members.map((member) => {
+              {filteredMembers.map((member) => {
                 const isEditing = editingId === member.id;
                 const isSelf = member.id === user?.id;
                 const canManageMember = user?.role === "ADMIN" || !["ADMIN", "SUBADMIN"].includes(member.role);
+                const memberStatus = statusOf(member);
+                const isDeleted = memberStatus === "DELETED";
 
                 return (
                   <Fragment key={member.id}>
@@ -263,6 +300,9 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                       )}
                     </td>
                     <td className="px-4 py-3 min-w-[12rem]">
+                      <span className="font-body-md text-xs text-on-surface-variant">{member.site?.name || "Indian Rajneeti"}</span>
+                    </td>
+                    <td className="px-4 py-3 min-w-[12rem]">
                       {isEditing && canHaveReviewer(editForm.role) ? (
                         <select
                           name="assignedEditorId"
@@ -271,7 +311,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                           className={fieldClass}
                         >
                           <option value="">Unassigned</option>
-                          {reviewers.filter((reviewer) => reviewer.id !== member.id).map((reviewer) => (
+                          {reviewers.filter((reviewer) => reviewer.id !== member.id && Number(reviewer.site_id || 1) === Number(member.site_id || 1)).map((reviewer) => (
                             <option key={reviewer.id} value={reviewer.id}>
                               {reviewer.name} ({reviewer.role === "SUBADMIN" ? "Subadmin" : "Editor"})
                             </option>
@@ -288,10 +328,10 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                     <td className="px-4 py-3">
                       <span
                         className={`text-[10px] font-bold px-2.5 py-1 rounded-sm uppercase ${
-                          STATUS_BADGE[member.status] || "bg-surface-container-high text-on-surface"
+                          STATUS_BADGE[memberStatus] || "bg-surface-container-high text-on-surface"
                         }`}
                       >
-                        {member.status}
+                        {memberStatus}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs font-body-md text-on-surface-variant whitespace-nowrap">
@@ -322,10 +362,11 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                         </div>
                       ) : (
                         <div className="flex gap-2">
+                          {user?.role === "ADMIN" && !isDeleted && <button type="button" onClick={() => handleStatus(member)} disabled={isSelf || updatingId === member.id} className="px-3 py-1.5 text-xs font-label-md border border-primary/40 text-primary rounded hover:bg-primary/5 disabled:opacity-40 disabled:cursor-not-allowed">{memberStatus === "ACTIVE" ? "Deactivate" : "Activate"}</button>}
                           <button
                             type="button"
                             onClick={() => startEdit(member)}
-                            disabled={!canManageMember}
+                            disabled={!canManageMember || isDeleted}
                             title={!canManageMember ? "Only an Admin can edit this account" : undefined}
                             className="px-3 py-1.5 text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                           >
@@ -334,7 +375,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                           <button
                             type="button"
                             onClick={() => setDeleteTarget(member)}
-                            disabled={isSelf || !canManageMember}
+                            disabled={isSelf || !canManageMember || isDeleted}
                             title={isSelf ? "You cannot delete your own account" : !canManageMember ? "Only an Admin can delete this account" : undefined}
                             className="px-3 py-1.5 text-xs font-label-md border border-error/40 text-error rounded hover:bg-error/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           >
@@ -346,7 +387,7 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
                   </tr>
                   {isEditing && (
                     <tr className="bg-surface-container-low/70">
-                      <td colSpan={7} className="border-t border-outline-variant/15 px-4 py-4">
+                      <td colSpan={8} className="border-t border-outline-variant/15 px-4 py-4">
                         {user?.role !== "ADMIN" || editForm.role === "ADMIN" ? (
                           <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary">
                             <i className="fa-solid fa-shield-halved" aria-hidden="true" />
@@ -402,10 +443,10 @@ export default function TeamMembersTable({ refreshKey = 0 }) {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        title="Delete this team member?"
+        title={deleteTarget ? `Delete this ${ROLE_LABEL[deleteTarget.role] || "team member"}?` : "Delete team member?"}
         description={
           deleteTarget
-            ? `${deleteTarget.name}'s (${deleteTarget.email}) account will move to Deleted Items and can be restored by an Admin.`
+            ? `The ${ROLE_LABEL[deleteTarget.role] || "team member"} account for ${deleteTarget.name} (${deleteTarget.email}) will be moved to Deleted Items. It can be restored later from Deleted Items.`
             : undefined
         }
         confirmLabel="Delete"

@@ -19,8 +19,6 @@ export default function ApplyToJobClient({ job }) {
   const { user, loading } = useAuth();
 
   const [form, setForm] = useState({
-    name: "",
-    email: "",
     phone: "",
     pan: "",
     aadhaar: "",
@@ -36,18 +34,6 @@ export default function ApplyToJobClient({ job }) {
 
   // undefined = still checking, null = never applied, object = already applied
   const [myApplication, setMyApplication] = useState(undefined);
-
-  useEffect(() => {
-    if (user) {
-      // Seed the application fields once the asynchronous user session resolves.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setForm((prev) => ({
-        ...prev,
-        name: prev.name || user.name || "",
-        email: prev.email || user.email || "",
-      }));
-    }
-  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -225,9 +211,6 @@ export default function ApplyToJobClient({ job }) {
     try {
       const fd = new FormData();
 
-      fd.append("name", form.name.trim());
-      fd.append("email", form.email.trim());
-
       if (form.phone) {
         fd.append("phone", form.phone.trim());
       }
@@ -266,44 +249,11 @@ export default function ApplyToJobClient({ job }) {
         Apply for this Position
       </h2>
 
+      <div className="rounded-lg bg-primary/5 px-4 py-3 text-sm text-on-surface-variant">
+        Applying as <strong className="text-on-surface">{user.name}</strong> ({user.email})
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-        {/* Full Name */}
-        <div>
-          <label className="block font-label-md text-xs text-on-surface-variant mb-1.5">
-            Full Name <span className="text-error">*</span>
-          </label>
-
-          <input
-            type="text"
-            name="name"
-            required
-            placeholder="Enter your name"
-            value={form.name}
-            onChange={handleChange}
-            className={fieldClass}
-          />
-        </div>
-
-
-        {/* Email */}
-        <div>
-          <label className="block font-label-md text-xs text-on-surface-variant mb-1.5">
-            Email <span className="text-error">*</span>
-          </label>
-
-          <input
-            type="email"
-            name="email"
-            required
-            placeholder="Enter your emaile"
-            value={form.email}
-            onChange={handleChange}
-            className={fieldClass}
-          />
-        </div>
-
-
         {/* Phone */}
         <div>
           <label className="block font-label-md text-xs text-on-surface-variant mb-1.5">

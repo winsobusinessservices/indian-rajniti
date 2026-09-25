@@ -31,7 +31,7 @@ export default function LoginForm() {
       throw new Error("This panel is only for Authors, Editors, Subadmins, and Admins. Use the public website to sign in.");
     }
     setUser(data.user);
-    router.replace("/author/dashboard");
+    router.replace("/panel/dashboard");
   }, [router, setUser]);
 
   const handleSubmit = async (e) => {
@@ -123,11 +123,10 @@ export default function LoginForm() {
           </Link>
         </div>
 
-        {error && (
-          <p className="text-sm text-error font-body-md" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <div className="rounded-lg bg-error/10 px-4 py-3 text-sm text-error font-body-md" role="alert">
+          <p>{error}</p>
+          {/account is inactive/i.test(error) && <a href={`${PUBLIC_SITE_URL}/contact`} className="mt-2 inline-flex items-center gap-2 font-semibold text-primary hover:underline">Contact us <i className="fa-solid fa-arrow-right text-xs" aria-hidden="true" /></a>}
+        </div>}
 
         <div>
           <button

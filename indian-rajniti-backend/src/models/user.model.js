@@ -4,7 +4,7 @@ const { normalizePermissions } = require("../config/permissions");
 const ROLES = ["USER", "ADMIN", "SUBADMIN", "EDITOR", "AUTHOR", "INVESTOR"];
 
 const PUBLIC_COLUMNS =
-  "id, name, email, role, permissions, status, created_at, terms_accepted, terms_accepted_at, accepted_policy_ids, pan_document, aadhar_document, graduation_certificate, created_by";
+  "id, name, email, phone, role, permissions, status, site_id, (SELECT s.name FROM sites s WHERE s.id = users.site_id) AS site_name, (SELECT s.slug FROM sites s WHERE s.id = users.site_id) AS site_slug, (SELECT s.domain FROM sites s WHERE s.id = users.site_id) AS site_domain, (SELECT s.status FROM sites s WHERE s.id = users.site_id) AS site_status, created_at, terms_accepted, terms_accepted_at, accepted_policy_ids, pan_document, aadhar_document, graduation_certificate, created_by, deleted_at, deleted_by, delete_reason";
 
 function parseUser(row) {
   if (!row) return null;
@@ -23,12 +23,12 @@ const User = {
   ROLES,
 
   async findByEmail(email) {
-    const [rows] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
+    const [rows] = await pool.query("SELECT users.*, s.name AS site_name, s.slug AS site_slug, s.domain AS site_domain, s.status AS site_status FROM users LEFT JOIN sites s ON s.id = users.site_id WHERE users.email = ?", [email]);
     return parseUser(rows[0]);
   },
 
   async findByGoogleSub(googleSub) {
-    const [rows] = await pool.query("SELECT * FROM users WHERE google_sub = ?", [googleSub]);
+    const [rows] = await pool.query("SELECT users.*, s.name AS site_name, s.slug AS site_slug, s.domain AS site_domain, s.status AS site_status FROM users LEFT JOIN sites s ON s.id = users.site_id WHERE users.google_sub = ?", [googleSub]);
     return parseUser(rows[0]);
   },
 
@@ -57,9 +57,56 @@ const User = {
     ]);
   },
 
-  async findAll() {
+  async findByPhone(phone) {
+    const [rows] = await pool.query("SELECT users.*, s.name AS site_name, s.slug AS site_slug, s.domain AS site_domain, s.status AS site_status FROM users LEFT JOIN sites s ON s.id = users.site_id WHERE users.phone = ?", [phone]);
+    return parseUser(rows[0]);
+  },
+
+  async reactivateDeletedRegistration(id, {
+    name,
+    phone = null,
+    passwordHash,
+    googleSub = null,
+    acceptedPolicyIds = [],
+    siteId = 1,
+  }) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.query(
+        `UPDATE users SET
+          name = ?, phone = ?, password_hash = ?, google_sub = ?, role = 'USER', permissions = NULL,
+          status = 'ACTIVE', terms_accepted = 1, terms_accepted_at = NOW(),
+          accepted_policy_ids = ?, pan_document = NULL, aadhar_document = NULL,
+          graduation_certificate = NULL, created_by = NULL, site_id = ?,
+          deleted_at = NULL, deleted_by = NULL, delete_reason = NULL
+         WHERE id = ? AND deleted_at IS NOT NULL`,
+        [name, phone, passwordHash, googleSub, JSON.stringify(acceptedPolicyIds), siteId, id]
+      );
+      if (!result.affectedRows) {
+        await connection.rollback();
+        return null;
+      }
+      await connection.query(
+        `UPDATE deletion_audit SET restored_at = NOW(), restored_by = NULL
+         WHERE entity_type = 'USER' AND entity_id = ?
+           AND restored_at IS NULL AND permanently_deleted_at IS NULL`,
+        [String(id)]
+      );
+      await connection.commit();
+      return User.findById(id);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  },
+
+  async findAll({ siteId, includeDeleted = false } = {}) {
     const [rows] = await pool.query(
-      `SELECT ${PUBLIC_COLUMNS} FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC`
+      `SELECT ${PUBLIC_COLUMNS} FROM users WHERE ${includeDeleted ? "1 = 1" : "deleted_at IS NULL"}${siteId ? " AND site_id = ?" : ""} ORDER BY created_at DESC`,
+      siteId ? [siteId] : []
     );
     return rows.map(parseUser);
   },
@@ -118,7 +165,7 @@ const User = {
   // Combined name/email/role/document editor backing the Team Members table
   // and the admin role-assignment flow — only touches whichever fields are
   // actually passed in.
-  async update(id, { name, email, role, permissions, panDocument, aadharDocument, graduationCertificate } = {}) {
+  async update(id, { name, email, role, status, permissions, siteId, panDocument, aadharDocument, graduationCertificate } = {}) {
     const sets = [];
     const params = [];
     if (name !== undefined) {
@@ -133,9 +180,17 @@ const User = {
       sets.push("role = ?");
       params.push(role);
     }
+    if (status !== undefined) {
+      sets.push("status = ?");
+      params.push(status);
+    }
     if (permissions !== undefined) {
       sets.push("permissions = ?");
       params.push(JSON.stringify(normalizePermissions(permissions, role)));
+    }
+    if (siteId !== undefined) {
+      sets.push("site_id = ?");
+      params.push(siteId);
     }
     if (panDocument !== undefined) {
       sets.push("pan_document = ?");
@@ -163,6 +218,7 @@ const User = {
   async create({
     name,
     email,
+    phone = null,
     passwordHash,
     googleSub = null,
     role = "USER",
@@ -173,14 +229,16 @@ const User = {
     graduationCertificate = null,
     createdBy = null,
     permissions = null,
+    siteId = 1,
   }) {
     const [result] = await pool.query(
       `INSERT INTO users
-        (name, email, password_hash, google_sub, role, permissions, status, terms_accepted, terms_accepted_at, accepted_policy_ids, pan_document, aadhar_document, graduation_certificate, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (name, email, phone, password_hash, google_sub, role, permissions, status, terms_accepted, terms_accepted_at, accepted_policy_ids, pan_document, aadhar_document, graduation_certificate, created_by, site_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         email,
+        phone,
         passwordHash,
         googleSub,
         role,
@@ -193,6 +251,7 @@ const User = {
         aadharDocument,
         graduationCertificate,
         createdBy,
+        siteId,
       ]
     );
     return User.findById(result.insertId);

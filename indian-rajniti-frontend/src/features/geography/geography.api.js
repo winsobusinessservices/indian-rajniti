@@ -1,11 +1,12 @@
 import { createJsonResource } from "@/lib/jsonResource";
 import { mediaUrl } from "@/lib/api";
+import { withSiteHeaders } from "@/lib/siteRequest";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 const readGeographyResource = createJsonResource(`${API_BASE_URL}/states`, {
   ttl: 0,
-  fetchOptions: { cache: "no-store" },
+  fetchOptions: () => withSiteHeaders({ cache: "no-store" }),
 });
 
 async function getGeographyData() {

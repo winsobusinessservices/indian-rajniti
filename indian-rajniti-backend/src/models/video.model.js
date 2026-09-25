@@ -26,22 +26,23 @@ function runAiCheck({ title, description, videoUrl }) {
 }
 
 const Video = {
-  async findCategories() {
+  async findCategories(siteId = 1) {
     const [rows] = await pool.query(
-      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`
+      `SELECT DISTINCT TRIM(category) AS category FROM ${TABLE} WHERE deleted_at IS NULL AND site_id = ? AND category IS NOT NULL AND TRIM(category) <> '' ORDER BY category`, [siteId]
     );
     return rows.map((row) => row.category);
   },
 
   runAiCheck,
 
-  async create({ authorId, title, description, videoSource, videoUrl, thumbnail, category, state, tags, relatedArticleId, relatedPolitician }) {
+  async create({ authorId, siteId, title, description, videoSource, videoUrl, thumbnail, category, state, tags, relatedArticleId, relatedPolitician }) {
     const [result] = await pool.query(
       `INSERT INTO ${TABLE}
-        (author_id, title, description, video_source, video_url, thumbnail, category, state, tags, related_article_id, related_politician, status, ai_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
+        (author_id, site_id, title, description, video_source, video_url, thumbnail, category, state, tags, related_article_id, related_politician, status, ai_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', 'NOT_CHECKED')`,
       [
         authorId,
+        siteId || 1,
         title,
         description,
         videoSource,
@@ -70,9 +71,10 @@ const Video = {
   // Public reads — no auth, APPROVED only. See article.model.js's
   // findPublished for the category-substring-match rationale. No slug on
   // videos (see file header), so no findPublishedBySlug here.
-  async findPublished({ category, orderBy = "recent", limit = 20 } = {}) {
+  async findPublished({ category, siteId = 1, orderBy = "recent", limit = 20 } = {}) {
     const conditions = ["v.deleted_at IS NULL", "v.status = 'APPROVED'"];
-    const params = [];
+    const params = [siteId];
+    conditions.push("v.site_id = ?");
     if (category) {
       conditions.push("v.category LIKE ?");
       params.push(`%${category}%`);
@@ -99,8 +101,8 @@ const Video = {
   // Always scoped to the caller's own content — see article.model.js's
   // findForUser for why this no longer branches on role.
   async findForUser(user, { status } = {}) {
-    const conditions = ["v.author_id = ?", "v.deleted_at IS NULL"];
-    const params = [user.userId];
+    const conditions = ["v.author_id = ?", "v.deleted_at IS NULL", "v.site_id = ?"];
+    const params = [user.userId, user.siteId || 1];
     if (status) {
       conditions.push("v.status = ?");
       params.push(status);
@@ -114,9 +116,10 @@ const Video = {
 
   // Moderator-only — every author, every status. See article.model.js's
   // findAll for the full rationale.
-  async findAll({ status } = {}) {
+  async findAll({ status, siteId } = {}) {
     const conditions = ["v.deleted_at IS NULL"];
     const params = [];
+    if (siteId) { conditions.push("v.site_id = ?"); params.push(siteId); }
     if (status) {
       conditions.push("v.status = ?");
       params.push(status);

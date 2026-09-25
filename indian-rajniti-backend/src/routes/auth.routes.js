@@ -27,7 +27,7 @@ const { uploadUserDocuments } = require("../middleware/upload.middleware");
  * @openapi
  * /api/auth/register/request-otp:
  *   post:
- *     summary: Email a six-digit registration verification code
+ *     summary: Send email and mobile registration verification codes
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -35,10 +35,11 @@ const { uploadUserDocuments } = require("../middleware/upload.middleware");
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name, email, password, confirmPassword, agreeToTerms, acceptedPolicyIds]
+ *             required: [name, email, phone, password, confirmPassword, agreeToTerms, acceptedPolicyIds]
  *             properties:
  *               name: { type: string, example: John Doe }
  *               email: { type: string, format: email }
+ *               phone: { type: string, example: "+919876543210" }
  *               password: { type: string, format: password }
  *               confirmPassword: { type: string, format: password }
  *               agreeToTerms: { type: boolean }
@@ -50,7 +51,7 @@ const { uploadUserDocuments } = require("../middleware/upload.middleware");
  *       400: { description: Missing or invalid registration fields }
  *       409: { description: Account already exists }
  *       429: { description: Code requested too frequently }
- *       500: { description: Unable to send verification code through the configured cPanel mail account }
+ *       500: { description: Unable to send verification codes }
  */
 routes.post("/auth/register/request-otp", requestRegistrationOtp);
 
@@ -58,7 +59,7 @@ routes.post("/auth/register/request-otp", requestRegistrationOtp);
  * @openapi
  * /api/auth/register/verify-otp:
  *   post:
- *     summary: Verify the emailed registration code
+ *     summary: Verify email and mobile registration codes
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -66,13 +67,15 @@ routes.post("/auth/register/request-otp", requestRegistrationOtp);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, otp, challengeToken]
+ *             required: [email, phone, emailOtp, mobileOtp, challengeToken]
  *             properties:
  *               email: { type: string, format: email }
- *               otp: { type: string, example: "123456" }
+ *               phone: { type: string, example: "+919876543210" }
+ *               emailOtp: { type: string, example: "123456" }
+ *               mobileOtp: { type: string, example: "654321" }
  *               challengeToken: { type: string }
  *     responses:
- *       200: { description: Email verified; returns a registration verification token }
+ *       200: { description: Email and mobile verified; returns a registration verification token }
  *       400: { description: Incorrect, invalid, or expired code }
  *       429: { description: Too many attempts }
  */
@@ -90,10 +93,11 @@ routes.post("/auth/register/verify-otp", verifyRegistrationOtp);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name, email, password, verificationToken]
+ *             required: [name, email, phone, password, verificationToken]
  *             properties:
  *               name: { type: string, example: John Doe }
  *               email: { type: string, example: john@example.com }
+ *               phone: { type: string, example: "+919876543210" }
  *               password: { type: string, format: password, example: secret123 }
  *               verificationToken: { type: string }
  *     responses:
@@ -218,7 +222,7 @@ routes.get("/auth/me", authenticate, getCurrentUser);
  *       403:
  *         description: Caller is not an admin
  */
-routes.get("/auth/users", authenticate, authorizeRoleOrPermission(["ADMIN", "INVESTOR"], PERMISSIONS.TEAM_MEMBERS), listUsers);
+routes.get("/auth/users", authenticate, authorizeRoleOrPermission(["ADMIN", "INVESTOR"], PERMISSIONS.TEAM_MEMBERS, PERMISSIONS.MANAGE_USERS), listUsers);
 
 /**
  * @openapi
@@ -385,7 +389,7 @@ routes.patch("/auth/users/:id/editor", authenticate, authorize("ADMIN", "SUBADMI
  *       404:
  *         description: User not found
  */
-routes.delete("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS), deleteUser);
+routes.delete("/auth/users/:id", authenticate, authorizePermission(PERMISSIONS.TEAM_MEMBERS, PERMISSIONS.MANAGE_USERS), deleteUser);
 
 /**
  * @openapi

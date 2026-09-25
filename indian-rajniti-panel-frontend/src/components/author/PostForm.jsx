@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useAdminSite } from "@/context/AdminSiteContext";
 import { authorApi, contentLimitsApi, mediaUrl } from "@/lib/api";
 import { splitContentMedia } from "@/lib/contentMedia";
 import { hasRichText } from "@/lib/richText";
@@ -19,8 +20,8 @@ const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 const VIDEO_SOURCES = ["YOUTUBE", "VIMEO", "UPLOAD", "EXTERNAL"];
 const LOCAL_DRAFT_VERSION = 1;
 
-function localDraftKey(userId, type) {
-  return userId ? `indian-rajneeti:content-draft:${userId}:${type}` : null;
+function localDraftKey(userId, siteId, type) {
+  return userId && siteId ? `indian-rajneeti:content-draft:${userId}:${siteId}:${type}` : null;
 }
 
 function initialForm(post, initialCategory = "") {
@@ -156,7 +157,7 @@ function FieldLabel({ icon, required, children }) {
 
 // A styled dropzone-style file picker (native input hidden underneath) so
 // uploads don't fall back to the bare, unstyled browser "Choose File" button.
-function FileUploadField({ name, icon, label, accept, required, currentUrl, onChange, selectedFile }) {
+function FileUploadField({ name, icon, label, accept, required, currentUrl, onChange, selectedFile, error }) {
   const inputId = `field-${name}`;
   return (
     <div>
@@ -165,7 +166,7 @@ function FileUploadField({ name, icon, label, accept, required, currentUrl, onCh
       </FieldLabel>
       <label
         htmlFor={inputId}
-        className="flex items-center gap-3 px-3 py-2.5 border-2 border-dashed border-outline-variant/40 rounded-lg bg-surface-container-low hover:border-primary/60 hover:bg-surface-container transition-colors cursor-pointer"
+        className={`flex items-center gap-3 px-3 py-2.5 border-2 border-dashed rounded-lg bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer ${error ? "border-error bg-error/5" : "border-outline-variant/40 hover:border-primary/60"}`}
       >
         <span className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
           <i className="fa-solid fa-cloud-arrow-up text-primary" />
@@ -196,7 +197,8 @@ function FileUploadField({ name, icon, label, accept, required, currentUrl, onCh
           </a>
         )}
       </label>
-      <input id={inputId} type="file" name={name} accept={accept} required={required} onChange={onChange} className="hidden" />
+      <input id={inputId} type="file" name={name} accept={accept} aria-required={required} onChange={onChange} className="hidden" />
+      {error && <p className="mt-1.5 flex items-center gap-1.5 text-xs text-error" role="alert"><i className="fa-solid fa-circle-exclamation" />{error}</p>}
     </div>
   );
 }
@@ -208,9 +210,10 @@ function FileUploadField({ name, icon, label, accept, required, currentUrl, onCh
  */
 
 
-export default function PostForm({ type, post, redirectTo = "/author/content", initialCategory = "" }) {
+export default function PostForm({ type, post, redirectTo = "/panel/content", initialCategory = "" }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { activeSite, activeSiteId, features } = useAdminSite();
   const isEdit = Boolean(post);
   const [form, setForm] = useState(() => initialForm(post, initialCategory));
   const [files, setFiles] = useState({});
@@ -219,6 +222,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [draftNotice, setDraftNotice] = useState("");
@@ -228,7 +232,10 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   const [readyDraftKey, setReadyDraftKey] = useState(null);
   const restoredDraftKeyRef = useRef(null);
   const createSucceededRef = useRef(false);
-  const draftKey = isEdit ? null : localDraftKey(user?.id || user?.userId, type);
+  const errorSummaryRef = useRef(null);
+  const draftKey = isEdit ? null : localDraftKey(user?.id || user?.userId, activeSiteId, type);
+  const disabledFeature = type === "VIDEO" ? "feature_videos" : type === "BLOG" ? "feature_blogs" : null;
+  const featureDisabled = Boolean(disabledFeature && features[disabledFeature] === false);
   const hasDailyLimit = ["AUTHOR", "EDITOR"].includes(user?.role);
   const limitRequestKey = `${user?.role || "unknown"}:${type}`;
   const currentDailyLimit = dailyLimit?._requestKey === limitRequestKey ? dailyLimit : null;
@@ -325,7 +332,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   useEffect(() => {
     let active = true;
 
-    authorApi.listCategories()
+    authorApi.listCategories(activeSiteId || user?.siteId)
       .then((data) => {
         if (!active) return;
         setCategories((data.categories || []).map((category) => category.name));
@@ -342,7 +349,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeSiteId, user?.siteId]);
 
   useEffect(() => {
     if (isEdit || !user?.role) return undefined;
@@ -376,12 +383,20 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setFieldErrors((current) => ({ ...current, [e.target.name]: "" }));
   };
 
   const handleFileChange = (e) => {
     const { name, files: fileList } = e.target;
     setFiles((prev) => ({ ...prev, [name]: fileList?.[0] || null }));
+    setFieldErrors((current) => ({ ...current, [name]: "" }));
   };
+
+  useEffect(() => {
+    if (!error) return;
+    errorSummaryRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    errorSummaryRef.current?.focus({ preventScroll: true });
+  }, [error]);
 
   const handleAdditionalImages = (e) => {
     const selected = Array.from(e.target.files || []);
@@ -403,6 +418,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
     setSuccess("");
 
     if (limitReached) {
@@ -412,7 +428,11 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
 
     const missing = validateForm(type, form, files, isEdit);
     if (missing.length) {
-      setError(`Please fill in: ${missing.join(", ")}`);
+      const nextFieldErrors = {};
+      const fieldNames = { Title: "title", Category: "category", Excerpt: "excerpt", Content: "content", Description: "description", "Featured Image": "featuredImage", Thumbnail: "thumbnail", "Video File": "videoFile", "Video URL": "videoUrl", "Video Source": "videoSource" };
+      missing.forEach((label) => { nextFieldErrors[fieldNames[label] || label] = `${label} is required.`; });
+      setFieldErrors(nextFieldErrors);
+      setError(missing.length === 1 ? `${missing[0]} is required before this ${label.toLowerCase()} can be saved.` : `Please complete these required fields: ${missing.join(", ")}.`);
       return;
     }
 
@@ -441,12 +461,22 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
       setTimeout(() => router.push(redirectTo), 900);
     } catch (err) {
       setError(err.message);
+      if (err.fieldErrors && typeof err.fieldErrors === "object") setFieldErrors(err.fieldErrors);
     } finally {
       setLoading(false);
     }
   };
 
   const label = TYPE_LABEL[type];
+
+  if (featureDisabled) {
+    return (
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-6 text-amber-950">
+        <h2 className="font-headline-md text-xl">{TYPE_LABEL[type]} is disabled for {activeSite?.name || "this website"}</h2>
+        <p className="mt-2 text-sm">Enable this website feature from Administrative Tools → Website Management before creating this content type.</p>
+      </div>
+    );
+  }
 
   return (
     <form
@@ -455,6 +485,12 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
       aria-busy={loading || checkingLimit}
       className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start"
     >
+      {error && (
+        <div ref={errorSummaryRef} tabIndex={-1} className="lg:col-span-3 flex items-start gap-3 rounded-xl border border-error/40 bg-error/10 px-4 py-4 text-error outline-none" role="alert" aria-live="assertive">
+          <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true" />
+          <div><p className="font-headline-md text-sm">Could not save {label.toLowerCase()}</p><p className="mt-1 text-sm">{error}</p></div>
+        </div>
+      )}
       {!isEdit && hasDailyLimit && (
         <div
           className={`lg:col-span-3 rounded-xl border px-4 py-4 ${
@@ -596,6 +632,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                   required={!isEdit && form.videoSource === "UPLOAD"}
                   currentUrl={form.thumbnail}
                   selectedFile={files.thumbnail}
+                  error={fieldErrors.thumbnail}
                   onChange={handleFileChange}
                 />
                 {form.videoSource !== "UPLOAD" && (
@@ -613,6 +650,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                     required={!isEdit}
                     currentUrl={form.videoUrl}
                     selectedFile={files.videoFile}
+                    error={fieldErrors.videoFile}
                     onChange={handleFileChange}
                   />
                 ) : (
@@ -642,6 +680,7 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
                   required={!isEdit}
                   currentUrl={form.featuredImage}
                   selectedFile={files.featuredImage}
+                  error={fieldErrors.featuredImage}
                   onChange={handleFileChange}
                 />
                 <div>
@@ -780,12 +819,6 @@ export default function PostForm({ type, post, redirectTo = "/author/content", i
         <div className={sectionClass}>
           <SectionTitle icon="fa-cloud-arrow-up">Publish</SectionTitle>
 
-          {error && (
-            <p className="flex items-start gap-1.5 text-sm text-error font-body-md mb-3" role="alert">
-              <i className="fa-solid fa-triangle-exclamation mt-0.5" />
-              {error}
-            </p>
-          )}
           {success && (
             <p className="flex items-start gap-1.5 text-sm text-primary font-body-md mb-3" role="status">
               <i className="fa-solid fa-circle-check mt-0.5" />

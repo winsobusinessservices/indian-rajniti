@@ -14,7 +14,7 @@ export default function PanelHome() {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/login");
-    else if (STAFF_ROLES.has(user.role)) router.replace("/author/dashboard");
+    else if (STAFF_ROLES.has(user.role)) router.replace("/panel/dashboard");
     else window.location.replace(`${PUBLIC_SITE_URL}${user.role === "INVESTOR" ? "/investor/dashboard" : ""}`);
   }, [loading, router, user]);
 

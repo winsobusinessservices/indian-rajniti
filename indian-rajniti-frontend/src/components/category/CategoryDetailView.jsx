@@ -75,6 +75,28 @@ function CategoryDescription({ info }) {
   );
 }
 
+function SeatAllocationTable({ title, rows }) {
+  const total = rows.reduce((sum, row) => sum + Number(row.seats || 0), 0);
+  return (
+    <div className="overflow-hidden rounded-xl border border-outline-variant/30 bg-surface">
+      <div className="flex items-center justify-between gap-3 bg-surface-container px-4 py-3">
+        <h3 className="font-headline-md text-primary">{title}</h3>
+        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">{total} seats</span>
+      </div>
+      <div className="max-h-[30rem] overflow-y-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="sticky top-0 bg-surface-container-high text-xs uppercase tracking-wide text-on-surface-variant">
+            <tr><th className="px-4 py-2.5">State / Territory</th><th className="px-4 py-2.5 text-right">Seats</th></tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/20">
+            {rows.map((row) => <tr key={row.name}><td className="px-4 py-2.5 text-on-surface">{row.name}</td><td className="px-4 py-2.5 text-right font-semibold text-primary">{row.seats}</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Shared layout for anything resolved like a "category": states, parties,
  * topics, individual politicians (via /category/[slug]), and — reusing the
@@ -88,7 +110,7 @@ export default function CategoryDetailView({ info }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      <NewsAsideLeft />
+      <NewsAsideLeft adPlacement="category_left_rectangle" />
 
       {/* Center: Category / person / house detail */}
       <article className="order-1 lg:order-2 flex-grow lg:w-3/5">
@@ -192,6 +214,56 @@ export default function CategoryDetailView({ info }) {
               ))}
             </div>
           </div>
+        )}
+
+        {(info.stateSeatAllocation?.length > 0 || info.unionTerritorySeatAllocation?.length > 0) && (
+          <div className="mb-12">
+            <h2 className="mb-2 border-b border-outline-variant/30 pb-2 font-headline-lg text-xl text-primary">
+              State-wise and Union Territory Seats
+            </h2>
+            <p className="mb-6 text-sm text-on-surface-variant">
+              Constitutional seat allocation for the {info.label}.
+              {info.nominatedSeats > 0 ? ` The House also includes ${info.nominatedSeats} nominated members.` : ""}
+            </p>
+            <div className="grid gap-6 xl:grid-cols-2">
+              {info.stateSeatAllocation?.length > 0 && <SeatAllocationTable title="States" rows={info.stateSeatAllocation} />}
+              {info.unionTerritorySeatAllocation?.length > 0 && <SeatAllocationTable title="Union Territories" rows={info.unionTerritorySeatAllocation} />}
+            </div>
+          </div>
+        )}
+
+        {info.privileges?.length > 0 && (
+          <section className="mb-12" aria-labelledby="parliamentary-privileges-heading">
+            <h2
+              id="parliamentary-privileges-heading"
+              className="mb-2 border-b border-outline-variant/30 pb-2 font-headline-lg text-xl text-primary"
+            >
+              Powers, Privileges and Immunities
+            </h2>
+            <p className="mb-6 font-body-md text-sm leading-relaxed text-on-surface-variant">
+              Parliamentary privileges protect the independence of each House and allow its members and committees to perform their legislative duties without improper obstruction. They operate within the Constitution, parliamentary rules and applicable law.
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {info.privileges.map((privilege, index) => (
+                <article
+                  key={`${privilege.title}-${index}`}
+                  className="rounded-xl border border-outline-variant/30 bg-surface-container p-5"
+                >
+                  <div className="mb-3 flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <i className="fa-solid fa-shield-halved" aria-hidden="true" />
+                    </span>
+                    <h3 className="pt-1 font-headline-md text-base text-on-surface">
+                      {privilege.title}
+                    </h3>
+                  </div>
+                  <p className="font-body-md text-sm leading-relaxed text-on-surface-variant">
+                    {privilege.description}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
         )}
 
         {info.profile && (
@@ -317,7 +389,7 @@ export default function CategoryDetailView({ info }) {
         )}
       </article>
 
-      <NewsAsideRight />
+      <NewsAsideRight adPlacement="category_right_skyscraper" />
     </div>
   );
 }

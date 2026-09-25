@@ -1,5 +1,8 @@
-import { SITE_URL } from "@/lib/site";
 import { slugify } from "@/lib/slugify";
+import { getCurrentSite } from "@/lib/currentSite";
+import { withSiteHeaders } from "@/lib/siteRequest";
+
+export const dynamic = "force-dynamic";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -26,11 +29,12 @@ const STATIC_ROUTES = [
   { path: "/careers", changeFrequency: "weekly", priority: 0.5 },
   { path: "/about", changeFrequency: "monthly", priority: 0.5 },
   { path: "/contact", changeFrequency: "monthly", priority: 0.4 },
+  { path: "/advertise-with-us", changeFrequency: "monthly", priority: 0.5 },
 ];
 
 async function fetchJson(path) {
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, { next: { revalidate: 3600 } });
+    const response = await fetch(`${API_BASE_URL}${path}`, await withSiteHeaders({ cache: "no-store" }));
     return response.ok ? response.json() : null;
   } catch {
     return null;
@@ -43,7 +47,8 @@ function validDate(value) {
 }
 
 export default async function sitemap() {
-  const [newsBundle, categoryData, politicianData, partyData, stateData, careerData, policyData] = await Promise.all([
+  const [site, newsBundle, categoryData, politicianData, partyData, stateData, careerData, policyData] = await Promise.all([
+    getCurrentSite().catch(() => ({ domain: "indianrajneeti.com" })),
     fetchJson("/news/home"),
     fetchJson("/categories"),
     fetchJson("/politicians"),
@@ -52,13 +57,14 @@ export default async function sitemap() {
     fetchJson("/careers"),
     fetchJson("/policies"),
   ]);
+  const siteUrl = `https://${site.domain}`;
 
-  const entries = STATIC_ROUTES.map(({ path, ...meta }) => ({ url: `${SITE_URL}${path}`, ...meta }));
+  const entries = STATIC_ROUTES.map(({ path, ...meta }) => ({ url: `${siteUrl}${path}`, ...meta }));
   const posts = newsBundle?.posts || [];
 
   posts.filter((post) => post.slug).forEach((post) => {
     entries.push({
-      url: `${SITE_URL}/news/${post.slug}`,
+      url: `${siteUrl}/news/${post.slug}`,
       lastModified: validDate(post.updated_at || post.time),
       changeFrequency: "weekly",
       priority: 0.9,
@@ -71,7 +77,7 @@ export default async function sitemap() {
     const slug = category.slug || slugify(category.name);
     if (!slug) return;
     standaloneCategorySlugs.add(slug);
-    entries.push({ url: `${SITE_URL}/${slug}`, changeFrequency: "daily", priority: 0.7 });
+    entries.push({ url: `${siteUrl}/${slug}`, changeFrequency: "daily", priority: 0.7 });
   });
   posts.forEach((post) => {
     if (post.category) categorySlugs.add(slugify(post.category));
@@ -86,7 +92,7 @@ export default async function sitemap() {
     (politicianData?.[group] || []).forEach((person) => categorySlugs.add(person.slug || slugify(person.name)));
   });
   categorySlugs.forEach((slug) => {
-    if (slug && !standaloneCategorySlugs.has(slug)) entries.push({ url: `${SITE_URL}/category/${slug}`, changeFrequency: "daily", priority: 0.7 });
+    if (slug && !standaloneCategorySlugs.has(slug)) entries.push({ url: `${siteUrl}/category/${slug}`, changeFrequency: "daily", priority: 0.7 });
   });
 
   (careerData?.jobs || []).filter((job) => {
@@ -94,7 +100,7 @@ export default async function sitemap() {
     return job.slug && job.status === "OPEN" && (!closesAt || closesAt.getTime() > Date.now());
   }).forEach((job) => {
     entries.push({
-      url: `${SITE_URL}/careers/${job.slug}`,
+      url: `${siteUrl}/careers/${job.slug}`,
       lastModified: validDate(job.updated_at || job.created_at),
       changeFrequency: "weekly",
       priority: 0.5,
@@ -103,7 +109,7 @@ export default async function sitemap() {
 
   (policyData?.policies || []).filter((policy) => policy.slug).forEach((policy) => {
     entries.push({
-      url: `${SITE_URL}/policies/${policy.slug}`,
+      url: `${siteUrl}/policies/${policy.slug}`,
       lastModified: validDate(policy.updated_at || policy.published_at),
       changeFrequency: "monthly",
       priority: 0.8,

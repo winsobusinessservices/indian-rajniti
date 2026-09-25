@@ -3,6 +3,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import ToastProvider from "@/components/common/ToastProvider";
 import ConfirmDialogProvider from "@/components/common/ConfirmDialogProvider";
 import AuthorWorkspaceShell from "@/components/author/AuthorWorkspaceShell";
+import { AdminSiteProvider } from "@/context/AdminSiteContext";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export default function RootLayout({ children }) {
         <ToastProvider />
         <ConfirmDialogProvider>
           <AuthProvider>
-            <AuthorWorkspaceShell>{children}</AuthorWorkspaceShell>
+            <AdminSiteProvider><AuthorWorkspaceShell>{children}</AuthorWorkspaceShell></AdminSiteProvider>
           </AuthProvider>
         </ConfirmDialogProvider>
       </body>

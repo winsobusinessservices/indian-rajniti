@@ -1,10 +1,6 @@
 import { notFound } from "next/navigation";
-import BreakingNews from "@/components/layout/BreakingNews";
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
 import RequireContributorRole from "@/components/author/RequireContributorRole";
 import PostForm from "@/components/author/PostForm";
-import { getBreakingNews } from "@/features/news/news.api";
 import { PERMISSIONS } from "@/lib/permissions";
 
 const VALID_TYPES = ["article", "blog", "video"];
@@ -20,14 +16,10 @@ export default async function CreateContentPage({ params, searchParams }) {
   const { type } = await params;
   const { category = "" } = await searchParams;
   if (!VALID_TYPES.includes(type)) notFound();
-
-  const breakingNews = await getBreakingNews();
   const label = TYPE_LABEL[type];
 
   return (
     <>
-      <BreakingNews text={breakingNews} />
-      <Header />
       <main className="w-full bg-background flex-grow">
         <RequireContributorRole roles={["AUTHOR", "EDITOR", "ADMIN", "INVESTOR"]} permissions={[TYPE_PERMISSION[type]]}>
           <div className="max-w-full mx-auto px-4 md:px-16 py-10">
@@ -39,7 +31,6 @@ export default async function CreateContentPage({ params, searchParams }) {
           </div>
         </RequireContributorRole>
       </main>
-      <Footer />
     </>
   );
 }

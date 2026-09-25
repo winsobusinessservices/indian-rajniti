@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { formatViews } from "@/lib/formatViews";
 
-export default function TrendingNews({ items, viewAllHref }) {
+export default function TrendingNews({ items, viewAllHref, title = "" }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-        <h3 className="font-headline-md text-primary tracking-tight text-lg">Trending</h3>
+        <h3 className="font-headline-md text-primary tracking-tight text-lg">{title}</h3>
         {viewAllHref ? (
           <Link href={viewAllHref} className="text-xs font-label-md text-secondary hover:underline">
             VIEW ALL

@@ -30,10 +30,10 @@ const authenticate = async (req, res, next) => {
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decodedToken.userId);
-    if (!user || user.status !== "ACTIVE") {
+    if (!user || user.status !== "ACTIVE" || user.site_status !== "ACTIVE") {
       return res.status(401).json({ success: false, message: "Account is unavailable" });
     }
-    req.user = { userId: user.id, id: user.id, role: user.role, permissions: user.permissions };
+    req.user = { userId: user.id, id: user.id, role: user.role, permissions: user.permissions, siteId: Number(user.site_id || 1) };
     next();
   } catch (error) {
     return res.status(401).json({
@@ -55,8 +55,8 @@ const optionalAuthenticate = async (req, res, next) => {
 
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decodedToken.userId);
-    if (user?.status === "ACTIVE") {
-      req.user = { userId: user.id, id: user.id, role: user.role, permissions: user.permissions };
+    if (user?.status === "ACTIVE" && user.site_status === "ACTIVE") {
+      req.user = { userId: user.id, id: user.id, role: user.role, permissions: user.permissions, siteId: Number(user.site_id || 1) };
     }
     return next();
   } catch {

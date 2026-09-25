@@ -1,24 +1,42 @@
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
-import { DEFAULT_SOCIAL_IMAGE, serializeJsonLd } from "@/lib/seo";
+import { serializeJsonLd } from "@/lib/seo";
 import ToastProvider from "@/components/common/ToastProvider";
 import ConfirmDialogProvider from "@/components/common/ConfirmDialogProvider";
+import { SiteProvider } from "@/context/SiteContext";
+import { getCurrentSite } from "@/lib/currentSite";
+import { mediaUrl } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  metadataBase: new URL(SITE_URL),
+async function loadSite() {
+  try { return await getCurrentSite(); } catch { return { name: "Indian Rajneeti", domain: "indianrajneeti.com" }; }
+}
+
+export async function generateMetadata() {
+  const site = await loadSite();
+  const siteUrl = `https://${site.domain}`;
+  const description = site.description || site.subtitle || "Political news, election coverage, and analysis.";
+  const image = site.logo_url ? mediaUrl(site.logo_url) : `${siteUrl}/images/logo.png`;
+  const iconVersion = encodeURIComponent(site.updated_at || site.id || "default");
+  const rawIcon = site.icon_url
+    ? mediaUrl(site.icon_url)
+    : site.logo_url
+      ? mediaUrl(site.logo_url)
+      : "/images/indian-rajneeti-favicon.ico";
+  const icon = `${rawIcon}${rawIcon.includes("?") ? "&" : "?"}v=${iconVersion}`;
+  return {
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "Indian Rajneeti — Indian Political News & Analysis",
-    template: `%s | ${SITE_NAME}`,
+    default: `${site.name} — Political News & Analysis`,
+    template: `%s | ${site.name}`,
   },
-  description: SITE_DESCRIPTION,
-  applicationName: SITE_NAME,
+  description,
+  applicationName: site.name,
   keywords: ["Indian politics", "political news India", "India elections", "Parliament news", "Lok Sabha", "Rajya Sabha", "government policy India", "political analysis"],
-  authors: [{ name: SITE_NAME, url: SITE_URL }],
-  creator: SITE_NAME,
-  publisher: SITE_NAME,
+  authors: [{ name: site.name, url: siteUrl }],
+  creator: site.name,
+  publisher: site.name,
   referrer: "origin-when-cross-origin",
   formatDetection: { email: false, address: false, telephone: false },
   alternates: { canonical: "/", languages: { "en-IN": "/" } },
@@ -26,16 +44,16 @@ export const metadata = {
     type: "website",
     locale: "en_IN",
     url: "/",
-    siteName: SITE_NAME,
-    title: "Indian Rajneeti — Indian Political News & Analysis",
-    description: SITE_DESCRIPTION,
-    images: [DEFAULT_SOCIAL_IMAGE],
+    siteName: site.name,
+    title: `${site.name} — Political News & Analysis`,
+    description,
+    images: [{ url: image }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Indian Rajneeti — Indian Political News & Analysis",
-    description: SITE_DESCRIPTION,
-    images: [DEFAULT_SOCIAL_IMAGE.url],
+    title: `${site.name} — Political News & Analysis`,
+    description,
+    images: [image],
   },
   robots: {
     index: true,
@@ -53,7 +71,13 @@ export const metadata = {
   verification: {
     google: process.env.GOOGLE_SITE_VERIFICATION || undefined,
   },
-};
+  icons: {
+    icon: [{ url: icon }],
+    shortcut: [{ url: icon }],
+    apple: [{ url: icon }],
+  },
+  };
+}
 
 // suppressHydrationWarning below: some browser extensions (e.g. LanguageTool)
 // inject attributes like data-lt-installed onto <html> before React
@@ -63,37 +87,41 @@ export default async function RootLayout({ children }) {
   // API-backed pages must not contact the separately deployed cPanel backend
   // while `next build` is prerendering. Rendering starts once a real request
   // reaches the running Next.js application instead.
+  const site = await loadSite();
+  const siteUrl = `https://${site.domain}`;
+  const description = site.description || site.subtitle || "Political news, election coverage, and analysis.";
+  const logo = site.logo_url ? mediaUrl(site.logo_url) : `${siteUrl}/images/logo.png`;
   const siteSchema = {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "NewsMediaOrganization",
-        "@id": `${SITE_URL}/#organization`,
-        name: SITE_NAME,
-        alternateName: "Indian Rajneeti",
-        description: SITE_DESCRIPTION,
-        url: SITE_URL,
+        "@id": `${siteUrl}/#organization`,
+        name: site.name,
+        alternateName: site.subtitle || site.name,
+        description,
+        url: siteUrl,
         logo: {
           "@type": "ImageObject",
-          url: `${SITE_URL}/icon.png`,
-          contentUrl: `${SITE_URL}/icon.png`,
+          url: logo,
+          contentUrl: logo,
         },
       },
       {
         "@type": "WebSite",
-        "@id": `${SITE_URL}/#website`,
-        url: SITE_URL,
-        name: SITE_NAME,
-        alternateName: "Indian Rajneeti",
-        description: SITE_DESCRIPTION,
+        "@id": `${siteUrl}/#website`,
+        url: siteUrl,
+        name: site.name,
+        alternateName: site.subtitle || site.name,
+        description,
         inLanguage: "en-IN",
-        publisher: { "@id": `${SITE_URL}/#organization` },
+        publisher: { "@id": `${siteUrl}/#organization` },
       },
     ],
   };
 
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning style={{ "--color-primary": site.primary_color || "#002068", "--color-secondary": site.secondary_color || "#8f4e00" }}>
       <head>
         <link
           rel="stylesheet"
@@ -108,9 +136,9 @@ export default async function RootLayout({ children }) {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(siteSchema) }} />
         <ToastProvider />
         <ConfirmDialogProvider>
-          <AuthProvider>
-            {children}
-          </AuthProvider>
+          <SiteProvider site={site}>
+            <AuthProvider>{children}</AuthProvider>
+          </SiteProvider>
         </ConfirmDialogProvider>
       </body>
     </html>

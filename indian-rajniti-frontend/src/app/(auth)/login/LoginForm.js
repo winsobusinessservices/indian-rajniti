@@ -121,11 +121,10 @@ export default function LoginForm() {
           </Link>
         </div>
 
-        {error && (
-          <p className="text-sm text-error font-body-md" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <div className="rounded-lg bg-error/10 px-4 py-3 text-sm text-error font-body-md" role="alert">
+          <p>{error}</p>
+          {/account is inactive/i.test(error) && <Link href="/contact" className="mt-2 inline-flex items-center gap-2 font-semibold text-primary hover:underline">Contact us <i className="fa-solid fa-arrow-right text-xs" aria-hidden="true" /></Link>}
+        </div>}
 
         <div>
           <button

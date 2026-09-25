@@ -10,6 +10,9 @@ import { getBreakingNews } from "@/features/news/news.api";
 import { careersApi } from "@/lib/api";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
+import { isSiteFeatureEnabled } from "@/lib/siteFeatures";
+import PostBody from "@/components/common/PostBody";
+import { richTextToPlainText } from "@/lib/richText";
 
 const EMPLOYMENT_LABEL = {
   FULL_TIME: "Full-time",
@@ -44,13 +47,14 @@ export async function generateMetadata({ params }) {
   const isExpired = hasExpired(job);
   return buildPageMetadata({
     title: job.title,
-    description: job.description,
+    description: richTextToPlainText(job.description),
     path: `/careers/${slug}`,
     noIndex: isExpired,
   });
 }
 
 export default async function CareerDetailPage({ params }) {
+  if (!(await isSiteFeatureEnabled("feature_careers"))) notFound();
   const { slug } = await params;
 
   const job = await getJob(slug);
@@ -66,7 +70,7 @@ export default async function CareerDetailPage({ params }) {
     "@context": "https://schema.org",
     "@type": "JobPosting",
     title: job.title,
-    description: [job.description, job.responsibilities, job.requirements].filter(Boolean).join("\n\n"),
+    description: [job.description, job.responsibilities, job.requirements].filter(Boolean).map(richTextToPlainText).join("\n\n"),
     datePosted: job.created_at,
     validThrough: job.closes_at || undefined,
     employmentType: job.employment_type,
@@ -75,7 +79,7 @@ export default async function CareerDetailPage({ params }) {
       "@id": `${SITE_URL}/#organization`,
       name: SITE_NAME,
       sameAs: SITE_URL,
-      logo: `${SITE_URL}/icon.png`,
+      logo: `${SITE_URL}/images/logo.png`,
     },
     identifier: { "@type": "PropertyValue", name: SITE_NAME, value: String(job.id) },
     url: absoluteUrl(`/careers/${slug}`),
@@ -181,9 +185,7 @@ export default async function CareerDetailPage({ params }) {
                       About the Role
                     </h2>
 
-                    <p className="whitespace-pre-line">
-                      {job.description}
-                    </p>
+                    <PostBody content={job.description} className="space-y-4" />
                   </div>
                 )}
 
@@ -193,9 +195,7 @@ export default async function CareerDetailPage({ params }) {
                       Responsibilities
                     </h2>
 
-                    <p className="whitespace-pre-line">
-                      {job.responsibilities}
-                    </p>
+                    <PostBody content={job.responsibilities} className="space-y-4" />
                   </div>
                 )}
 
@@ -205,9 +205,7 @@ export default async function CareerDetailPage({ params }) {
                       Requirements
                     </h2>
 
-                    <p className="whitespace-pre-line">
-                      {job.requirements}
-                    </p>
+                    <PostBody content={job.requirements} className="space-y-4" />
                   </div>
                 )}
 

@@ -1,16 +1,22 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import NewsCard from "@/components/news/NewsCard";
-import { getBlogs } from "@/features/news/news.api";
+import { getBlogs, getListingPages } from "@/features/news/news.api";
 import { buildPageMetadata } from "@/lib/seo";
+import { notFound } from "next/navigation";
+import { isSiteFeatureEnabled } from "@/lib/siteFeatures";
 
-export const metadata = buildPageMetadata({ title: "Indian Politics Blogs and Analysis", description: "Read commentary, explainers, opinions, and in-depth analysis of Indian politics, elections, Parliament, and public policy.", path: "/blogs" });
+export async function generateMetadata() {
+  const page = (await getListingPages()).blogs || {};
+  return buildPageMetadata({ title: page.title || "Blogs", description: page.description || "", path: "/blogs" });
+}
 
 export default async function BlogsPage() {
-  const blogs = await getBlogs();
+  if (!(await isSiteFeatureEnabled("feature_blogs"))) notFound();
+  const [blogs, pages] = await Promise.all([getBlogs(), getListingPages()]);
 
   return (
     <CategoryPageShell
-      title="Blogs"
+      title={pages.blogs?.title || ""}
       count={blogs.length}
       gridClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
     >

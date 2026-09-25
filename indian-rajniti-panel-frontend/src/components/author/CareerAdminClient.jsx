@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { careersApi, mediaUrl } from "@/lib/api";
 import Link from "next/link";
 import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
+import EmptyState from "@/components/common/EmptyState";
+import RichTextEditor from "@/components/common/RichTextEditor";
 
 const EMPLOYMENT_TYPES = [
   { value: "FULL_TIME", label: "Full-time" },
@@ -137,7 +139,7 @@ export default function CareerAdminClient() {
   const handleDelete = async (job) => {
     const confirmed = await confirmDelete({
       title: "Delete job posting?",
-      description: `“${job.title}” will be moved to Deleted Items and can be restored by an Admin.`,
+      description: `The career opening “${job.title}” will be moved to Deleted Items. It can be restored later from Deleted Items.`,
     });
     if (!confirmed) return;
     await careersApi.remove(job.id);
@@ -179,7 +181,7 @@ export default function CareerAdminClient() {
           {loading ? (
             <p className="font-body-md text-sm text-on-surface-variant">Loading…</p>
           ) : jobs.length === 0 ? (
-            <p className="font-body-md text-sm text-on-surface-variant">No job postings yet — create one using the form.</p>
+            <EmptyState compact icon="fa-briefcase" title="No job postings for this website" description="Create the first job using the form on this page." />
           ) : (
             <div className="space-y-3">
               {jobs.map((job) => (
@@ -406,15 +408,15 @@ export default function CareerAdminClient() {
           </div>
           <div>
             <FieldLabel required>Description</FieldLabel>
-            <textarea name="description" required rows={4} value={form.description} onChange={handleChange} className={fieldClass} />
+            <RichTextEditor value={form.description} onChange={(description) => setForm((current) => ({ ...current, description }))} placeholder="Describe the role…" minHeight="12rem" maxHeight="28rem" disabled={submitting} />
           </div>
           <div>
             <FieldLabel>Requirements</FieldLabel>
-            <textarea name="requirements" rows={3} value={form.requirements} onChange={handleChange} className={fieldClass} />
+            <RichTextEditor value={form.requirements} onChange={(requirements) => setForm((current) => ({ ...current, requirements }))} placeholder="Add qualifications and requirements…" minHeight="10rem" maxHeight="24rem" disabled={submitting} />
           </div>
           <div>
             <FieldLabel>Responsibilities</FieldLabel>
-            <textarea name="responsibilities" rows={3} value={form.responsibilities} onChange={handleChange} className={fieldClass} />
+            <RichTextEditor value={form.responsibilities} onChange={(responsibilities) => setForm((current) => ({ ...current, responsibilities }))} placeholder="Add key responsibilities…" minHeight="10rem" maxHeight="24rem" disabled={submitting} />
           </div>
           <div>
             <FieldLabel>Applications Close</FieldLabel>

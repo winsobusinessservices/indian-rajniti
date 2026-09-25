@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { deletionsApi } from "@/lib/api";
 import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
+import { useAdminSite } from "@/context/AdminSiteContext";
 
 const FILTERS = [
   ["ACTIVE", "Deleted"],
@@ -22,6 +23,7 @@ function friendlyType(value) {
 
 export default function DeletedItemsClient() {
   const confirm = useConfirmDialog();
+  const { activeSite, activeSiteId } = useAdminSite();
   const [state, setState] = useState("ACTIVE");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,18 +34,19 @@ export default function DeletedItemsClient() {
     setLoading(true);
     setError("");
     try {
-      const data = await deletionsApi.list(state);
+      const data = await deletionsApi.list(state, activeSiteId);
       setItems(data.deletions || []);
     } catch (loadError) {
       setError(loadError.message);
     } finally {
       setLoading(false);
     }
-  }, [state]);
+  }, [state, activeSiteId]);
 
   useEffect(() => {
     let current = true;
-    deletionsApi.list(state)
+    if (!activeSiteId) return undefined;
+    deletionsApi.list(state, activeSiteId)
       .then((data) => {
         if (current) setItems(data.deletions || []);
       })
@@ -54,7 +57,7 @@ export default function DeletedItemsClient() {
         if (current) setLoading(false);
       });
     return () => { current = false; };
-  }, [state]);
+  }, [state, activeSiteId]);
 
   const restore = async (item) => {
     const approved = await confirm({
@@ -66,7 +69,7 @@ export default function DeletedItemsClient() {
     if (!approved) return;
     setBusyId(item.id);
     try {
-      await deletionsApi.restore(item.id);
+      await deletionsApi.restore(item.id, activeSiteId);
       await load();
     } catch (actionError) {
       setError(actionError.message);
@@ -84,7 +87,7 @@ export default function DeletedItemsClient() {
     if (!approved) return;
     setBusyId(item.id);
     try {
-      await deletionsApi.permanentlyDelete(item.id);
+      await deletionsApi.permanentlyDelete(item.id, activeSiteId);
       await load();
     } catch (actionError) {
       setError(actionError.message);
@@ -94,7 +97,7 @@ export default function DeletedItemsClient() {
   };
 
   return (
-    <div>
+    <div><div className="mb-6 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3"><p className="text-xs font-semibold uppercase tracking-wider text-primary">Deletion history for</p><p className="mt-1 font-headline-md text-lg text-on-surface">{activeSite?.name || "Select a website"}</p><p className="text-xs text-on-surface-variant">Restore and permanent-delete actions are limited to this website.</p></div>
       <div className="mb-6 flex flex-wrap gap-2" aria-label="Deletion history filter">
         {FILTERS.map(([key, label]) => (
           <button

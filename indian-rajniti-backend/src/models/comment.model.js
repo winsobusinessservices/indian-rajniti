@@ -4,6 +4,7 @@ function mapComment(row) {
   if (!row) return row;
   return {
     id: row.id,
+    siteId: row.site_id,
     authorId: row.author_id,
     author: row.author,
     postType: row.post_type,
@@ -25,24 +26,24 @@ const SELECT_COMMENT = `
 `;
 
 const Comment = {
-  async create({ authorId, postType, postId, postSlug, postTitle, content }) {
+  async create({ siteId, authorId, postType, postId, postSlug, postTitle, content }) {
     const [result] = await pool.query(
       `INSERT INTO comments
-        (author_id, post_type, post_id, post_slug, post_title, content, status)
-       VALUES (?, ?, ?, ?, ?, ?, 'VISIBLE')`,
-      [authorId, postType, String(postId), postSlug, postTitle, content]
+        (site_id, author_id, post_type, post_id, post_slug, post_title, content, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'VISIBLE')`,
+      [siteId, authorId, postType, String(postId), postSlug, postTitle, content]
     );
-    return Comment.findById(result.insertId);
+    return Comment.findById(result.insertId, siteId);
   },
 
-  async findById(id) {
-    const [rows] = await pool.query(`${SELECT_COMMENT} WHERE c.id = ? AND c.deleted_at IS NULL`, [id]);
+  async findById(id, siteId = null) {
+    const [rows] = await pool.query(`${SELECT_COMMENT} WHERE c.id = ? AND c.deleted_at IS NULL${siteId ? " AND c.site_id = ?" : ""}`, siteId ? [id, siteId] : [id]);
     return mapComment(rows[0]);
   },
 
-  async findForPost(postSlug, viewer = null) {
-    const conditions = ["c.post_slug = ?", "c.deleted_at IS NULL"];
-    const params = [postSlug];
+  async findForPost(postSlug, viewer = null, siteId = 1) {
+    const conditions = ["c.post_slug = ?", "c.site_id = ?", "c.deleted_at IS NULL"];
+    const params = [postSlug, siteId];
     if (viewer?.role !== "ADMIN") {
       if (viewer?.userId) {
         conditions.push("(c.status = 'VISIBLE' OR c.author_id = ?)");
@@ -58,19 +59,19 @@ const Comment = {
     return rows.map(mapComment);
   },
 
-  async findAll() {
-    const [rows] = await pool.query(`${SELECT_COMMENT} WHERE c.deleted_at IS NULL ORDER BY c.created_at DESC, c.id DESC`);
+  async findAll(siteId = 1) {
+    const [rows] = await pool.query(`${SELECT_COMMENT} WHERE c.site_id = ? AND c.deleted_at IS NULL ORDER BY c.created_at DESC, c.id DESC`, [siteId]);
     return rows.map(mapComment);
   },
 
-  async setHidden(id, hidden, adminId) {
+  async setHidden(id, hidden, adminId, siteId) {
     await pool.query(
       `UPDATE comments
        SET status = ?, hidden_by = ?, hidden_at = ?
-       WHERE id = ?`,
-      [hidden ? "HIDDEN" : "VISIBLE", hidden ? adminId : null, hidden ? new Date() : null, id]
+       WHERE id = ? AND site_id = ?`,
+      [hidden ? "HIDDEN" : "VISIBLE", hidden ? adminId : null, hidden ? new Date() : null, id, siteId]
     );
-    return Comment.findById(id);
+    return Comment.findById(id, siteId);
   },
 
   async remove(id) {

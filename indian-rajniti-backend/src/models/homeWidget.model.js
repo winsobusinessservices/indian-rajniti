@@ -11,8 +11,8 @@ const HomeWidget = {
   // the right JS value (string/array/object) — no manual JSON.parse needed,
   // and calling it anyway breaks on widgets whose payload is itself a bare
   // string (e.g. breaking_news), since that comes back already unwrapped.
-  async getAll() {
-    const [rows] = await pool.query(`SELECT widget_key, data FROM ${TABLE}`);
+  async getAll(siteId = 1) {
+    const [rows] = await pool.query(`SELECT widget_key, data FROM ${TABLE} WHERE site_id = ?`, [siteId]);
     const widgets = {};
     rows.forEach((row) => {
       widgets[row.widget_key] = row.data;
@@ -20,19 +20,19 @@ const HomeWidget = {
     return widgets;
   },
 
-  async upsert(widgetKey, data) {
+  async upsert(widgetKey, data, siteId = 1) {
     await pool.query(
-      `INSERT INTO ${TABLE} (widget_key, data) VALUES (?, ?)
+      `INSERT INTO ${TABLE} (site_id, widget_key, data) VALUES (?, ?, ?)
        ON DUPLICATE KEY UPDATE data = VALUES(data)`,
-      [widgetKey, JSON.stringify(data)]
+      [siteId, widgetKey, JSON.stringify(data)]
     );
   },
 
-  async votePoll(optionIndex) {
+  async votePoll(optionIndex, siteId = 1) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
-      const [rows] = await connection.query(`SELECT data FROM ${TABLE} WHERE widget_key = ? FOR UPDATE`, ["poll_of_the_day"]);
+      const [rows] = await connection.query(`SELECT data FROM ${TABLE} WHERE widget_key = ? AND site_id = ? FOR UPDATE`, ["poll_of_the_day", siteId]);
       if (!rows[0]) throw new Error("Poll is not available");
       const poll = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : rows[0].data;
       if (!Array.isArray(poll.options) || optionIndex < 0 || optionIndex >= poll.options.length) throw new Error("Please choose a valid poll option");
@@ -44,7 +44,7 @@ const HomeWidget = {
         options: options.map((option) => ({ ...option, pct: totalVotes ? Math.round((option.votes / totalVotes) * 100) : 0 })),
         totalVotes,
       };
-      await connection.query(`UPDATE ${TABLE} SET data = ? WHERE widget_key = ?`, [JSON.stringify(result), "poll_of_the_day"]);
+      await connection.query(`UPDATE ${TABLE} SET data = ? WHERE widget_key = ? AND site_id = ?`, [JSON.stringify(result), "poll_of_the_day", siteId]);
       await connection.commit();
       return result;
     } catch (error) {

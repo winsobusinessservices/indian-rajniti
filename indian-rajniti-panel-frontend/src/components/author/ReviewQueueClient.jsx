@@ -7,6 +7,7 @@ import { authorApi } from "@/lib/api";
 import ReasonModal from "@/components/common/ReasonModal";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import { richTextToPlainText } from "@/lib/richText";
+import EmptyState from "@/components/common/EmptyState";
 
 const AI_BADGE = {
   NOT_CHECKED: "bg-surface-container-high text-on-surface-variant",
@@ -223,15 +224,9 @@ export default function ReviewQueueClient() {
       {loading ? (
         <DashboardRowsSkeleton />
       ) : error ? (
-        <p className="text-sm text-error font-body-md" role="alert">
-          {error}
-        </p>
+        <EmptyState icon="fa-triangle-exclamation" title="Review queue is unavailable" description={error} />
       ) : posts.length === 0 ? (
-        <div className="text-center py-16">
-          <i className="fa-solid fa-circle-check text-4xl text-green-600 mb-4" />
-          <p className="font-headline-md text-lg text-on-surface">Queue is empty</p>
-          <p className="font-body-md text-sm text-on-surface-variant">Nothing is waiting for review right now.</p>
-        </div>
+        <EmptyState icon="fa-circle-check" title="Review queue is empty" description="Nothing from this website is waiting for review right now." />
       ) : (
         <div className="space-y-3">
           {posts.map((post) => {
@@ -313,7 +308,7 @@ export default function ReviewQueueClient() {
               </div>
               <div className="flex flex-col gap-2 flex-shrink-0">
                 <Link
-                  href={`/author/view/${post.type.toLowerCase()}/${post.id}?from=review`}
+                  href={`/panel/view/${post.type.toLowerCase()}/${post.id}?from=review`}
                   className="px-3 py-1.5 text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors text-center"
                 >
                   View
@@ -406,7 +401,7 @@ export default function ReviewQueueClient() {
         onClose={() => setBulkAction(null)}
         onConfirm={handleBulkAction}
         title={`${bulkAction === "APPROVE" ? "Approve" : bulkAction === "REJECT" ? "Reject" : "Delete"} ${selectedPosts.length} selected item${selectedPosts.length === 1 ? "" : "s"}?`}
-        description={bulkAction === "DELETE" ? "Selected content will be moved to Deleted Items and can be restored by an Admin." : "This action will be applied to every selected item."}
+        description={bulkAction === "DELETE" ? "The selected content will be moved to Deleted Items. It can be restored later from Deleted Items." : "This action will be applied to every selected item."}
         confirmLabel={bulkAction === "APPROVE" ? "Approve All" : bulkAction === "REJECT" ? "Reject All" : "Delete All"}
         placeholder={bulkAction === "REJECT" ? "Explain what the authors need to change..." : "Why is this content being deleted?"}
         required={bulkAction !== "APPROVE"}
@@ -418,7 +413,7 @@ export default function ReviewQueueClient() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Delete this post?"
-        description="This post will move to Deleted Items and can be restored by an Admin."
+        description="This content item will be moved to Deleted Items. It can be restored later from Deleted Items."
         confirmLabel="Delete"
         placeholder="Why is this being deleted?"
         danger

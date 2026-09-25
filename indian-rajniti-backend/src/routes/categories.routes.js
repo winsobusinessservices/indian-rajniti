@@ -1,6 +1,6 @@
 const express = require("express");
 const {
-  listCategories, listVisibilitySettings, createCategory, getCategoryContent, updateCategoryContent, updateCategoryVisibility, updateSectionVisibility, deleteCategory,
+  listCategories, listVisibilitySettings, createCategory, getCategoryContent, updateCategoryContent, updateCategoryVisibility, updateSectionVisibility, listReferenceVisibility, updateReferenceVisibility, deleteCategory,
 } = require("../controllers/categories/categories.controller");
 const { authenticate, authorizePermission, authorizeRoleOrPermission } = require("../middleware/auth.middleware");
 const { PERMISSIONS } = require("../config/permissions");
@@ -32,6 +32,7 @@ const router = express.Router();
  *                       slug: { type: string, example: politics }
  *                       is_visible: { type: integer, enum: [0, 1], example: 1 }
  *                       content: { type: string, nullable: true, example: Background information about Indian politics. }
+ *                       canonical_slug: { type: string, nullable: true, example: inc, description: Another public topic whose page and related content this URL displays }
  *       500: { description: Internal server error }
  *   post:
  *     summary: Create a category
@@ -47,6 +48,7 @@ const router = express.Router();
  *             properties:
  *               name: { type: string, maxLength: 120 }
  *               content: { type: string, maxLength: 50000, description: Standalone content displayed on the category page }
+ *               canonicalSlug: { type: string, maxLength: 140, nullable: true, description: Optional target slug whose content this category URL displays }
  *               isVisible: { type: boolean, default: true }
  *     responses:
  *       201: { description: Category created }
@@ -113,6 +115,7 @@ const router = express.Router();
  *                     name: { type: string, example: Politics }
  *                     slug: { type: string, example: politics }
  *                     content: { type: string, nullable: true }
+ *                     canonical_slug: { type: string, nullable: true }
  *                     is_visible: { type: integer, enum: [0, 1] }
  *                     route_owner: { type: object, nullable: true, additionalProperties: true }
  *       404: { description: Category not found or hidden }
@@ -132,9 +135,9 @@ const router = express.Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [content]
  *             properties:
  *               content: { type: string, maxLength: 50000 }
+ *               canonicalSlug: { type: string, maxLength: 140, nullable: true }
  *     responses:
  *       200: { description: Category page content updated }
  *       400: { description: Content is too long }
@@ -187,11 +190,13 @@ const router = express.Router();
  */
 router.get("/categories", listCategories);
 router.get("/admin/ui-visibility", authenticate, authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), listVisibilitySettings);
+router.get("/admin/reference-visibility", authenticate, authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), listReferenceVisibility);
+router.patch("/admin/reference-visibility/:type/:id", authenticate, authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), updateReferenceVisibility);
 router.post("/categories", authenticate, authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), createCategory);
 router.get("/categories/:id/content", getCategoryContent);
 router.patch("/categories/:id/content", authenticate, authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), updateCategoryContent);
 router.patch("/categories/:id/visibility", authenticate, authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), updateCategoryVisibility);
-router.patch("/admin/ui-sections/:key/visibility", authenticate, authorizeRoleOrPermission(["ADMIN", "SUBADMIN"], PERMISSIONS.MANAGE_CATEGORIES), updateSectionVisibility);
+router.patch("/admin/ui-sections/:key/visibility", authenticate, authorizeRoleOrPermission(["ADMIN", "SUBADMIN"], PERMISSIONS.MANAGE_CATEGORIES, PERMISSIONS.MANAGE_SITE_MANAGEMENT), updateSectionVisibility);
 router.delete("/categories/:id", authenticate, authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), deleteCategory);
 
 module.exports = router;

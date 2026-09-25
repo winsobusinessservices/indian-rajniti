@@ -10,7 +10,7 @@ import ImagePlaceholder from "@/components/common/ImagePlaceholder";
 import { slugify } from "@/lib/slugify";
 import { formatViews } from "@/lib/formatViews";
 
-import { getBreakingNews, getPostBySlug, getRelatedPosts } from "@/features/news/news.api";
+import { getBreakingNews, getPostBySlug, getRelatedPosts, getSectionVisibility } from "@/features/news/news.api";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
 import { mediaUrl } from "@/lib/api";
@@ -44,7 +44,7 @@ export default async function PostDetailPage({ params }) {
     notFound();
   }
 
-  const [breakingNews, relatedPosts] = await Promise.all([getBreakingNews(), getRelatedPosts(slug, 4)]);
+  const [breakingNews, relatedPosts, sectionVisibility] = await Promise.all([getBreakingNews(), getRelatedPosts(slug, 4), getSectionVisibility()]);
   const articleSchema = {
     "@context": "https://schema.org",
     "@type": "NewsArticle",
@@ -56,7 +56,7 @@ export default async function PostDetailPage({ params }) {
       "@type": "NewsMediaOrganization",
       "@id": `${SITE_URL}/#organization`,
       name: SITE_NAME,
-      logo: { "@type": "ImageObject", url: `${SITE_URL}/icon.png` },
+      logo: { "@type": "ImageObject", url: `${SITE_URL}/images/logo.png` },
     },
     datePublished: post.datePublished,
     dateModified: post.dateModified,
@@ -165,7 +165,7 @@ export default async function PostDetailPage({ params }) {
                 </div>
               </div>
 
-              <CommentSection postSlug={post.slug || slug} commentsEnabled={post.comments_enabled !== 0 && post.comments_enabled !== false} />
+              {sectionVisibility.feature_comments !== false && <CommentSection postSlug={post.slug || slug} commentsEnabled={post.comments_enabled !== 0 && post.comments_enabled !== false} />}
             </article>
 
             <NewsAsideRight />

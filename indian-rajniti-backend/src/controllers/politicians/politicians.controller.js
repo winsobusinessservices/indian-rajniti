@@ -5,13 +5,19 @@
 const Politician = require("../../models/politician.model");
 const Party = require("../../models/party.model");
 const State = require("../../models/state.model");
+const SiteReferenceVisibility = require("../../models/siteReferenceVisibility.model");
 
 const getPoliticians = async (req, res) => {
   try {
+    const [rawKeyFigures, rawFormerPMs, rawChiefMinisters] = await Promise.all([
+      Politician.findAll({ category: "KEY_FIGURE", siteId: req.site.id }),
+      Politician.findAll({ category: "FORMER_PM", siteId: req.site.id }),
+      Politician.findAll({ category: "CHIEF_MINISTER", siteId: req.site.id }),
+    ]);
     const [keyFigures, formerPMs, chiefMinisters] = await Promise.all([
-      Politician.findAll({ category: "KEY_FIGURE" }),
-      Politician.findAll({ category: "FORMER_PM" }),
-      Politician.findAll({ category: "CHIEF_MINISTER" }),
+      SiteReferenceVisibility.filter(req.site.id, "POLITICIAN", rawKeyFigures),
+      SiteReferenceVisibility.filter(req.site.id, "POLITICIAN", rawFormerPMs),
+      SiteReferenceVisibility.filter(req.site.id, "POLITICIAN", rawChiefMinisters),
     ]);
     return res.status(200).json({ success: true, keyFigures, formerPMs, chiefMinisters });
   } catch (error) {
@@ -22,8 +28,8 @@ const getPoliticians = async (req, res) => {
 
 const getPoliticianBySlug = async (req, res) => {
   try {
-    const politician = await Politician.findBySlug(req.params.slug);
-    if (!politician) {
+    const politician = await Politician.findBySlug(req.params.slug, req.site.id);
+    if (!politician || !(await SiteReferenceVisibility.isVisible(req.site.id, "POLITICIAN", politician.id))) {
       return res.status(404).json({ success: false, message: "Politician not found" });
     }
     return res.status(200).json({ success: true, politician });
@@ -35,7 +41,7 @@ const getPoliticianBySlug = async (req, res) => {
 
 const getParties = async (req, res) => {
   try {
-    const parties = await Party.findAll();
+    const parties = await SiteReferenceVisibility.filter(req.site.id, "PARTY", await Party.findAll({ siteId: req.site.id }));
     return res.status(200).json({ success: true, parties });
   } catch (error) {
     console.error("Get parties error:", error);
@@ -45,8 +51,8 @@ const getParties = async (req, res) => {
 
 const getPartyBySlug = async (req, res) => {
   try {
-    const party = await Party.findBySlug(req.params.slug);
-    if (!party) {
+    const party = await Party.findBySlug(req.params.slug, req.site.id);
+    if (!party || !(await SiteReferenceVisibility.isVisible(req.site.id, "PARTY", party.id))) {
       return res.status(404).json({ success: false, message: "Party not found" });
     }
     return res.status(200).json({ success: true, party });
@@ -58,7 +64,7 @@ const getPartyBySlug = async (req, res) => {
 
 const getStates = async (req, res) => {
   try {
-    const states = await State.findAll();
+    const states = await SiteReferenceVisibility.filter(req.site.id, "STATE", await State.findAll({ siteId: req.site.id }));
     return res.status(200).json({ success: true, states });
   } catch (error) {
     console.error("Get states error:", error);
@@ -68,8 +74,8 @@ const getStates = async (req, res) => {
 
 const getStateBySlug = async (req, res) => {
   try {
-    const state = await State.findBySlug(req.params.slug);
-    if (!state) return res.status(404).json({ success: false, message: "State not found" });
+    const state = await State.findBySlug(req.params.slug, req.site.id);
+    if (!state || !(await SiteReferenceVisibility.isVisible(req.site.id, "STATE", state.id))) return res.status(404).json({ success: false, message: "State not found" });
     return res.status(200).json({ success: true, state });
   } catch (error) {
     console.error("Get state by slug error:", error);

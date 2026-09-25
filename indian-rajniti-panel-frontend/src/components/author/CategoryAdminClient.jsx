@@ -6,15 +6,19 @@ import { categoriesApi } from "@/lib/api";
 import { slugify } from "@/lib/slugify";
 import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
 import RichTextEditor from "@/components/common/RichTextEditor";
+import WebsiteReferenceVisibility from "@/components/author/WebsiteReferenceVisibility";
+import { useAdminSite } from "@/context/AdminSiteContext";
 
 const ROWS_PER_PAGE = 6;
 const PUBLIC_SITE_URL = (process.env.NEXT_PUBLIC_PUBLIC_SITE_URL || "https://indianrajneeti.in").replace(/\/$/, "");
 
 export default function CategoryAdminClient() {
   const confirmDelete = useConfirmDialog();
+  const { activeSite, activeSiteId: siteId } = useAdminSite();
   const [categories, setCategories] = useState([]);
   const [name, setName] = useState("");
   const [content, setContent] = useState("");
+  const [canonicalSlug, setCanonicalSlug] = useState("");
   const [isVisible, setIsVisible] = useState(true);
   const [editingCategory, setEditingCategory] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,9 +38,11 @@ export default function CategoryAdminClient() {
   const firstRow = (currentPage - 1) * ROWS_PER_PAGE;
   const visibleCategories = filteredCategories.slice(firstRow, firstRow + ROWS_PER_PAGE);
 
-  const loadCategories = async () => {
+  const activeSiteUrl = activeSite?.domain ? `https://${activeSite.domain}` : PUBLIC_SITE_URL;
+
+  const loadCategories = async (targetSiteId = siteId) => {
     try {
-      const data = await categoriesApi.listVisibilitySettings();
+      const data = await categoriesApi.listVisibilitySettings(targetSiteId);
       setCategories(data.categories || []);
     } catch (err) {
       setError(err.message);
@@ -45,7 +51,8 @@ export default function CategoryAdminClient() {
 
   useEffect(() => {
     let active = true;
-    categoriesApi.listVisibilitySettings()
+    if (!siteId) return () => { active = false; };
+    categoriesApi.listVisibilitySettings(siteId)
       .then((data) => {
         if (active) {
           setCategories(data.categories || []);
@@ -60,7 +67,7 @@ export default function CategoryAdminClient() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [siteId]);
 
   const addCategory = async (event) => {
     event.preventDefault();
@@ -69,17 +76,18 @@ export default function CategoryAdminClient() {
     setSubmitting(true);
     try {
       if (editingCategory) {
-        await categoriesApi.updateContent(editingCategory.id, content);
+        await categoriesApi.updateContent(editingCategory.id, content, canonicalSlug);
         if (Boolean(editingCategory.is_visible) !== isVisible) {
           await categoriesApi.setVisibility(editingCategory.id, isVisible);
         }
-        setSuccess(`Category page updated at /${editingCategory.slug}`);
+        setSuccess(`Category page updated at /category/${editingCategory.slug}`);
       } else {
-        const result = await categoriesApi.create({ name, content, isVisible });
-        setSuccess(`Category created at /${result.category.slug}`);
+        const result = await categoriesApi.create({ name, content, canonicalSlug, isVisible, siteId });
+        setSuccess(`Category created at /category/${result.category.slug}`);
       }
       setName("");
       setContent("");
+      setCanonicalSlug("");
       setIsVisible(true);
       setEditingCategory(null);
       await loadCategories();
@@ -111,6 +119,7 @@ export default function CategoryAdminClient() {
     setEditingCategory(category);
     setName(category.name);
     setContent(category.content || "");
+    setCanonicalSlug(category.canonical_slug || "");
     setIsVisible(Boolean(category.is_visible));
     setError("");
     setSuccess("");
@@ -121,6 +130,7 @@ export default function CategoryAdminClient() {
     setEditingCategory(null);
     setName("");
     setContent("");
+    setCanonicalSlug("");
     setIsVisible(true);
     setError("");
   };
@@ -148,6 +158,14 @@ export default function CategoryAdminClient() {
 
   return (
     <div className="space-y-6">
+      <section className="rounded-lg border border-primary/30 bg-surface p-4 sm:p-5">
+        <label htmlFor="category-website" className="font-headline-md text-primary">Website being configured</label>
+        <p className="mt-1 text-xs text-on-surface-variant">Every visibility change below applies only to this website.</p>
+        <div id="category-website" className="mt-3 inline-flex rounded-lg bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary">{activeSite?.name || "Select a website in the sidebar"}</div>
+      </section>
+
+      {siteId && <WebsiteReferenceVisibility key={siteId} siteId={siteId} />}
+
       <form onSubmit={addCategory} inert={submitting} aria-busy={submitting} className="bg-surface-container-low/60 rounded-lg border border-primary/30 p-4 sm:p-6">
         <h2 className="font-headline-lg text-xl text-primary mb-1">{editingCategory ? `Edit ${editingCategory.name}` : "Create Category Page"}</h2>
         <p className="mb-4 text-xs text-on-surface-variant">{editingCategory ? "Update this category's page content and visibility." : "The public route is created automatically. Existing party, leader, state, and union-territory routes stay protected."}</p>
@@ -165,8 +183,25 @@ export default function CategoryAdminClient() {
           className="w-full border border-outline-variant/30 bg-surface-container-low rounded px-3 py-2.5 text-on-surface focus:border-primary focus:outline-none"
         />
         <div className="mt-2 rounded bg-surface-container px-3 py-2 text-xs text-on-surface-variant">
-          Route: <span className="font-label-md text-primary">/{slugify(name) || "your-category"}</span>
+          Route: <span className="font-label-md text-primary">/category/{slugify(name) || "your-category"}</span>
         </div>
+        <label htmlFor="category-canonical-slug" className="mt-4 block font-label-md text-xs text-on-surface-variant mb-1.5">
+          Show content from another URL <span className="font-normal">(optional)</span>
+        </label>
+        <div className="flex rounded border border-outline-variant/30 bg-surface-container-low focus-within:border-primary">
+          <span className="flex items-center border-r border-outline-variant/30 px-3 text-sm text-on-surface-variant">/</span>
+          <input
+            id="category-canonical-slug"
+            value={canonicalSlug}
+            onChange={(event) => setCanonicalSlug(event.target.value.replace(/^\/+|^category\//g, ""))}
+            maxLength={140}
+            placeholder="inc"
+            className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-on-surface focus:outline-none"
+          />
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-on-surface-variant">
+          Enter the main topic slug to reuse its profile and related articles. Example: set Congress and Congress Politics to <span className="font-semibold text-primary">inc</span>.
+        </p>
         <label className="mt-4 block font-label-md text-xs text-on-surface-variant mb-1.5">
           Category page content
         </label>
@@ -279,7 +314,9 @@ export default function CategoryAdminClient() {
                             ? category.route_owner.section
                               ? `Dedicated ${category.route_owner.type} page - manage in Site Data > ${category.route_owner.section}`
                               : `Reserved route used by ${category.route_owner.name}`
-                            : category.content ? "Page content added" : "No page content yet"}
+                            : category.canonical_slug
+                              ? `Shows the same content as /${category.canonical_slug}`
+                              : category.content ? "Page content added" : "No page content yet"}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-xs text-on-surface-variant hidden sm:table-cell">/{category.slug}</td>
@@ -310,7 +347,7 @@ export default function CategoryAdminClient() {
                             </button>
                           )}
                           <Link
-                            href={`${PUBLIC_SITE_URL}${category.route_owner ? `/category/${category.slug}` : `/${category.slug}`}`}
+                            href={`${activeSiteUrl}/category/${category.slug}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Open category page"

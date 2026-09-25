@@ -9,11 +9,11 @@ export const SITE = {
 // homepage hero are translated today, not the whole site).
 export const NAV_LINKS = [
   { label: "Home", href: "/", key: "home" },
-  { label: "Politics", href: "/parties", key: "politics" },
-  { label: "States", href: "/state", key: "states" },
+  { label: "Politics", href: "/parties", key: "politics", feature: "feature_parties" },
+  { label: "States", href: "/state", key: "states", feature: "feature_states" },
   { label: "Elections", href: "/elections" },
   // { label: "Policies", href: "/policies" },
-  { label: "Blogs", href: "/blogs", key: "blogs" },
+  { label: "Blogs", href: "/blogs", key: "blogs", feature: "feature_blogs" },
   { label: "Lok Sabha", href: "/loksabha", key: "loksabha" },
   { label: "Rajya Sabha", href: "/rajyasabha", key: "rajyasabha" },
   // { label: "Parliament", href: "/parliament" },
@@ -33,7 +33,7 @@ export const SIDEBAR_CATEGORIES = {
   more: [
     "Investors",
     "Advertise with Us",
-    { label:"Career", href: "/careers"},
+    { label:"Career", href: "/careers", feature: "feature_careers"},
     "Connect As A Sponsor",
     { label: "Lok Sabha", href: "/loksabha" },
     { label: "Rajya Sabha", href: "/rajyasabha" },
@@ -42,6 +42,6 @@ export const SIDEBAR_CATEGORIES = {
   legal: [
     { label: "About", href: "/about"},
     { label: "Contact", href: "/contact" },
-    { label: "Privacy Policy", href: "/policies/privacy-policy" }
+    { label: "Privacy Policy", href: "/policies/privacy-policy", feature: "feature_policies" }
   ]
 };

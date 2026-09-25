@@ -5,6 +5,10 @@ const isLocalMediaOrigin = ["localhost", "127.0.0.1", "::1"].includes(mediaOrigi
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactCompiler: true,
+  // Lets two local dev processes run from this same folder without competing
+  // for Next.js's development lock/cache directory.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+  allowedDevOrigins: ["indian-rajneeti.localhost"],
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 60 * 60 * 24 * 30,

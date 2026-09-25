@@ -4,9 +4,12 @@
 // or rejects; approval is what actually creates the `users` row, using the
 // password the applicant chose at submission time.
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 const RoleApplication = require("../../models/roleApplication.model");
 const User = require("../../models/user.model");
 const { userDocumentUrl } = require("../../middleware/upload.middleware");
+const { sendInvestorApprovedEmail, sendPasswordResetEmail, sendRoleChangedEmail } = require("../../services/nodemailer.service");
 
 const APPLICATION_ROLES = ["AUTHOR", "EDITOR", "INVESTOR"];
 
@@ -27,12 +30,13 @@ const DOC_LABEL = {
 
 const submitApplication = async (req, res) => {
   try {
-    const { name, email, phone, password, role, message } = req.body || {};
+    const { phone, role, message, alternateEmail, panNumber, aadharNumber } = req.body || {};
+    const applicant = await User.findById(req.user.userId);
 
-    if (!name || !email || !password || !role) {
+    if (!applicant || !role) {
       return res.status(400).json({
         success: false,
-        message: "Name, email, password, and role are required",
+        message: "A signed-in account and requested role are required",
       });
     }
 
@@ -43,17 +47,18 @@ const submitApplication = async (req, res) => {
       });
     }
 
-    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!strongPasswordRegex.test(password)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character",
-      });
+    const normalizedPan = String(panNumber || "").trim().toUpperCase();
+    const normalizedAadhar = String(aadharNumber || "").replace(/\s+/g, "");
+    if (role === "INVESTOR" && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(normalizedPan)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid PAN number" });
+    }
+    if (role === "INVESTOR" && !/^[0-9]{12}$/.test(normalizedAadhar)) {
+      return res.status(400).json({ success: false, message: "Please enter a valid 12-digit Aadhaar number" });
     }
 
     const validEmailRegex = /^[a-zA-Z0-9](?!.*\.\.)[a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
-    const normalizedEmail = email.trim().toLowerCase();
+    const requestedAlternateEmail = String(alternateEmail || "").trim().toLowerCase();
+    const normalizedEmail = requestedAlternateEmail || applicant.email;
     if (!validEmailRegex.test(normalizedEmail)) {
       return res.status(400).json({
         success: false,
@@ -61,15 +66,23 @@ const submitApplication = async (req, res) => {
       });
     }
 
-    const existingUser = await User.findByEmail(normalizedEmail);
+    const usesDifferentAccount = normalizedEmail !== applicant.email;
+    if (!usesDifferentAccount && applicant.role === role) {
+      return res.status(409).json({
+        success: false,
+        message: `Your current account already has the ${role} role`,
+      });
+    }
+    const existingUser = usesDifferentAccount ? await User.findByEmail(normalizedEmail) : null;
     if (existingUser) {
       return res.status(409).json({
         success: false,
-        message: "An account with this email already exists",
+        message: "The alternate email already belongs to an account. Use that account to apply instead.",
       });
     }
 
-    const existingApplication = await RoleApplication.findPendingByEmail(normalizedEmail);
+    const existingApplication = await RoleApplication.findPendingByUserId(applicant.id)
+      || await RoleApplication.findPendingByEmail(normalizedEmail);
     if (existingApplication) {
       return res.status(409).json({
         success: false,
@@ -96,14 +109,15 @@ const submitApplication = async (req, res) => {
       });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-
     const application = await RoleApplication.create({
-      name: name.trim(),
+      applicantUserId: applicant.id,
+      name: applicant.name,
       email: normalizedEmail,
       phone: phone?.trim(),
+      panNumber: normalizedPan || null,
+      aadharNumber: normalizedAadhar || null,
       role,
-      passwordHash,
+      passwordHash: null,
       resume: userDocumentUrl(files.resume),
       panDocument: files.panDocument ? userDocumentUrl(files.panDocument) : null,
       aadharDocument: files.aadharDocument ? userDocumentUrl(files.aadharDocument) : null,
@@ -113,7 +127,9 @@ const submitApplication = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Application submitted. We'll be in touch once it's reviewed.",
+      message: usesDifferentAccount
+        ? "Application submitted. If approved, the alternate email will receive a password-setup link."
+        : "Application submitted. If approved, your current account will be upgraded.",
       application,
     });
   } catch (error) {
@@ -160,22 +176,60 @@ const reviewApplication = async (req, res) => {
     }
 
     if (action === "APPROVE") {
-      const existingUser = await User.findByEmail(application.email);
-      if (existingUser) {
-        return res.status(409).json({ success: false, message: "An account with this email already exists" });
-      }
+      const applicant = application.applicant_user_id
+        ? await User.findById(application.applicant_user_id)
+        : null;
 
-      await User.create({
-        name: application.name,
-        email: application.email,
-        passwordHash: application.password_hash,
-        role: application.role,
-        termsAccepted: true,
-        panDocument: application.pan_document,
-        aadharDocument: application.aadhar_document,
-        graduationCertificate: application.graduation_certificate,
-        createdBy: req.user.userId,
-      });
+      if (applicant && applicant.email === application.email) {
+        const previousRole = applicant.role;
+        const updatedUser = await User.updateRole(applicant.id, application.role);
+        if (previousRole !== application.role) {
+          const notification = application.role === "INVESTOR"
+            ? sendInvestorApprovedEmail(updatedUser.email, updatedUser.name)
+            : sendRoleChangedEmail(updatedUser.email, updatedUser.name, previousRole, application.role);
+          void notification
+            .catch((error) => console.error("Role application email error:", error));
+        }
+      } else {
+        const existingUser = await User.findByEmail(application.email);
+        if (existingUser) {
+          return res.status(409).json({ success: false, message: "An account with this email already exists" });
+        }
+
+        const passwordHash = application.password_hash
+          || await bcrypt.hash(crypto.randomBytes(48).toString("base64url"), 10);
+        const createdUser = await User.create({
+          name: application.name,
+          email: application.email,
+          passwordHash,
+          role: application.role,
+          termsAccepted: true,
+          panDocument: application.pan_document,
+          aadharDocument: application.aadhar_document,
+          graduationCertificate: application.graduation_certificate,
+          createdBy: req.user.userId,
+          siteId: applicant?.site_id || 1,
+        });
+
+        if (!application.password_hash) {
+          const resetToken = jwt.sign(
+            { userId: createdUser.id, purpose: "reset" },
+            process.env.JWT_SECRET,
+            { expiresIn: "15m" },
+          );
+          const staffRoles = new Set(["AUTHOR", "EDITOR", "ADMIN", "SUBADMIN"]);
+          const origin = staffRoles.has(createdUser.role)
+            ? String(process.env.PANEL_ORIGIN || "https://indianrajneeti.com").split(",")[0].trim().replace(/\/$/, "")
+            : String(process.env.CLIENT_ORIGIN || "https://indianrajneeti.in").split(",")[0].trim().replace(/\/$/, "");
+          const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(resetToken)}`;
+          void sendPasswordResetEmail(createdUser.email, resetUrl)
+            .catch((error) => console.error("New role account password email error:", error));
+        }
+        if (application.role === "INVESTOR") {
+          void sendInvestorApprovedEmail(createdUser.email, createdUser.name, { separateAccount: true })
+            .catch((error) => console.error("Investor approval email error:", error));
+        }
+      }
     }
 
     const updated = await RoleApplication.review(application.id, {
@@ -186,7 +240,7 @@ const reviewApplication = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: action === "APPROVE" ? "Application approved and account created" : "Application rejected",
+      message: action === "APPROVE" ? "Application approved and account updated" : "Application rejected",
       application: updated,
     });
   } catch (error) {

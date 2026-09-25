@@ -7,6 +7,7 @@ import AiCheckLoader from "@/components/common/AiCheckLoader";
 import ReasonModal from "@/components/common/ReasonModal";
 import { DashboardRowsSkeleton } from "@/components/common/PageSkeletons";
 import { richTextToPlainText } from "@/lib/richText";
+import EmptyState from "@/components/common/EmptyState";
 
 const STATUS_BADGE = {
   DRAFT: "bg-outline-variant text-on-surface",
@@ -174,13 +175,9 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
       {loading ? (
         <DashboardRowsSkeleton />
       ) : error ? (
-        <p className="text-sm text-error font-body-md" role="alert">
-          {error}
-        </p>
+        <EmptyState icon="fa-triangle-exclamation" title="Content is unavailable" description={error} />
       ) : filteredPosts.length === 0 ? (
-        <p className="font-body-md text-on-surface-variant">
-          {searchQuery.trim() ? `No content matches “${searchQuery.trim()}”.` : "No content found."}
-        </p>
+        <EmptyState icon={searchQuery.trim() ? "fa-magnifying-glass" : "fa-file-circle-plus"} title={searchQuery.trim() ? "No content matches your search" : "No content has been created for this website"} description={searchQuery.trim() ? "Try a different title, category, state, tag, type, or status." : "Create an article, blog, or video and it will appear here."} actionHref={searchQuery.trim() ? undefined : "/panel/create/article"} actionLabel={searchQuery.trim() ? undefined : "Create Article"} />
       ) : (
         <div className="space-y-3">
           {filteredPosts.map((post) => (
@@ -226,13 +223,13 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-shrink-0">
                 <div className="grid grid-cols-3 gap-2 sm:flex">
                   <Link
-                    href={`/author/view/${post.type.toLowerCase()}/${post.id}`}
+                    href={`/panel/view/${post.type.toLowerCase()}/${post.id}`}
                     className="px-2 py-2 text-center text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors sm:px-3 sm:py-1.5"
                   >
                     View
                   </Link>
                   <Link
-                    href={`/author/edit/${post.type.toLowerCase()}/${post.id}`}
+                    href={`/panel/edit/${post.type.toLowerCase()}/${post.id}`}
                     className="px-2 py-2 text-center text-xs font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors sm:px-3 sm:py-1.5"
                   >
                     Edit
@@ -266,7 +263,7 @@ export default function MyPostsClient({ compact = false, refreshSignal }) {
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
         title="Delete this post?"
-        description="This post will move to Deleted Items and can be restored by an Admin."
+        description="This content item will be moved to Deleted Items. It can be restored later from Deleted Items."
         confirmLabel="Delete"
         placeholder="Why is this being deleted?"
         danger

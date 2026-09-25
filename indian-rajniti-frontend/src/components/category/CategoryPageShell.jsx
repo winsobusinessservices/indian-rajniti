@@ -4,12 +4,15 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CategorySidebar from "@/components/category/CategorySidebar";
 import { getBreakingNews } from "@/features/news/news.api";
+import EmptyState from "@/components/common/EmptyState";
 
 export default async function CategoryPageShell({
   title,
   count,
   gridClassName = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4",
   children,
+  emptyTitle,
+  emptyDescription,
 }) {
   const breakingNews = await getBreakingNews();
 
@@ -37,7 +40,7 @@ export default async function CategoryPageShell({
 
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="order-1 flex-grow lg:w-3/4">
-              <div className={gridClassName}>{children}</div>
+              {count === 0 ? <EmptyState icon="fa-box-open" title={emptyTitle || `No ${String(title || "content").toLowerCase()} available`} description={emptyDescription || "Content for this website will appear here when it becomes available."} /> : <div className={gridClassName}>{children}</div>}
             </div>
             <aside className="order-2 lg:w-1/4 bg-surface-container rounded-xl p-4 border border-outline-variant/30">
               <CategorySidebar />

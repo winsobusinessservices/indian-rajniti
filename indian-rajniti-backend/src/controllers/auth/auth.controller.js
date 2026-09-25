@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
 const User = require("../../models/user.model");
+const Site = require("../../models/site.model");
 const Policy = require("../../models/policy.model");
 const DeletionAudit = require("../../models/deletionAudit.model");
 const {
@@ -10,12 +11,14 @@ const {
   sendRoleChangedEmail,
   sendRegistrationOtpEmail,
 } = require("../../services/nodemailer.service");
+const { AmazeSmsError, sendRegistrationOtpSms } = require("../../services/amazesms.service");
 const { userDocumentUrl } = require("../../middleware/upload.middleware");
-const { ALL_PERMISSIONS, normalizePermissions } = require("../../config/permissions");
+const { PERMISSIONS, ALL_PERMISSIONS, normalizePermissions } = require("../../config/permissions");
 
 const EMAIL_REGEX = /^[a-zA-Z0-9](?!.*\.\.)[a-zA-Z0-9._%+-]*[a-zA-Z0-9]@[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 const VALID_NAME_REGEX = /^[a-zA-Z\s]+$/;
+const INDIAN_MOBILE_REGEX = /^[6-9]\d{9}$/;
 const OTP_TTL = "10m";
 const VERIFIED_EMAIL_TTL = "15m";
 const OTP_RESEND_DELAY_MS = 60 * 1000;
@@ -41,8 +44,14 @@ function normalizedEmailOf(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function otpHash(email, otp) {
-  return crypto.createHmac("sha256", process.env.JWT_SECRET).update(`${email}:${otp}`).digest("hex");
+function normalizedMobileOf(value) {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) digits = digits.slice(2);
+  return INDIAN_MOBILE_REGEX.test(digits) ? `+91${digits}` : "";
+}
+
+function otpHash(identifier, otp) {
+  return crypto.createHmac("sha256", process.env.JWT_SECRET).update(`${identifier}:${otp}`).digest("hex");
 }
 
 function tokenKey(token) {
@@ -72,14 +81,16 @@ async function validateAcceptedPolicies(value) {
 async function validateRegistrationFields(payload, { requirePasswordConfirmation = false } = {}) {
   const name = String(payload?.name || "").trim();
   const email = normalizedEmailOf(payload?.email);
+  const rawPhone = String(payload?.phone || "").trim();
+  const phone = normalizedMobileOf(rawPhone);
   const password = String(payload?.password || "");
   const confirmPassword = String(payload?.confirmPassword || "");
 
-  if (!name || !email || !password || (requirePasswordConfirmation && !confirmPassword)) {
+  if (!name || !email || !rawPhone || !password || (requirePasswordConfirmation && !confirmPassword)) {
     return {
       error: requirePasswordConfirmation
-        ? "Name, email, password and password confirmation are required"
-        : "Name, email and password are required",
+        ? "Name, email, mobile number, password and password confirmation are required"
+        : "Name, email, mobile number and password are required",
     };
   }
   if (!VALID_NAME_REGEX.test(name)) {
@@ -87,6 +98,9 @@ async function validateRegistrationFields(payload, { requirePasswordConfirmation
   }
   if (!EMAIL_REGEX.test(email)) {
     return { error: "Please enter a valid email address" };
+  }
+  if (!phone) {
+    return { error: "Enter a valid 10-digit Indian mobile number" };
   }
   if (!STRONG_PASSWORD_REGEX.test(password)) {
     return {
@@ -105,7 +119,7 @@ async function validateRegistrationFields(payload, { requirePasswordConfirmation
     return { error: "Please review and accept all required policies" };
   }
 
-  return { name, email, password, policyAcceptance };
+  return { name, email, phone, password, policyAcceptance };
 }
 
 const requestRegistrationOtp = async (req, res) => {
@@ -114,30 +128,58 @@ const requestRegistrationOtp = async (req, res) => {
     if (validation.error) {
       return res.status(400).json({ success: false, message: validation.error });
     }
-    const { email } = validation;
-    if (await User.findByEmail(email)) {
+    const { email, phone } = validation;
+    const existingUser = await User.findByEmail(email);
+    if (existingUser && !existingUser.deleted_at) {
       return res.status(409).json({ success: false, message: "An account with this email already exists" });
     }
+    const existingPhoneUser = await User.findByPhone(phone);
+    if (existingPhoneUser && !existingPhoneUser.deleted_at && existingPhoneUser.id !== existingUser?.id) {
+      return res.status(409).json({ success: false, message: "An account with this mobile number already exists" });
+    }
 
-    const rateKey = `${req.ip}:${email}`;
+    const rateKey = `${req.ip}:${email}:${phone}`;
     const lastSentAt = otpSendTimes.get(rateKey) || 0;
     const waitSeconds = Math.ceil((OTP_RESEND_DELAY_MS - (Date.now() - lastSentAt)) / 1000);
     if (waitSeconds > 0) {
       return res.status(429).json({ success: false, message: `Please wait ${waitSeconds} seconds before requesting another code` });
     }
 
-    const otp = crypto.randomInt(100000, 1000000).toString();
+    // Reserve the cooldown before either delivery starts. Without this lock,
+    // two near-simultaneous requests can both pass the check and send duplicate
+    // email and SMS codes.
+    const reservedAt = Date.now();
+    otpSendTimes.set(rateKey, reservedAt);
+
+    const emailOtp = crypto.randomInt(100000, 1000000).toString();
+    const mobileOtp = crypto.randomInt(100000, 1000000).toString();
     const challengeToken = jwt.sign(
-      { purpose: "registration-otp", email, otpHash: otpHash(email, otp) },
+      { purpose: "registration-otp", email, phone, emailOtpHash: otpHash(email, emailOtp), mobileOtpHash: otpHash(phone, mobileOtp) },
       process.env.JWT_SECRET,
       { expiresIn: OTP_TTL }
     );
-    await sendRegistrationOtpEmail(email, otp);
-    otpSendTimes.set(rateKey, Date.now());
-    setTimeout(() => otpSendTimes.delete(rateKey), OTP_RESEND_DELAY_MS).unref();
-    return res.status(200).json({ success: true, message: "Verification code sent", challengeToken });
+    try {
+      await Promise.all([
+        sendRegistrationOtpEmail(email, emailOtp),
+        sendRegistrationOtpSms(phone, mobileOtp),
+      ]);
+    } catch (error) {
+      if (otpSendTimes.get(rateKey) === reservedAt) otpSendTimes.delete(rateKey);
+      throw error;
+    }
+    setTimeout(() => {
+      if (otpSendTimes.get(rateKey) === reservedAt) otpSendTimes.delete(rateKey);
+    }, OTP_RESEND_DELAY_MS).unref();
+    return res.status(200).json({ success: true, message: "Email and mobile verification codes sent", challengeToken });
   } catch (error) {
     console.error("Request registration OTP error:", error);
+    if (error instanceof AmazeSmsError) {
+      return res.status(error.status).json({
+        success: false,
+        code: error.code,
+        message: `Mobile verification SMS could not be sent: ${error.message}`,
+      });
+    }
     return res.status(500).json({ success: false, message: "Unable to send verification code" });
   }
 };
@@ -145,10 +187,12 @@ const requestRegistrationOtp = async (req, res) => {
 const verifyRegistrationOtp = async (req, res) => {
   try {
     const email = normalizedEmailOf(req.body.email);
-    const otp = String(req.body.otp || "").trim();
+    const phone = normalizedMobileOf(req.body.phone);
+    const emailOtp = String(req.body.emailOtp || "").trim();
+    const mobileOtp = String(req.body.mobileOtp || "").trim();
     const challengeToken = String(req.body.challengeToken || "");
-    if (!/^\d{6}$/.test(otp) || !challengeToken) {
-      return res.status(400).json({ success: false, message: "Enter the six-digit verification code" });
+    if (!/^\d{6}$/.test(emailOtp) || !/^\d{6}$/.test(mobileOtp) || !phone || !challengeToken) {
+      return res.status(400).json({ success: false, message: "Enter both six-digit verification codes" });
     }
 
     const key = tokenKey(challengeToken);
@@ -160,22 +204,27 @@ const verifyRegistrationOtp = async (req, res) => {
     }
 
     const challenge = jwt.verify(challengeToken, process.env.JWT_SECRET);
-    if (challenge.purpose !== "registration-otp" || challenge.email !== email) {
-      return res.status(400).json({ success: false, message: "Verification request does not match this email" });
+    if (challenge.purpose !== "registration-otp" || challenge.email !== email || challenge.phone !== phone) {
+      return res.status(400).json({ success: false, message: "Verification request does not match this email and mobile number" });
     }
-    const expected = Buffer.from(challenge.otpHash, "hex");
-    const supplied = Buffer.from(otpHash(email, otp), "hex");
-    if (expected.length !== supplied.length || !crypto.timingSafeEqual(expected, supplied)) {
-      return res.status(400).json({ success: false, message: "Incorrect verification code" });
+    const expectedEmail = Buffer.from(challenge.emailOtpHash, "hex");
+    const suppliedEmail = Buffer.from(otpHash(email, emailOtp), "hex");
+    const expectedMobile = Buffer.from(challenge.mobileOtpHash, "hex");
+    const suppliedMobile = Buffer.from(otpHash(phone, mobileOtp), "hex");
+    if (expectedEmail.length !== suppliedEmail.length || !crypto.timingSafeEqual(expectedEmail, suppliedEmail)) {
+      return res.status(400).json({ success: false, message: "Incorrect email verification code" });
+    }
+    if (expectedMobile.length !== suppliedMobile.length || !crypto.timingSafeEqual(expectedMobile, suppliedMobile)) {
+      return res.status(400).json({ success: false, message: "Incorrect mobile verification code" });
     }
 
     otpAttempts.delete(key);
     const verificationToken = jwt.sign(
-      { purpose: "registration-verified", email },
+      { purpose: "registration-verified", email, phone },
       process.env.JWT_SECRET,
       { expiresIn: VERIFIED_EMAIL_TTL }
     );
-    return res.status(200).json({ success: true, message: "Email verified", verificationToken });
+    return res.status(200).json({ success: true, message: "Email and mobile number verified", verificationToken });
   } catch (error) {
     const expired = error.name === "TokenExpiredError";
     return res.status(400).json({ success: false, message: expired ? "Verification code expired. Request a new code" : "Invalid verification request" });
@@ -210,9 +259,12 @@ function authUserResponse(user) {
     id: user.id,
     name: user.name,
     email: user.email,
+    phone: user.phone,
     role: user.role,
     permissions: user.permissions,
     status: user.status,
+    siteId: Number(user.site_id || 1),
+    site: { id: Number(user.site_id || 1), name: user.site_name || "Indian Rajneeti", slug: user.site_slug || "indian-rajneeti", domain: user.site_domain || "indianrajneeti.com" },
   };
 }
 
@@ -227,39 +279,56 @@ const register = async (req, res) => {
     if (validation.error) {
       return res.status(400).json({ success: false, message: validation.error });
     }
-    const { name, email: normalizedEmail, password, policyAcceptance } = validation;
+    const { name, email: normalizedEmail, phone, password, policyAcceptance } = validation;
 
     try {
       const verification = jwt.verify(verificationToken || "", process.env.JWT_SECRET);
-      if (verification.purpose !== "registration-verified" || verification.email !== normalizedEmail) {
-        return res.status(400).json({ success: false, message: "Please verify this email address before registering" });
+      if (verification.purpose !== "registration-verified" || verification.email !== normalizedEmail || verification.phone !== phone) {
+        return res.status(400).json({ success: false, message: "Please verify this email address and mobile number before registering" });
       }
     } catch {
-      return res.status(400).json({ success: false, message: "Email verification has expired. Please verify again" });
+      return res.status(400).json({ success: false, message: "Email and mobile verification has expired. Please verify again" });
     }
 
     const existingUser = await User.findByEmail(normalizedEmail);
-    if (existingUser) {
+    if (existingUser && !existingUser.deleted_at) {
       return res.status(409).json({
         success: false,
         message: "User already exists",
       });
     }
+    const existingPhoneUser = await User.findByPhone(phone);
+    if (existingPhoneUser && !existingPhoneUser.deleted_at && existingPhoneUser.id !== existingUser?.id) {
+      return res.status(409).json({ success: false, message: "An account with this mobile number already exists" });
+    }
 
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
-      name,
-      email: normalizedEmail,
-      passwordHash,
-      termsAccepted: true,
-      acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
-    });
+    const user = existingUser?.deleted_at
+      ? await User.reactivateDeletedRegistration(existingUser.id, {
+        name,
+        phone,
+        passwordHash,
+        acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
+        siteId: req.site?.id || 1,
+      })
+      : await User.create({
+        name,
+        email: normalizedEmail,
+        phone,
+        passwordHash,
+        termsAccepted: true,
+        acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
+        siteId: req.site?.id || 1,
+      });
+    if (!user) {
+      return res.status(409).json({ success: false, message: "This account is no longer available for re-registration" });
+    }
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: existingUser?.deleted_at ? "Deleted account re-registered successfully" : "User registered successfully",
       user,
     });
   } catch (error) {
@@ -298,7 +367,16 @@ const login = async (req, res) => {
     if (user.status !== "ACTIVE") {
       return res.status(403).json({
         success: false,
-        message: "Your account is not active",
+        code: "ACCOUNT_INACTIVE",
+        message: "Your account is inactive. Please contact an administrator to reactivate it.",
+      });
+    }
+
+    if (user.site_status !== "ACTIVE") {
+      return res.status(403).json({
+        success: false,
+        code: "SITE_INACTIVE",
+        message: "You don't have access to this panel",
       });
     }
 
@@ -347,6 +425,9 @@ const googleAuth = async (req, res) => {
 
     const credential = String(req.body?.credential || "");
     const intent = req.body?.intent === "register" ? "register" : "login";
+    if (intent === "register") {
+      return res.status(400).json({ success: false, message: "Use the registration form so both your email and mobile number can be verified." });
+    }
     if (!credential) {
       return res.status(400).json({ success: false, message: "Google credential is required" });
     }
@@ -384,13 +465,35 @@ const googleAuth = async (req, res) => {
 
     let created = false;
     let user = await User.findByGoogleSub(googleSub);
+    if (user?.deleted_at && intent === "register") {
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(48).toString("base64url"), 10);
+      user = await User.reactivateDeletedRegistration(user.id, {
+        name: String(profile?.name || email.split("@")[0]).trim().slice(0, 120),
+        passwordHash,
+        googleSub,
+        acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
+        siteId: req.site?.id || 1,
+      });
+      created = true;
+    }
     if (!user) {
       const emailUser = await User.findByEmail(email);
       if (emailUser) {
-        if (emailUser.status !== "ACTIVE") {
-          return res.status(403).json({ success: false, message: "Your account is not active" });
+        if (emailUser.deleted_at && intent === "register") {
+          const passwordHash = await bcrypt.hash(crypto.randomBytes(48).toString("base64url"), 10);
+          user = await User.reactivateDeletedRegistration(emailUser.id, {
+            name: String(profile?.name || email.split("@")[0]).trim().slice(0, 120),
+            passwordHash,
+            googleSub,
+            acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
+            siteId: req.site?.id || 1,
+          });
+          created = true;
+        } else if (emailUser.status !== "ACTIVE") {
+          return res.status(403).json({ success: false, code: "ACCOUNT_INACTIVE", message: "Your account is inactive. Please contact an administrator to reactivate it." });
+        } else {
+          user = await User.linkGoogleAccount(emailUser.id, googleSub);
         }
-        user = await User.linkGoogleAccount(emailUser.id, googleSub);
       } else if (intent === "register") {
         // Keep password_hash non-null for compatibility. This random value is
         // never disclosed and cannot be used to sign in; password reset can
@@ -404,6 +507,7 @@ const googleAuth = async (req, res) => {
           googleSub,
           termsAccepted: true,
           acceptedPolicyIds: policyAcceptance.acceptedPolicyIds,
+          siteId: req.site?.id || 1,
         });
         created = true;
       } else {
@@ -415,7 +519,10 @@ const googleAuth = async (req, res) => {
     }
 
     if (user.status !== "ACTIVE") {
-      return res.status(403).json({ success: false, message: "Your account is not active" });
+      return res.status(403).json({ success: false, code: "ACCOUNT_INACTIVE", message: "Your account is inactive. Please contact an administrator to reactivate it." });
+    }
+    if (user.site_status !== "ACTIVE") {
+      return res.status(403).json({ success: false, code: "SITE_INACTIVE", message: "You don't have access to this panel" });
     }
 
     setAuthCookie(res, user);
@@ -458,9 +565,12 @@ const getCurrentUser = async (req, res) => {
       user: {
         id: user.id,
         name: user.name,
+        phone: user.phone,
         role: user.role,
         permissions: user.permissions,
         status: user.status,
+        siteId: Number(user.site_id || 1),
+        site: { id: Number(user.site_id || 1), name: user.site_name || "Indian Rajneeti", slug: user.site_slug || "indian-rajneeti", domain: user.site_domain || "indianrajneeti.com" },
         termsAccepted: user.terms_accepted,
         termsAcceptedAt: user.terms_accepted_at,
         created_at: user.created_at,
@@ -501,18 +611,29 @@ const logout = async (req, res) => {
 
 const listUsers = async (req, res) => {
   try {
-    const allUsers = await User.findAll();
+    const requestedSiteId = Number(req.query?.siteId || req.get("x-management-site-id") || req.user.siteId || 1);
+    const siteId = req.user.role === "ADMIN" ? requestedSiteId : Number(req.user.siteId);
+    const includeDeleted = req.user.role === "ADMIN" && String(req.query?.includeDeleted || "") === "true";
+    const allUsers = await User.findAll({ siteId, includeDeleted });
+    const primarySite = await Site.findBySlug(process.env.DEFAULT_SITE_SLUG || "indian-rajneeti");
+    const sites = primarySite ? [primarySite] : [];
+    const siteById = new Map(sites.map((site) => [Number(site.id), site]));
     const assignments = await User.getEditorAssignments();
     const assignmentByAuthor = new Map(assignments.map((assignment) => [Number(assignment.author_id), assignment]));
-    const visibleUsers = ["ADMIN", "INVESTOR"].includes(req.user.role)
+    const canManageTeam = req.user.role === "ADMIN" || req.user.permissions?.includes(PERMISSIONS.TEAM_MEMBERS);
+    const canManageUsers = req.user.role === "ADMIN" || req.user.permissions?.includes(PERMISSIONS.MANAGE_USERS);
+    const visibleUsers = req.user.role === "INVESTOR" || (canManageTeam && canManageUsers)
       ? allUsers
-      : allUsers.filter((user) => [...MEMBER_ASSIGNABLE_ROLES, "SUBADMIN"].includes(user.role));
+      : canManageUsers
+        ? allUsers.filter((user) => user.role === "USER")
+        : allUsers.filter((user) => [...MEMBER_ASSIGNABLE_ROLES, "SUBADMIN"].includes(user.role));
     const users = visibleUsers.map((user) => {
       const assignment = assignmentByAuthor.get(Number(user.id));
       return {
         ...user,
         assigned_editor_id: assignment ? Number(assignment.editor_id) : null,
         assigned_editor_name: assignment?.editor_name || null,
+        site: siteById.get(Number(user.site_id)) || null,
       };
     });
 
@@ -563,6 +684,7 @@ const DOC_COLUMN = {
 const adminAssignRole = async (req, res) => {
   try {
     const { email, role } = req.body;
+    const siteId = Number(req.site?.id || 1);
 
     if (!email || !role) {
       return res.status(400).json({
@@ -570,6 +692,8 @@ const adminAssignRole = async (req, res) => {
         message: "Email and role are required",
       });
     }
+    const site = await Site.findById(siteId);
+    if (!site || site.status !== "ACTIVE") return res.status(400).json({ success: false, message: "Select an active website" });
 
     const assignableRoles = req.user.role === "ADMIN" ? ADMIN_ASSIGNABLE_ROLES : MEMBER_ASSIGNABLE_ROLES;
     if (!assignableRoles.includes(role)) {
@@ -630,6 +754,7 @@ const adminAssignRole = async (req, res) => {
       : normalizePermissions(requestedPermissions, role);
     const user = await User.update(existingUser.id, {
       role,
+      siteId,
       permissions: effectivePermissions,
       panDocument: files.panDocument ? userDocumentUrl(files.panDocument) : undefined,
       aadharDocument: files.aadharDocument ? userDocumentUrl(files.aadharDocument) : undefined,
@@ -719,7 +844,8 @@ const updateUserRole = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, permissions } = req.body;
+    const { name, email, role, status, permissions } = req.body;
+    const siteId = req.body.siteId !== undefined ? Number(req.site?.id || 1) : undefined;
 
     const existing = await User.findById(id);
     if (!existing) {
@@ -748,8 +874,27 @@ const updateUser = async (req, res) => {
         });
       }
     }
+    if (status !== undefined) {
+      if (!["ACTIVE", "INACTIVE"].includes(status)) {
+        return res.status(400).json({ success: false, message: "Status must be ACTIVE or INACTIVE" });
+      }
+      if (req.user.role !== "ADMIN") {
+        return res.status(403).json({ success: false, message: "Only Admin can activate or deactivate accounts" });
+      }
+      if (Number(id) === req.user.userId && status !== existing.status) {
+        return res.status(400).json({ success: false, message: "You cannot change your own account status" });
+      }
+    }
     if (req.user.role !== "ADMIN" && ["ADMIN", "SUBADMIN"].includes(existing.role)) {
       return res.status(403).json({ success: false, message: "Only Admin can modify Admin or Subadmin accounts" });
+    }
+    if (req.user.role !== "ADMIN" && Number(existing.site_id) !== Number(req.user.siteId)) {
+      return res.status(403).json({ success: false, message: "This team member belongs to another website" });
+    }
+    if (siteId !== undefined) {
+      if (req.user.role !== "ADMIN" && siteId !== Number(req.user.siteId)) return res.status(403).json({ success: false, message: "Only Admin can move team members between websites" });
+      const site = await Site.findById(siteId);
+      if (!site || site.status !== "ACTIVE") return res.status(400).json({ success: false, message: "Select an active website" });
     }
 
     let normalizedEmail;
@@ -794,7 +939,9 @@ const updateUser = async (req, res) => {
       name: name !== undefined ? name.trim() : undefined,
       email: normalizedEmail,
       role,
+      status,
       permissions: effectivePermissions,
+      siteId,
     });
 
     if (role !== undefined && role !== existing.role) {
@@ -834,6 +981,7 @@ const assignAuthorEditor = async (req, res) => {
     if (!author || !["AUTHOR", "EDITOR"].includes(author.role)) {
       return res.status(400).json({ success: false, message: "A reviewer can only be assigned to an Author or Editor" });
     }
+    if (req.user.role !== "ADMIN" && Number(author.site_id) !== Number(req.user.siteId)) return res.status(403).json({ success: false, message: "This creator belongs to another website" });
 
     let editor = null;
     if (editorId !== null) {
@@ -844,6 +992,7 @@ const assignAuthorEditor = async (req, res) => {
       if (editor.id === author.id) {
         return res.status(400).json({ success: false, message: "An Editor cannot review their own content" });
       }
+      if (Number(editor.site_id) !== Number(author.site_id)) return res.status(400).json({ success: false, message: "Creator and reviewer must belong to the same website" });
     }
 
     await User.setAssignedEditor({ authorId, editorId, assignedBy: req.user.userId });
@@ -872,6 +1021,12 @@ const deleteUser = async (req, res) => {
         success: false,
         message: "User not found",
       });
+    }
+    const canManageTarget = existing.role === "USER"
+      ? req.user.role === "ADMIN" || req.user.permissions?.includes(PERMISSIONS.MANAGE_USERS)
+      : req.user.role === "ADMIN" || req.user.permissions?.includes(PERMISSIONS.TEAM_MEMBERS);
+    if (!canManageTarget) {
+      return res.status(403).json({ success: false, message: "You do not have permission to delete this account" });
     }
     if (req.user.role !== "ADMIN" && ["ADMIN", "SUBADMIN"].includes(existing.role)) {
       return res.status(403).json({ success: false, message: "Only Admin can delete Admin or Subadmin accounts" });

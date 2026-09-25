@@ -3,10 +3,13 @@ import CMCard from "@/components/politician/CMCard";
 import { getChiefMinisters } from "@/features/politicians/politician.api";
 import { getAllStatesAndUTs } from "@/features/geography/geography.api";
 import { buildPageMetadata } from "@/lib/seo";
+import { notFound } from "next/navigation";
+import { isSiteFeatureEnabled } from "@/lib/siteFeatures";
 
 export const metadata = buildPageMetadata({ title: "Indian States and Union Territories", description: "Explore state politics, chief ministers, opposition leaders, elections, and governance across India's states and union territories.", path: "/state" });
 
 export default async function StatesPage() {
+  if (!(await isSiteFeatureEnabled("feature_states"))) notFound();
   const [places, chiefMinisters] = await Promise.all([
     getAllStatesAndUTs(),
     getChiefMinisters(),

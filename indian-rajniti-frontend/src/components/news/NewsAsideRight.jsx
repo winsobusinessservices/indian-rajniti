@@ -6,7 +6,7 @@ import { getDigitalPulse, getElectionResults, getPoliticalKeywords, getFollowUs 
 import { getParliamentSummary } from "@/features/parliament/parliament.api";
 import { slugify } from "@/lib/slugify";
 
-export default async function NewsAsideRight() {
+export default async function NewsAsideRight({ adPlacement = "article_right_skyscraper" }) {
   const [digitalPulse, electionResults, politicalKeywords, followUs, parliamentSummary] = await Promise.all([
     getDigitalPulse(),
     getElectionResults(),
@@ -100,8 +100,8 @@ export default async function NewsAsideRight() {
         <NewsletterCta followUs={followUs} />
       </div>
 
-      <div className="pt-4 border-t border-outline-variant/30">
-        <AdSlot width="300px" height="600px" label="300x600 Skyscraper Ad" orientation="vertical" />
+      <div className="empty:hidden pt-4 border-t border-outline-variant/30">
+        <AdSlot placement={adPlacement} width="300px" height="600px" label="300x600 Skyscraper Ad" orientation="vertical" />
       </div>
     </aside>
   );

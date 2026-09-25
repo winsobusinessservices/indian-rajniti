@@ -36,6 +36,8 @@ const TYPE_ICON = {
   VIDEO: "fa-video",
 };
 
+const TYPE_LABEL = { ARTICLE: "article", BLOG: "blog", VIDEO: "video" };
+
 export default function ViewPostClient({ type, id }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -273,7 +275,7 @@ export default function ViewPostClient({ type, id }) {
           )}
           {post.related_article_id && (
             <Link
-              href={`/author/view/article/${post.related_article_id}`}
+              href={`/panel/view/article/${post.related_article_id}`}
               className="px-3 py-1.5 bg-surface-container-high text-on-surface text-xs font-label-md rounded-sm hover:bg-primary hover:text-on-primary transition-colors"
             >
               <i className="fa-solid fa-link mr-2" />
@@ -393,7 +395,7 @@ export default function ViewPostClient({ type, id }) {
       <div className="flex flex-wrap gap-3 pt-6 border-t border-outline-variant/30">
         {(post.author_id === user?.id || user?.role === "ADMIN") && (
           <Link
-            href={`/author/edit/${post.type.toLowerCase()}/${post.id}${fromParam ? `?from=${fromParam}` : ""}`}
+            href={`/panel/edit/${post.type.toLowerCase()}/${post.id}${fromParam ? `?from=${fromParam}` : ""}`}
             className="flex items-center gap-2 px-5 py-2.5 text-sm font-label-md border border-outline-variant/40 rounded hover:border-primary hover:text-primary transition-colors"
           >
             <i className="fa-solid fa-pen" /> Edit
@@ -453,8 +455,8 @@ export default function ViewPostClient({ type, id }) {
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}
         onConfirm={handleDelete}
-        title="Delete this post?"
-        description="This post will move to Deleted Items and can be restored by an Admin."
+        title={`Delete this ${TYPE_LABEL[post?.type] || "content item"}?`}
+        description={`This ${TYPE_LABEL[post?.type] || "content item"} will be moved to Deleted Items. It can be restored later from Deleted Items.`}
         confirmLabel="Delete"
         placeholder="Why is this being deleted?"
         required="true"

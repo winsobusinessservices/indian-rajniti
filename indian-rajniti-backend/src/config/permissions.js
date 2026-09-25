@@ -7,11 +7,18 @@ const PERMISSIONS = Object.freeze({
   REVIEW_CONTENT: "review_content",
   CONTENT_HISTORY: "content_history",
   TEAM_MEMBERS: "team_members",
+  MANAGE_USERS: "manage_users",
+  MANAGE_POLICIES: "manage_policies",
+  MANAGE_COMMENTS: "manage_comments",
+  MANAGE_DELETED_ITEMS: "manage_deleted_items",
+  MANAGE_POSTING_LIMITS: "manage_posting_limits",
+  MANAGE_SITE_MANAGEMENT: "manage_site_management",
   MANAGE_CATEGORIES: "manage_categories",
   MANAGE_CAREERS: "manage_careers",
   MANAGE_WALLETS: "manage_wallets",
   MANAGE_POINT_RATES: "manage_point_rates",
   MANAGE_SITE_DATA: "manage_site_data",
+  MANAGE_SERVICES: "manage_services",
   SITE_POLITICIANS: "site_politicians",
   SITE_PARTIES: "site_parties",
   SITE_STATES: "site_states",
@@ -52,9 +59,11 @@ const ROLE_DEFAULT_PERMISSIONS = Object.freeze({
     PERMISSIONS.REVIEW_CONTENT,
     PERMISSIONS.CONTENT_HISTORY,
     PERMISSIONS.TEAM_MEMBERS,
+    PERMISSIONS.MANAGE_SITE_MANAGEMENT,
     PERMISSIONS.MANAGE_WALLETS,
     PERMISSIONS.MANAGE_POINT_RATES,
     PERMISSIONS.MANAGE_SITE_DATA,
+    PERMISSIONS.MANAGE_SERVICES,
     PERMISSIONS.SITE_POLITICIANS,
     PERMISSIONS.SITE_PARTIES,
     PERMISSIONS.SITE_STATES,
@@ -81,7 +90,7 @@ function normalizePermissions(value, role) {
   if (!Array.isArray(parsed)) return [];
   const permissions = parsed.filter((permission) => ALL_PERMISSIONS.includes(permission));
   if (role === "SUBADMIN") {
-    permissions.push(PERMISSIONS.REVIEW_CONTENT, PERMISSIONS.CONTENT_HISTORY);
+    permissions.push(PERMISSIONS.REVIEW_CONTENT, PERMISSIONS.CONTENT_HISTORY, PERMISSIONS.MANAGE_SITE_MANAGEMENT);
   }
   return [...new Set(permissions)];
 }

@@ -3,18 +3,27 @@ const Blog = require("../../models/blog.model");
 const WpPost = require("../../models/wordpress/wpPost.model");
 const Comment = require("../../models/comment.model");
 const DeletionAudit = require("../../models/deletionAudit.model");
+const UiSection = require("../../models/uiSection.model");
 const { checkCommentContent } = require("../../utils/contentModeration");
+const { PERMISSIONS } = require("../../config/permissions");
 
 const MAX_COMMENT_LENGTH = 1000;
+const managedSiteId = (req) => Number(
+  (req.user?.role === "ADMIN" && (req.get("x-management-site-id") || req.query?.siteId || req.body?.siteId))
+  || req.user?.siteId
+  || req.site?.id
+  || 1
+);
+const commentsEnabled = async (siteId) => (await UiSection.visibilityMap(siteId)).feature_comments !== false;
 
-async function findPublishedPost(slug) {
-  const article = await Article.findPublishedBySlug(slug);
+async function findPublishedPost(slug, siteId = 1) {
+  const article = await Article.findPublishedBySlug(slug, siteId);
   if (article) return { type: "ARTICLE", post: article };
 
-  const blog = await Blog.findPublishedBySlug(slug);
+  const blog = await Blog.findPublishedBySlug(slug, siteId);
   if (blog) return { type: "BLOG", post: blog };
 
-  const wordpress = await WpPost.findPublishedBySlug(slug);
+  const wordpress = Number(siteId) === 1 ? await WpPost.findPublishedBySlug(slug) : null;
   if (wordpress) return { type: "WORDPRESS", post: wordpress };
 
   return null;
@@ -28,7 +37,7 @@ function modelForPostType(postType) {
 
 async function canDeleteComment(user, comment, resolvedPost = null) {
   if (!user) return false;
-  if (user.role === "ADMIN" || Number(comment.authorId) === Number(user.userId)) return true;
+  if (user.role === "ADMIN" || user.permissions?.includes(PERMISSIONS.MANAGE_COMMENTS) || Number(comment.authorId) === Number(user.userId)) return true;
 
   let post = resolvedPost?.post;
   if (!post) {
@@ -45,8 +54,9 @@ async function canDeleteComment(user, comment, resolvedPost = null) {
 
 const listPostComments = async (req, res) => {
   try {
-    const comments = await Comment.findForPost(req.params.slug, req.user || null);
-    const resolvedPost = req.user ? await findPublishedPost(req.params.slug) : null;
+    if (!(await commentsEnabled(req.site.id))) return res.status(200).json({ success: true, comments: [], disabled: true });
+    const comments = await Comment.findForPost(req.params.slug, req.user || null, req.site.id);
+    const resolvedPost = req.user ? await findPublishedPost(req.params.slug, req.site.id) : null;
     const commentsWithPermissions = await Promise.all(comments.map(async (comment) => ({
       ...comment,
       canDelete: await canDeleteComment(req.user, comment, resolvedPost),
@@ -60,6 +70,7 @@ const listPostComments = async (req, res) => {
 
 const createComment = async (req, res) => {
   try {
+    if (!(await commentsEnabled(req.site.id))) return res.status(403).json({ success: false, message: "Comments are disabled for this website" });
     const postSlug = String(req.body?.postSlug || "").trim();
     const content = String(req.body?.content || "").trim();
     if (!postSlug) return res.status(400).json({ success: false, message: "Article is required" });
@@ -73,13 +84,14 @@ const createComment = async (req, res) => {
       return res.status(422).json({ success: false, message: moderation.message });
     }
 
-    const resolved = await findPublishedPost(postSlug);
+    const resolved = await findPublishedPost(postSlug, req.site.id);
     if (!resolved) return res.status(404).json({ success: false, message: "Published article not found" });
     if (resolved.type !== "WORDPRESS" && resolved.post.comments_enabled === 0) {
       return res.status(403).json({ success: false, message: "Comments are disabled for this article." });
     }
 
     const comment = await Comment.create({
+      siteId: req.site.id,
       authorId: req.user.userId,
       postType: resolved.type,
       postId: resolved.post.id,
@@ -100,7 +112,7 @@ const createComment = async (req, res) => {
 
 const listAllComments = async (req, res) => {
   try {
-    const comments = await Comment.findAll();
+    const comments = await Comment.findAll(managedSiteId(req));
     return res.status(200).json({ success: true, comments });
   } catch (error) {
     console.error("List all comments error:", error);
@@ -113,10 +125,11 @@ const updateCommentVisibility = async (req, res) => {
     if (typeof req.body?.hidden !== "boolean") {
       return res.status(400).json({ success: false, message: "hidden must be true or false" });
     }
-    const existing = await Comment.findById(req.params.id);
+    const siteId = managedSiteId(req);
+    const existing = await Comment.findById(req.params.id, siteId);
     if (!existing) return res.status(404).json({ success: false, message: "Comment not found" });
 
-    const comment = await Comment.setHidden(existing.id, req.body.hidden, req.user.userId);
+    const comment = await Comment.setHidden(existing.id, req.body.hidden, req.user.userId, siteId);
     return res.status(200).json({
       success: true,
       message: req.body.hidden ? "Comment hidden" : "Comment shown",
@@ -130,7 +143,8 @@ const updateCommentVisibility = async (req, res) => {
 
 const deleteComment = async (req, res) => {
   try {
-    const comment = await Comment.findById(req.params.id);
+    const siteId = managedSiteId(req);
+    const comment = await Comment.findById(req.params.id, siteId);
     if (!comment) return res.status(404).json({ success: false, message: "Comment not found" });
     if (!(await canDeleteComment(req.user, comment))) {
       return res.status(403).json({

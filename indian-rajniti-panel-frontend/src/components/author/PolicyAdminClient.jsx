@@ -4,11 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { policiesApi } from "@/lib/api";
 import { useConfirmDialog } from "@/components/common/ConfirmDialogProvider";
+import { useAdminSite } from "@/context/AdminSiteContext";
+import EmptyState from "@/components/common/EmptyState";
+import RichTextEditor from "@/components/common/RichTextEditor";
 
 const EMPTY_FORM = { title: "", policyType: "", summary: "", content: "", status: "DRAFT", showOnRegistration: false };
 
 export default function PolicyAdminClient() {
   const confirmDelete = useConfirmDialog();
+  const { activeSite, activeSiteId } = useAdminSite();
   const [policies, setPolicies] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingId, setEditingId] = useState(null);
@@ -17,13 +21,19 @@ export default function PolicyAdminClient() {
   const [error, setError] = useState("");
 
   const loadPolicies = () => {
-    policiesApi.listForAdmin()
+    if (!activeSiteId) return;
+    policiesApi.listForAdmin(activeSiteId)
       .then((data) => setPolicies(data.policies || []))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(loadPolicies, []);
+  useEffect(() => {
+    let active = true;
+    if (!activeSiteId) return () => { active = false; };
+    policiesApi.listForAdmin(activeSiteId).then((data) => { if (active) setPolicies(data.policies || []); }).catch((err) => { if (active) setError(err.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [activeSiteId]);
 
   const updateField = (event) => {
     const value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
@@ -55,8 +65,8 @@ export default function PolicyAdminClient() {
     setSaving(true);
     setError("");
     try {
-      if (editingId) await policiesApi.update(editingId, form);
-      else await policiesApi.create(form);
+      if (editingId) await policiesApi.update(editingId, form, activeSiteId);
+      else await policiesApi.create(form, activeSiteId);
       resetForm();
       loadPolicies();
     } catch (err) {
@@ -69,11 +79,11 @@ export default function PolicyAdminClient() {
   const deletePolicy = async (policy) => {
     const confirmed = await confirmDelete({
       title: "Delete policy?",
-      description: `“${policy.title}” will be moved to Deleted Items and can be restored by an Admin.`,
+      description: `The policy “${policy.title}” will be moved to Deleted Items. It can be restored later from Deleted Items.`,
     });
     if (!confirmed) return;
     try {
-      await policiesApi.remove(policy.id);
+      await policiesApi.remove(policy.id, activeSiteId);
       setPolicies((current) => current.filter((item) => item.id !== policy.id));
       if (editingId === policy.id) resetForm();
     } catch (err) {
@@ -82,7 +92,7 @@ export default function PolicyAdminClient() {
   };
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)]">
+    <div className="space-y-5"><div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3"><p className="text-xs font-semibold uppercase tracking-wider text-primary">Managing website</p><p className="mt-1 font-headline-md text-lg text-on-surface">{activeSite?.name || "Select a website"}</p><p className="text-xs text-on-surface-variant">Policies created, edited or deleted here belong only to this website.</p></div><div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(420px,0.8fr)]">
       <form onSubmit={savePolicy} className="rounded-xl border border-outline-variant/25 bg-surface p-5 shadow-sm md:p-7">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -118,9 +128,7 @@ export default function PolicyAdminClient() {
             <textarea name="summary" value={form.summary} onChange={updateField} required maxLength={600} rows={4} className="mt-2 w-full resize-y rounded-lg border border-outline-variant/40 bg-surface-container-low px-4 py-3 font-body-md outline-none focus:border-primary" placeholder="A short public summary of this policy." />
             <span className="mt-1 block text-right text-xs text-on-surface-variant">{form.summary.length}/600</span>
           </label>
-          <label className="sm:col-span-2 font-label-md text-sm text-on-surface">Full policy content
-            <textarea name="content" value={form.content} onChange={updateField} required rows={14} className="mt-2 w-full resize-y rounded-lg border border-outline-variant/40 bg-surface-container-low px-4 py-3 font-body-md leading-relaxed outline-none focus:border-primary" placeholder="Write the complete policy analysis. Separate paragraphs with blank lines." />
-          </label>
+          <div className="sm:col-span-2"><p className="mb-2 font-label-md text-sm text-on-surface">Full policy content <span className="text-error">*</span></p><RichTextEditor value={form.content} onChange={(content) => setForm((current) => ({ ...current, content }))} placeholder="Write the complete policy analysis…" minHeight="24rem" disabled={saving} /></div>
         </div>
 
         <button type="submit" disabled={saving} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-6 py-3 font-label-md text-sm font-semibold text-on-primary disabled:opacity-50">
@@ -135,13 +143,13 @@ export default function PolicyAdminClient() {
             <h2 className="font-headline-lg text-2xl text-primary">All policies</h2>
             <p className="font-body-md text-sm text-on-surface-variant">{policies.length} total</p>
           </div>
-          <Link href="/policies" className="font-label-md text-sm font-semibold text-primary hover:underline">View public page</Link>
+          <a href={activeSite?.domain ? `https://${activeSite.domain}/policies` : "/policies"} className="font-label-md text-sm font-semibold text-primary hover:underline">View public page</a>
         </div>
 
         {loading ? (
           <p className="rounded-xl bg-surface p-6 text-on-surface-variant">Loading policies...</p>
         ) : policies.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-outline-variant/50 bg-surface p-8 text-center text-on-surface-variant">No policies created yet.</p>
+          <EmptyState icon="fa-scale-balanced" title="No policies for this website" description="Use the policy form to create the first policy. It will remain separate from other websites." />
         ) : (
           <div className="space-y-4">
             {policies.map((policy) => (
@@ -163,6 +171,6 @@ export default function PolicyAdminClient() {
           </div>
         )}
       </section>
-    </div>
+    </div></div>
   );
 }

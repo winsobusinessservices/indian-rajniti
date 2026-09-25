@@ -13,7 +13,7 @@ function normalizedPoll(poll) {
   };
 }
 
-export default function PollOfTheDay({ initialPoll }) {
+export default function PollOfTheDay({ initialPoll, title = "" }) {
   const [poll, setPoll] = useState(() => normalizedPoll(initialPoll));
   const [voted, setVoted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +39,7 @@ export default function PollOfTheDay({ initialPoll }) {
 
   return <div className="pt-4 border-t border-outline-variant/30">
     <div className="flex items-center justify-between mb-4 border-b-2 border-primary pb-2">
-      <h3 className="font-headline-md text-primary tracking-tight text-lg">Poll of the Day</h3>
+      <h3 className="font-headline-md text-primary tracking-tight text-lg">{title}</h3>
       <i className="fa-solid fa-square-poll-vertical text-secondary text-lg" />
     </div>
     <p className="font-body-md text-sm text-on-surface mb-3">{poll.question}</p>

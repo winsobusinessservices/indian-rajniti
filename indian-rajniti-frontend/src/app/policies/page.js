@@ -2,22 +2,26 @@ import Link from "next/link";
 import BreakingNews from "@/components/layout/BreakingNews";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { getBreakingNews } from "@/features/news/news.api";
+import { getBreakingNews, getListingPages } from "@/features/news/news.api";
 import { policiesApi } from "@/lib/api";
 import { buildPageMetadata } from "@/lib/seo";
+import { notFound } from "next/navigation";
+import { isSiteFeatureEnabled } from "@/lib/siteFeatures";
 
-export const metadata = buildPageMetadata({
-  title: "Indian Government Policies and Analysis",
-  description: "Explore clear analysis of Indian government policies, legislation, public programmes, and their impact on citizens.",
-  path: "/policies",
-});
+export async function generateMetadata() {
+  const page = (await getListingPages()).policies || {};
+  return buildPageMetadata({ title: page.title || "Policies", description: page.description || "", path: "/policies" });
+}
 
 export default async function PoliciesPage() {
-  const [breakingNews, policyData] = await Promise.all([
+  if (!(await isSiteFeatureEnabled("feature_policies"))) notFound();
+  const [breakingNews, policyData, pages] = await Promise.all([
     getBreakingNews(),
     policiesApi.list().catch(() => ({ policies: [] })),
+    getListingPages(),
   ]);
   const policies = policyData.policies || [];
+  const page = pages.policies || {};
 
   return (
     <>
@@ -26,16 +30,16 @@ export default async function PoliciesPage() {
       <main className="flex-grow bg-background">
         <section className="border-b border-outline-variant/20 bg-surface px-4 py-12 md:px-16 md:py-16">
           <div className="mx-auto max-w-6xl">
-            <span className="font-label-md text-xs font-bold uppercase tracking-[0.2em] text-secondary">Policy Analysis</span>
-            <h1 className="mt-3 max-w-4xl font-display-lg text-4xl tracking-tight text-primary md:text-5xl">Policies shaping India</h1>
-            <p className="mt-4 max-w-3xl font-body-lg text-base leading-relaxed text-on-surface-variant md:text-lg">Understand major public policies through concise summaries, detailed analysis, and the political context behind each decision.</p>
+            {page.eyebrow && <span className="font-label-md text-xs font-bold uppercase tracking-[0.2em] text-secondary">{page.eyebrow}</span>}
+            <h1 className="mt-3 max-w-4xl font-display-lg text-4xl tracking-tight text-primary md:text-5xl">{page.title}</h1>
+            {page.description && <p className="mt-4 max-w-3xl font-body-lg text-base leading-relaxed text-on-surface-variant md:text-lg">{page.description}</p>}
           </div>
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-10 md:px-16 md:py-14">
           <div className="mb-7 flex items-end justify-between gap-4 border-b border-outline-variant/30 pb-3">
             <div>
-              <h2 className="font-headline-lg text-2xl text-on-surface">Published policies</h2>
+              <h2 className="font-headline-lg text-2xl text-on-surface">{page.sectionTitle}</h2>
               <p className="mt-1 font-body-md text-sm text-on-surface-variant">{policies.length} {policies.length === 1 ? "policy" : "policies"}</p>
             </div>
           </div>
@@ -43,8 +47,8 @@ export default async function PoliciesPage() {
           {policies.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-outline-variant/50 bg-surface p-10 text-center">
               <i className="fa-solid fa-landmark text-3xl text-primary" aria-hidden="true" />
-              <h2 className="mt-4 font-headline-lg text-xl text-on-surface">Policy analysis is being prepared</h2>
-              <p className="mx-auto mt-2 max-w-xl font-body-md text-sm text-on-surface-variant">Published policies will appear here as soon as the editorial team makes them available.</p>
+              <h2 className="mt-4 font-headline-lg text-xl text-on-surface">{page.emptyTitle}</h2>
+              <p className="mx-auto mt-2 max-w-xl font-body-md text-sm text-on-surface-variant">{page.emptyText}</p>
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -57,7 +61,7 @@ export default async function PoliciesPage() {
                   <p className="mt-3 flex-grow font-body-md text-sm leading-relaxed text-on-surface-variant">{policy.summary}</p>
                   <div className="mt-6 flex items-center justify-between gap-3 border-t border-outline-variant/20 pt-4">
                     <span className="text-xs text-on-surface-variant">{new Date(policy.published_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
-                    <Link href={`/policies/${policy.slug}`} className="font-label-md text-sm font-semibold text-primary hover:underline">Read analysis <i className="fa-solid fa-arrow-right ml-1 text-xs" /></Link>
+                    <Link href={`/policies/${policy.slug}`} className="font-label-md text-sm font-semibold text-primary hover:underline">{page.itemLinkLabel} <i className="fa-solid fa-arrow-right ml-1 text-xs" /></Link>
                   </div>
                 </article>
               ))}

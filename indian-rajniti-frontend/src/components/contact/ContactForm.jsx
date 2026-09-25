@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { contactApi } from "@/lib/api";
+import ManagedText from "@/components/common/ManagedText";
+import { useAuth } from "@/context/AuthContext";
 
 const fieldClass =
   "w-full rounded-lg border border-outline-variant/40 bg-surface px-4 py-3 font-body-md text-sm text-on-surface outline-none transition-colors placeholder:text-outline focus:border-primary focus:ring-2 focus:ring-primary/15";
 
-export default function ContactForm() {
+export default function ContactForm({ eyebrow, title, description, buttonLabel = "Send Message" }) {
+  const { user, loading } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
 
@@ -29,25 +32,31 @@ export default function ContactForm() {
     }
   }
 
+  if (loading) return <div className="min-h-72 animate-pulse rounded-xl bg-surface-container-low" aria-hidden="true" />;
+
   return (
     <form onSubmit={handleSubmit} inert={submitting} aria-busy={submitting} className="rounded-xl border border-outline-variant/25 bg-surface p-6 shadow-sm md:p-8">
       <div className="mb-7">
-        <span className="font-label-sm text-xs font-bold uppercase tracking-[0.18em] text-secondary">Send a message</span>
-        <h2 className="mt-2 font-display-lg text-3xl text-on-surface">Get in Touch</h2>
-        <p className="mt-2 font-body-md text-sm text-on-surface-variant">
-          Have a story tip, correction, partnership proposal, or general question? We would be glad to hear from you.
-        </p>
+        {eyebrow && <span className="font-label-sm text-xs font-bold uppercase tracking-[0.18em] text-secondary">{eyebrow}</span>}
+        <h2 className="mt-2 font-display-lg text-3xl text-on-surface">{title}</h2>
+        {description && <ManagedText text={description} className="mt-2 space-y-3 font-body-md text-sm text-on-surface-variant" />}
       </div>
 
+      {user && <div className="mb-5 rounded-lg bg-primary/5 px-4 py-3 text-sm text-on-surface-variant">
+        Sending as <strong className="text-on-surface">{user.name}</strong> ({user.email})
+      </div>}
+
       <div className="grid gap-5 sm:grid-cols-2">
-        <label className="font-label-md text-sm text-on-surface">
-          Full name <span className="text-error">*</span>
-          <input name="name" type="text" autoComplete="name" required maxLength={100} className={`${fieldClass} mt-2`} placeholder="Your name" />
-        </label>
-        <label className="font-label-md text-sm text-on-surface">
-          Email address <span className="text-error">*</span>
-          <input name="email" type="email" autoComplete="email" required maxLength={254} className={`${fieldClass} mt-2`} placeholder="you@example.com" />
-        </label>
+        {!user && <>
+          <label className="font-label-md text-sm text-on-surface">
+            Full name <span className="text-error">*</span>
+            <input name="name" type="text" autoComplete="name" required maxLength={100} className={`${fieldClass} mt-2`} placeholder="Your name" />
+          </label>
+          <label className="font-label-md text-sm text-on-surface">
+            Email address <span className="text-error">*</span>
+            <input name="email" type="email" autoComplete="email" required maxLength={254} className={`${fieldClass} mt-2`} placeholder="you@example.com" />
+          </label>
+        </>}
         <label className="font-label-md text-sm text-on-surface">
           Phone number
           <input name="phone" type="tel" autoComplete="tel" maxLength={30} className={`${fieldClass} mt-2`} placeholder="+91 98765 43210" />
@@ -71,7 +80,7 @@ export default function ContactForm() {
 
       <button type="submit" disabled={submitting} className="mt-6 inline-flex min-w-40 items-center justify-center gap-2 rounded-lg bg-primary px-6 py-3 font-label-md text-sm font-semibold text-on-primary transition-colors hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60">
         <i className={`fa-solid ${submitting ? "fa-spinner fa-spin" : "fa-paper-plane"}`} />
-        {submitting ? "Sending..." : "Send Message"}
+        {submitting ? "Sending..." : buttonLabel}
       </button>
     </form>
   );

@@ -2,7 +2,6 @@
 
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
-import { NAV_LINKS, SIDEBAR_CATEGORIES } from "@/lib/constants";
 import { useAuth } from "@/context/AuthContext";
 import { useIsClient } from "@/hooks/useIsClient";
 import SearchBox from "@/components/search/SearchBox";
@@ -12,7 +11,7 @@ import { slugify } from "@/lib/slugify";
 const CONTRIBUTOR_ROLES = ["AUTHOR", "EDITOR", "ADMIN"];
 const MODERATOR_ROLES = ["EDITOR", "ADMIN"];
 
-function NavLinks({ pathname, onClose, links = NAV_LINKS }) {
+function NavLinks({ pathname, onClose, links = [] }) {
   return (
     <section className=" mb-8 bg-surface-container-low p-4 rounded-lg ">
       <h3 className="font-headline-md text-primary text-lg mb-4 border-b border-outline-variant/30 pb-2 tracking-wide">
@@ -42,14 +41,20 @@ function NavLinks({ pathname, onClose, links = NAV_LINKS }) {
   );
 }
 
-function CategoryList({ title, items, onClose }) {
+function CategoryList({ title, items, onClose, featureVisibility = {}, managedPages = {} }) {
+  const visibleItems = items.filter((item) => {
+    if (typeof item !== "string" && item.feature && featureVisibility[item.feature] === false) return false;
+    const label = typeof item === "string" ? item : item.label;
+    const href = typeof item === "string" ? `/${slugify(label)}` : item.href;
+    return managedPages[href.replace(/^\//, "")]?.enabled !== false;
+  });
   return (
     <section className="mb-8 bg-surface-container-low p-4 rounded-lg">
       <h3 className="font-headline-md text-primary text-lg mb-4 border-b border-outline-variant/30 pb-2 tracking-wide">
         {title}
       </h3>
       <ul className="space-y-3 font-body-md text-on-surface-variant">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const label = typeof item === "string" ? item : item.label;
           const href = typeof item === "string" ? null : item.href;
           return (
@@ -107,7 +112,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
       <ul className="space-y-3 font-body-md text-on-surface-variant">
         <li>
           <Link
-            href="/author/create/article"
+            href="/panel/create/article"
             onClick={onClose}
             className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
           >
@@ -116,7 +121,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
         </li>
         <li>
           <Link
-            href="/author/create/blog"
+            href="/panel/create/blog"
             onClick={onClose}
             className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
           >
@@ -125,7 +130,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
         </li>
         <li>
           <Link
-            href="/author/create/video"
+            href="/panel/create/video"
             onClick={onClose}
             className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
           >
@@ -134,7 +139,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
         </li>
         <li>
           <Link
-            href="/author/content"
+            href="/panel/content"
             onClick={onClose}
             className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
           >
@@ -144,7 +149,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
         {canUseWallet && (
           <li>
             <Link
-              href="/author/wallet"
+              href="/panel/wallet"
               onClick={onClose}
               className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
             >
@@ -155,13 +160,13 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
         {isModerator && (
           <>
             <li>
-              <Link href="/author/site-data" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+              <Link href="/panel/site-data" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
                 <i className="fa-solid fa-database w-4" /> Manage Site Data
               </Link>
             </li>
             <li>
               <Link
-                href="/author/review"
+                href="/panel/review"
                 onClick={onClose}
                 className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
               >
@@ -170,7 +175,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
             </li>
             <li>
               <Link
-                href="/author/history"
+                href="/panel/history"
                 onClick={onClose}
                 className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
               >
@@ -182,18 +187,18 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
         {isAdmin && (
           <>
             <li>
-              <Link href="/author/categories" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+              <Link href="/panel/categories" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
                 <i className="fa-solid fa-folder-tree w-4" /> Manage Categories
               </Link>
             </li>
             <li>
-              <Link href="/author/policies" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+              <Link href="/panel/policies" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
                 <i className="fa-solid fa-scale-balanced w-4" /> Manage Policies
               </Link>
             </li>
             <li>
             <Link
-              href="/author/team"
+              href="/panel/team"
               onClick={onClose}
               className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
             >
@@ -202,7 +207,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
           </li>
             <li>
             <Link
-              href="/author/career"
+              href="/panel/career"
               onClick={onClose}
               className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline"
             >
@@ -210,7 +215,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
             </Link>
           </li>
             <li>
-              <Link href="/author/wallet-admin" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
+              <Link href="/panel/wallet-admin" onClick={onClose} className="flex items-center gap-2 hover:text-primary transition-colors duration-300 hover:underline">
                 <i className="fa-solid fa-money-check-dollar w-4" /> Wallet Access
               </Link>
             </li>
@@ -219,7 +224,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
         )}
         <li className="pt-2 border-t border-outline-variant/20">
           <Link
-            href="/author/dashboard"
+            href="/panel/dashboard"
             onClick={onClose}
             className="group text-primary font-label-sm flex items-center gap-1 hover:underline"
           >
@@ -232,7 +237,7 @@ function AuthorTools({ onClose, isModerator, isAdmin, canUseWallet, roleLabel })
   );
 }
 
-export default function MobileMenu({ open, onClose, navLinks = NAV_LINKS }) {
+export default function MobileMenu({ open, onClose, navLinks = [], featureVisibility = {}, managedPages = {}, siteNavigation = { more: [], legal: [] } }) {
   const mounted = useIsClient();
   const pathname = usePathname();
   const { user } = useAuth();
@@ -287,10 +292,10 @@ export default function MobileMenu({ open, onClose, navLinks = NAV_LINKS }) {
 
           {isInvestor && <InvestorLink onClose={onClose} />}
 
-          <CategoryList title="More" items={SIDEBAR_CATEGORIES.more} onClose={onClose} />
+          <CategoryList title="More" items={siteNavigation.more || []} onClose={onClose} featureVisibility={featureVisibility} managedPages={managedPages} />
 
           <div className="mb-6 flex flex-col justify-center items-center  text-lg font-display-lg text-on-surface-variant tracking-tight">
-            {SIDEBAR_CATEGORIES.legal.map((i) => (
+            {(siteNavigation.legal || []).filter((item) => (!item.feature || featureVisibility[item.feature] !== false) && (!item.pageKey || managedPages[item.pageKey]?.enabled !== false)).map((i) => (
               <Link
                 key={i.label}
                 href={i.href}

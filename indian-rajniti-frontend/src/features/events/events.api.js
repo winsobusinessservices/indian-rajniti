@@ -19,7 +19,7 @@ export async function getSpeechesInfo() {
   const [relatedNews, profiles] = await Promise.all([getSpeeches(), getPageProfiles()]);
   const page = pageProfile("speeches", profiles);
   const relatedSlugSet = new Set(relatedNews.map((story) => story.slug));
-  const recommendedNews = allTeasers()
+  const recommendedNews = (await allTeasers())
     .filter((story) => story.slug && !relatedSlugSet.has(story.slug))
     .slice(0, 4);
 
@@ -46,7 +46,7 @@ export async function getRalliesInfo() {
   const [relatedNews, profiles] = await Promise.all([getRallies(), getPageProfiles()]);
   const page = pageProfile("rallies", profiles);
   const relatedSlugSet = new Set(relatedNews.map((story) => story.slug));
-  const recommendedNews = allTeasers()
+  const recommendedNews = (await allTeasers())
     .filter((story) => story.slug && !relatedSlugSet.has(story.slug))
     .slice(0, 4);
 

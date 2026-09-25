@@ -23,7 +23,7 @@ function configFor(entityType) {
 
 async function actorSnapshot(connection, userId) {
   const [rows] = await connection.query(
-    "SELECT id, name, email, role FROM users WHERE id = ? LIMIT 1",
+    "SELECT id, name, email, role, site_id FROM users WHERE id = ? LIMIT 1",
     [userId]
   );
   return rows[0] || { id: userId, name: `User #${userId}`, email: null, role: "UNKNOWN" };
@@ -54,16 +54,18 @@ const DeletionAudit = {
         ownerName = owners[0]?.name || null;
       }
       const normalizedReason = String(reason || "").trim().slice(0, 500) || null;
+      const siteId = Number(entity.site_id || actor.site_id || 1);
       const softDeleteSql = entityType === "USER"
         ? `UPDATE \`${config.table}\` SET deleted_at = NOW(), deleted_by = ?, delete_reason = ?, status = 'INACTIVE' WHERE id = ?`
         : `UPDATE \`${config.table}\` SET deleted_at = NOW(), deleted_by = ?, delete_reason = ? WHERE id = ?`;
       await connection.query(softDeleteSql, [deletedBy, normalizedReason, entityId]);
       const [result] = await connection.query(
         `INSERT INTO deletion_audit
-          (entity_type, entity_table, entity_id, entity_label, owner_id, owner_name,
+          (site_id, entity_type, entity_table, entity_id, entity_label, owner_id, owner_name,
            deleted_by, deleted_by_name, deleted_by_email, deleted_by_role, reason, snapshot)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          siteId,
           entityType,
           config.table,
           String(entityId),
@@ -88,8 +90,8 @@ const DeletionAudit = {
     }
   },
 
-  async list({ state = "ACTIVE" } = {}) {
-    const conditions = [];
+  async list({ state = "ACTIVE", siteId = 1 } = {}) {
+    const conditions = ["a.site_id = ?"];
     if (state === "ACTIVE") conditions.push("a.restored_at IS NULL AND a.permanently_deleted_at IS NULL");
     if (state === "RESTORED") conditions.push("a.restored_at IS NOT NULL");
     if (state === "PERMANENT") conditions.push("a.permanently_deleted_at IS NOT NULL");
@@ -100,7 +102,7 @@ const DeletionAudit = {
        LEFT JOIN users restorer ON restorer.id = a.restored_by
        LEFT JOIN users permanent ON permanent.id = a.permanently_deleted_by
        ${where}
-       ORDER BY a.deleted_at DESC, a.id DESC`
+       ORDER BY a.deleted_at DESC, a.id DESC`, [siteId]
     );
     return rows.map((row) => ({
       id: row.id,
@@ -122,14 +124,14 @@ const DeletionAudit = {
     }));
   },
 
-  async restore(auditId, restoredBy) {
+  async restore(auditId, restoredBy, siteId = 1) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
       const [rows] = await connection.query(
         `SELECT * FROM deletion_audit
-         WHERE id = ? AND restored_at IS NULL AND permanently_deleted_at IS NULL FOR UPDATE`,
-        [auditId]
+         WHERE id = ? AND site_id = ? AND restored_at IS NULL AND permanently_deleted_at IS NULL FOR UPDATE`,
+        [auditId, siteId]
       );
       const audit = rows[0];
       if (!audit) {
@@ -166,14 +168,14 @@ const DeletionAudit = {
     }
   },
 
-  async hardDelete(auditId, deletedBy) {
+  async hardDelete(auditId, deletedBy, siteId = 1) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
       const [rows] = await connection.query(
         `SELECT * FROM deletion_audit
-         WHERE id = ? AND restored_at IS NULL AND permanently_deleted_at IS NULL FOR UPDATE`,
-        [auditId]
+         WHERE id = ? AND site_id = ? AND restored_at IS NULL AND permanently_deleted_at IS NULL FOR UPDATE`,
+        [auditId, siteId]
       );
       const audit = rows[0];
       if (!audit) {

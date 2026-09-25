@@ -11,6 +11,7 @@
  */
 import { mediaUrl } from "@/lib/api";
 import { createJsonResource } from "@/lib/jsonResource";
+import { withSiteHeaders } from "@/lib/siteRequest";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
@@ -40,20 +41,16 @@ function playbackUrl(value) {
 // getter from this module in the same Promise.all) read already-fetched
 // data without itself being async.
 //
-let lastKnownBundle = null;
-
 const readHomeResource = createJsonResource(`${API_BASE_URL}/news/home`, {
   // Admin-managed widgets must be visible on the next refresh. In-flight
   // requests are still shared by createJsonResource, so all home sections
   // use one API call without retaining stale resolved data.
   ttl: 0,
-  fetchOptions: { cache: "no-store" },
+  fetchOptions: () => withSiteHeaders({ cache: "no-store" }),
 });
 
 async function getHomeData() {
-  const json = await readHomeResource();
-  lastKnownBundle = json;
-  return json;
+  return readHomeResource();
 }
 
 function withDisplayFields(item) {
@@ -85,6 +82,39 @@ export async function getSectionVisibility() {
 export async function getSiteHeaderSettings() {
   const { widgets } = await getHomeData();
   return widgets.site_header || {};
+}
+export async function getManagedPages() {
+  const { widgets } = await getHomeData();
+  return widgets.managed_pages || {};
+}
+export async function getSiteNavigation() {
+  const { widgets } = await getHomeData();
+  return widgets.site_navigation || { more: [], legal: [] };
+}
+export async function getSiteFooter() {
+  const { widgets } = await getHomeData();
+  return widgets.site_footer || { sections: [], coverageLinks: [] };
+}
+export async function getHomepageLabels() {
+  const { widgets } = await getHomeData();
+  return widgets.homepage_labels || {};
+}
+export async function getHomepageSections() {
+  const { widgets } = await getHomeData();
+  return Array.isArray(widgets.homepage_sections) ? widgets.homepage_sections : [];
+}
+export async function getAdvertisements() {
+  const { widgets } = await getHomeData();
+  return Array.isArray(widgets.advertisements) ? widgets.advertisements : [];
+}
+export async function getHomepageServices() {
+  const response = await fetch(`${API_BASE_URL}/services`, await withSiteHeaders({ cache: "no-store" }));
+  if (!response.ok) return [];
+  return (await response.json()).services || [];
+}
+export async function getListingPages() {
+  const { widgets } = await getHomeData();
+  return widgets.listing_pages || {};
 }
 export async function getHeroSlides() {
   const { news } = await getHomeData();
@@ -202,6 +232,14 @@ export async function getFollowUs() {
   const { widgets } = await getHomeData();
   return widgets.follow_us;
 }
+export async function getVoicesOfNation() {
+  const { widgets } = await getHomeData();
+  return widgets.voices_of_nation || [];
+}
+export async function getOpinionLeaders() {
+  const { widgets } = await getHomeData();
+  return widgets.opinion_leaders || [];
+}
 export async function getPageProfiles() {
   const { widgets } = await getHomeData();
   return widgets.page_profiles || null;
@@ -254,9 +292,9 @@ export async function getPmCorner() {
 // awaiting, always after it has already awaited getAllCategoryLabels() (or
 // another getter here) in the same Promise.all, so lastKnownBundle is
 // already populated by the time this runs.
-export function allTeasers() {
-  if (!lastKnownBundle) return [];
-  return lastKnownBundle.posts.map(withDisplayFields);
+export async function allTeasers() {
+  const { posts } = await getHomeData();
+  return posts.map(withDisplayFields);
 }
 
 // Every category/tag/keyword label used anywhere on the site (real article/
@@ -264,7 +302,7 @@ export function allTeasers() {
 // single source the /category/[slug] registry aggregates from, so no
 // clickable label 404s.
 export async function getCategoryDefinitions() {
-  const categoriesRes = await fetch(`${API_BASE_URL}/categories`, { cache: "no-store" });
+  const categoriesRes = await fetch(`${API_BASE_URL}/categories`, await withSiteHeaders({ cache: "no-store" }));
   if (!categoriesRes.ok) throw new Error(`Failed to load categories (${categoriesRes.status})`);
   const { categories } = await categoriesRes.json();
   return categories;
@@ -292,7 +330,7 @@ export async function getAllCategoryLabels() {
 export async function getPostsForTopics(terms) {
   const params = new URLSearchParams();
   terms.filter(Boolean).forEach((term) => params.append("term", term));
-  const res = await fetch(`${API_BASE_URL}/news/topics?${params.toString()}`, { next: { revalidate: 60 } });
+  const res = await fetch(`${API_BASE_URL}/news/topics?${params.toString()}`, await withSiteHeaders({ next: { revalidate: 60 } }));
   if (!res.ok) throw new Error(`Failed to load topic posts (${res.status})`);
   const { posts } = await res.json();
   return posts.map(withDisplayFields);
@@ -301,7 +339,7 @@ export async function getPostsForTopics(terms) {
 export async function getPostBySlug(slug) {
   // Always a fresh request (not the cached /news/home bundle) — this is the
   // one place a view actually gets counted server-side.
-  const res = await fetch(`${API_BASE_URL}/news/posts/${encodeURIComponent(slug)}`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE_URL}/news/posts/${encodeURIComponent(slug)}`, await withSiteHeaders({ cache: "no-store" }));
   if (!res.ok) return null;
   const { post } = await res.json();
   return {

@@ -26,7 +26,7 @@ export async function searchContent(query) {
   const words = tokenize(query || "");
   if (!words.length) return { posts: [], categories: [] };
 
-  const posts = allTeasers().filter(
+  const posts = (await allTeasers()).filter(
     (story) =>
       matchesAnyWord(story.title, words) ||
       matchesAnyWord(story.excerpt, words) ||

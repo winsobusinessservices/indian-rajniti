@@ -16,7 +16,7 @@
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-2.5-flash";
 // Even with thinkingBudget capped low, a full article-length prompt plus a
 // large structured JSON response has taken 20-28s in testing — longer real
 // articles could run past that, so this leaves real margin rather than
@@ -105,11 +105,9 @@ QUALITY SCORE
 RECOMMENDATION
 - "PASS" if there are no grammarIssues and no spellingIssues, otherwise "NEEDS_CORRECTION". This is advisory only — a human editor always makes the final approve/reject decision.`;
 
-// Google's free tier caps gemini-3.6-flash at 20 requests/minute. A 429 on
-// that quota is usually gone within seconds, so one short, bounded retry
-// recovers most transient hits without making the author wait through the
-// full (sometimes 30-45s) delay the API itself suggests.
 const RATE_LIMIT_RETRY_CAP_MS = 5_000;
+const TRANSIENT_RETRY_DELAYS_MS = [1_500, 3_000];
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 function parseRetryDelayMs(errorBody) {
   try {
@@ -122,11 +120,20 @@ function parseRetryDelayMs(errorBody) {
   }
 }
 
-async function callGeminiOnce(content) {
+function isRetryable(error) {
+  return (
+    RETRYABLE_STATUSES.has(error.status) ||
+    error.name === "AbortError" ||
+    error instanceof TypeError
+  );
+}
+
+async function callGeminiOnce(content, model) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const response = await fetch(`${url}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: controller.signal,
@@ -152,6 +159,7 @@ async function callGeminiOnce(content) {
       const error = new Error(`Gemini API returned ${response.status}: ${errorBody.slice(0, 500)}`);
       error.status = response.status;
       error.retryDelayMs = parseRetryDelayMs(errorBody);
+      error.model = model;
       throw error;
     }
 
@@ -171,16 +179,35 @@ async function callGemini(content) {
     throw new Error("GEMINI_API_KEY is not configured");
   }
 
-  try {
-    return await callGeminiOnce(content);
-  } catch (error) {
-    if (error.status !== 429) throw error;
+  // A busy Gemini model commonly returns a short-lived 503. Retry the
+  // configured model once, then use a stable fallback instead of immediately
+  // marking the article's grammar check as failed.
+  const models = [GEMINI_MODEL, GEMINI_MODEL];
+  if (GEMINI_FALLBACK_MODEL !== GEMINI_MODEL) models.push(GEMINI_FALLBACK_MODEL);
 
-    const wait = Math.min(error.retryDelayMs ?? RATE_LIMIT_RETRY_CAP_MS, RATE_LIMIT_RETRY_CAP_MS);
-    console.warn(`Gemini rate-limited, retrying once after ${wait}ms`);
-    await new Promise((resolve) => setTimeout(resolve, wait));
-    return callGeminiOnce(content);
+  let lastError;
+  for (let attempt = 0; attempt < models.length; attempt += 1) {
+    const model = models[attempt];
+    try {
+      return await callGeminiOnce(content, model);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryable(error) || attempt === models.length - 1) throw error;
+
+      const defaultWait = TRANSIENT_RETRY_DELAYS_MS[Math.min(attempt, TRANSIENT_RETRY_DELAYS_MS.length - 1)];
+      const wait =
+        error.status === 429
+          ? Math.min(error.retryDelayMs ?? RATE_LIMIT_RETRY_CAP_MS, RATE_LIMIT_RETRY_CAP_MS)
+          : defaultWait;
+      const nextModel = models[attempt + 1];
+      console.warn(
+        `Gemini ${model} temporarily unavailable (${error.status || error.name}); retrying with ${nextModel} after ${wait}ms`
+      );
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
   }
+
+  throw lastError;
 }
 
 async function reviewArticleWithAI({ content }) {

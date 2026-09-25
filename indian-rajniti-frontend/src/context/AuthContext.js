@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { authApi } from "@/lib/api";
+import { AUTH_SESSION_EXPIRED_EVENT, authApi } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
@@ -25,6 +25,15 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshUser();
   }, [refreshUser]);
+
+  useEffect(() => {
+    const clearExpiredSession = () => {
+      setUser(null);
+      setLoading(false);
+    };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, clearExpiredSession);
+    return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, clearExpiredSession);
+  }, []);
 
   const logout = useCallback(async () => {
     try {

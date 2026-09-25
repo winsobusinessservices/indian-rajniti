@@ -120,7 +120,7 @@ export function DashboardPageSkeleton() {
 // separately for the same reason as ArticleBodySkeleton above.
 export function FormBodySkeleton() {
   return (
-    <div className="max-w-5xl mx-auto px-4 md:px-16 py-10" aria-hidden="true">
+    <div className="max-w-full mx-auto px-4 md:px-16 py-10" aria-hidden="true">
       <SkeletonText className="w-48 h-9 mb-8" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <SkeletonBlock className="lg:col-span-2 h-96" />

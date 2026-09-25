@@ -1,31 +1,9 @@
 import Link from "next/link";
 import { slugify } from "@/lib/slugify";
 import { getParties, getChiefMinisters, getKeyFigures, getFormerPMs } from "@/features/politicians/politician.api";
-import { getFollowUs, getPopularTags } from "@/features/news/news.api";
-
-const SECTIONS = [
-  {
-    title: "SECTIONS",
-    links: ["Lok Sabha", "Rajya Sabha", "Legislative Assembly", "Policy Analysis"],
-  },
-  {
-    title: "ABOUT",
-    links: ["Our History", "Editorial Team", "Ethics Code", "Careers"],
-  },
-  {
-    title: "LEGAL",
-    links: ["Terms of Service", "Privacy Policy", "Ad Choices", "Cookie Policy"],
-  },
-];
-
-const COVERAGE_LINKS = [
-  { label: "Lok Sabha", href: "/loksabha" },
-  { label: "Rajya Sabha", href: "/rajyasabha" },
-  { label: "Elections", href: "/elections" },
-  { label: "Speeches", href: "/speeches" },
-  { label: "Rallies", href: "/rallies" },
-  { label: "Political Calendar", href: "/political-calendar" },
-];
+import { getFollowUs, getManagedPages, getPopularTags, getSectionVisibility, getSiteFooter } from "@/features/news/news.api";
+import { getCurrentSite } from "@/lib/currentSite";
+import AdSlot from "@/components/common/AdSlot";
 
 function KeywordColumn({ title, viewAllHref, items }) {
   return (
@@ -51,15 +29,24 @@ function KeywordColumn({ title, viewAllHref, items }) {
   );
 }
 
-export default async function Footer() {
-  const [parties, chiefMinisters, keyFigures, formerPMs, popularTags, followUs] = await Promise.all([
+export default async function Footer({ hideContactCta = false }) {
+  const [parties, chiefMinisters, keyFigures, formerPMs, popularTags, followUs, site, visibility, managedPages, footerConfig] = await Promise.all([
     getParties(),
     getChiefMinisters(),
     getKeyFigures(),
     getFormerPMs(),
     getPopularTags(),
     getFollowUs(),
+    getCurrentSite().catch(() => ({ name: "Indian Rajneeti", description: "Authoritative political analysis and policy discourse from the heart of the world&apos;s largest democracy." })),
+    getSectionVisibility(),
+    getManagedPages(),
+    getSiteFooter(),
   ]);
+
+  const visibleSections = (footerConfig.sections || []).map((section) => ({
+    ...section,
+    links: (section.links || []).filter((link) => (!link.feature || visibility[link.feature] !== false) && (!link.pageKey || managedPages[link.pageKey]?.enabled !== false)),
+  }));
 
   // Capped to keep the columns roughly even — each group's "View All" link
   // (or the dedicated page it mirrors) covers whatever isn't shown here.
@@ -83,14 +70,28 @@ export default async function Footer() {
     href: `/category/${slugify(tag)}`,
   }));
 
-  return (
+  return <>
+    <section className="empty:hidden mx-auto flex w-full justify-center border-t border-outline-variant/20 bg-surface px-4 py-8 md:px-16">
+      <AdSlot placement="sitewide_footer_leaderboard" width="728px" height="90px" label="Sitewide Footer Leaderboard Ad" orientation="horizontal" />
+    </section>
+    {!hideContactCta && managedPages.contact?.enabled !== false && <section className="border-t border-outline-variant/30 bg-primary px-4 py-8 text-on-primary md:px-16 md:py-10" aria-labelledby="contact-cta-title">
+      <div className="mx-auto flex max-w-[1280px] flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 id="contact-cta-title" className="font-display-lg text-2xl text-white md:text-3xl">Have a question or enquiry?</h2>
+          <p className="mt-1 max-w-2xl font-body-md text-sm leading-6 text-white/75">Our team is here to help with general questions, partnerships, corrections and feedback.</p>
+        </div>
+        <Link href="/contact" className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-white px-5 py-3 font-label-md text-sm font-semibold text-primary transition-colors hover:bg-white/90">
+          Contact us <i className="fa-solid fa-arrow-right text-xs" aria-hidden="true" />
+        </Link>
+      </div>
+    </section>}
     <footer className="bg-surface-container-highest border-t border-outline-variant/50 pt-10 pb-6">
       <div className="max-w-[1280px] mx-auto px-4 md:px-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           <div>
-            <h2 className="font-headline-md text-primary mb-3 text-base">INDIAN RAJNEETI</h2>
+            <h2 className="font-headline-md text-primary mb-3 text-base">{site.name.toUpperCase()}</h2>
             <p className="font-body-md text-on-surface-variant mb-4 text-xs">
-              Authoritative political analysis and policy discourse from the heart of the world&apos;s largest democracy.
+              {site.description || site.subtitle || "Political news, election coverage, and analysis."}
             </p>
             {Array.isArray(followUs) && followUs.length > 0 && (
               <div>
@@ -114,59 +115,11 @@ export default async function Footer() {
             )}
           </div>
 
-          {SECTIONS.map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.title}>
               <h3 className="font-label-md text-primary mb-2 text-xs">{section.title}</h3>
               <ul className="space-y-1 font-body-md text-on-surface-variant text-xs">
-                {section.links.map((link) =>
-                  link === "Our History" ? (
-                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
-                      <Link href="/about" className="inline-block">
-                        {link}
-                      </Link>
-                    </li>
-                  ) : link === "Careers" ? (
-                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
-                      <Link href="/careers" className="inline-block">
-                        {link}
-                      </Link>
-                    </li>
-                  ) :
-                  link ==="Lok Sabha"?(
-                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
-                      <Link href="/loksabha" className="inline-block">
-                        {link}
-                      </Link>
-                    </li>
-                  ):
-                                    link ==="Rajya Sabha"?(
-                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
-                      <Link href="/rajyasabha" className="inline-block">
-                        {link}
-                      </Link>
-                    </li>
-                  ):
-                                    link ==="Legislative Assembly"?(
-                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
-                      <Link href="/category/assembly-election" className="inline-block">
-                        {link}
-                      </Link>
-                    </li>
-                  ):
-                                    link ==="Policy Analysis"?(
-                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all">
-                      <Link href="/policies" className="inline-block">
-                        {link}
-                      </Link>
-                    </li>
-                  ):(
-                    <li key={link} className="hover:text-primary hover:translate-x-1 transition-all cursor-pointer">
-                      <Link href={`/${slugify(link)}`} className="inline-block">
-                        {link}
-                      </Link>
-                    </li>
-                  )
-                )}
+                {section.links.map((link) => <li key={`${link.label}-${link.href}`} className="cursor-pointer transition-all hover:translate-x-1 hover:text-primary"><Link href={link.href} className="inline-block">{link.label}</Link></li>)}
               </ul>
             </div>
           ))}
@@ -180,20 +133,20 @@ export default async function Footer() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <i className="fa-solid fa-hashtag text-secondary text-sm" />
-            <h2 className="font-headline-md text-primary text-sm uppercase tracking-widest">Explore by Keyword</h2>
+            <h2 className="font-headline-md text-primary text-sm uppercase tracking-widest">{footerConfig.directoryTitle}</h2>
             <div className="h-px flex-grow bg-outline-variant/30" />
           </div>
           <div className="bg-surface rounded-lg border border-outline-variant/20 p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-6">
-            <KeywordColumn title="Coverage" items={COVERAGE_LINKS} />
-            <KeywordColumn title="Political Parties" viewAllHref="/parties" items={partyLinks} />
-            <KeywordColumn title="Political Leaders" viewAllHref="/key-political-figures" items={leaderLinks} />
-            <KeywordColumn title="States" viewAllHref="/state" items={stateLinks} />
+            <KeywordColumn title={footerConfig.coverageTitle} items={footerConfig.coverageLinks || []} />
+            {visibility.feature_parties !== false && <KeywordColumn title="Political Parties" viewAllHref="/parties" items={partyLinks} />}
+            {visibility.feature_leaders !== false && <KeywordColumn title="Political Leaders" viewAllHref="/key-political-figures" items={leaderLinks} />}
+            {visibility.feature_states !== false && <KeywordColumn title="States" viewAllHref="/state" items={stateLinks} />}
             <KeywordColumn title="Popular Keywords" items={tagLinks} />
           </div>
         </div>
 
         <div className="border-t border-outline-variant/30 pt-4 flex flex-col md:flex-row justify-between items-center gap-4 text-on-surface-variant font-label-sm text-[10px]">
-          <p>&copy; 2026 Indian Rajneeti Publications. All rights reserved.</p>
+          <p>&copy; 2026 {site.name}. All rights reserved.</p>
           <p>Designed and Developed By Winso Business Services Private Limited .</p>
 
           <p className="flex flex-wrap justify-center gap-4">
@@ -204,5 +157,5 @@ export default async function Footer() {
         </div>
       </div>
     </footer>
-  );
+  </>;
 }

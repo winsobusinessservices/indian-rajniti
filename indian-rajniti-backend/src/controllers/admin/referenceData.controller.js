@@ -4,9 +4,19 @@ const State = require("../../models/state.model");
 const HomeWidget = require("../../models/homeWidget.model");
 const UiSection = require("../../models/uiSection.model");
 const DeletionAudit = require("../../models/deletionAudit.model");
+const { fileUrl } = require("../../middleware/upload.middleware");
 
 const POLITICIAN_CATEGORIES = ["KEY_FIGURE", "FORMER_PM", "CHIEF_MINISTER", "PARTY_LEADER"];
 const STATE_KINDS = ["STATE", "UNION_TERRITORY"];
+
+function managedSiteId(req) {
+  return Number(
+    (req.user?.role === "ADMIN" && (req.get("x-management-site-id") || req.query?.siteId || req.body?.siteId))
+    || req.user?.siteId
+    || req.site?.id
+    || 1
+  );
+}
 
 function slugify(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -122,8 +132,8 @@ function stateInput(body, existing) {
 
 async function listReferenceData(req, res) {
   const [politicians, parties, states, widgets] = await Promise.all([
-    Politician.findAll(), Party.findAll(), State.findAll(),
-    HomeWidget.getAll(),
+    Politician.findAll({ siteId: managedSiteId(req) }), Party.findAll({ siteId: managedSiteId(req) }), State.findAll({ siteId: managedSiteId(req) }),
+    HomeWidget.getAll(managedSiteId(req)),
   ]);
   const parliament = widgets.parliament_data || null;
   const pageProfiles = widgets.page_profiles || null;
@@ -148,9 +158,10 @@ function crudHandlers(model, input, label, entityType) {
   return {
     create: async (req, res) => {
       try {
-        const data = input(req.body);
+        const siteId = managedSiteId(req);
+        const data = { ...input(req.body), siteId };
         await model.upsert(data);
-        return res.status(201).json({ success: true, message: `${label} created`, item: await model.findBySlug(data.slug) });
+        return res.status(201).json({ success: true, message: `${label} created`, item: await model.findBySlug(data.slug, siteId) });
       } catch (error) {
         const duplicate = error.code === "ER_DUP_ENTRY";
         return res.status(duplicate ? 409 : 400).json({ success: false, message: duplicate ? `${label} already exists` : error.message });
@@ -158,16 +169,18 @@ function crudHandlers(model, input, label, entityType) {
     },
     update: async (req, res) => {
       try {
-        const existing = await model.findById(req.params.id);
+        const siteId = managedSiteId(req);
+        const existing = await model.findById(req.params.id, siteId);
         if (!existing) return res.status(404).json({ success: false, message: `${label} not found` });
-        const data = input(req.body, existing);
+        const data = { ...input(req.body, existing), siteId };
         await model.upsert(data);
-        return res.json({ success: true, message: `${label} updated`, item: await model.findBySlug(data.slug) });
+        return res.json({ success: true, message: `${label} updated`, item: await model.findBySlug(data.slug, siteId) });
       } catch (error) {
         return res.status(400).json({ success: false, message: error.message });
       }
     },
     remove: async (req, res) => {
+      if (!(await model.findById(req.params.id, managedSiteId(req)))) return res.status(404).json({ success: false, message: `${label} not found for this website` });
       const deleted = await DeletionAudit.softDelete({ entityType, entityId: req.params.id, deletedBy: req.user.userId, reason: req.body?.reason });
       if (!deleted) return res.status(404).json({ success: false, message: `${label} not found` });
       return res.json({ success: true, message: `${label} moved to deleted items` });
@@ -184,7 +197,7 @@ async function updateParliament(req, res) {
   if (!parliament || typeof parliament !== "object" || Array.isArray(parliament)) {
     return res.status(400).json({ success: false, message: "Parliament details are required" });
   }
-  await HomeWidget.upsert("parliament_data", parliament);
+  await HomeWidget.upsert("parliament_data", parliament, managedSiteId(req));
   return res.json({ success: true, message: "Parliament data updated", parliament });
 }
 
@@ -204,7 +217,7 @@ async function updateSchedule(req, res) {
   if (items.some((item) => !item.date || !item.title)) {
     return res.status(400).json({ success: false, message: "Date and title are required for every item" });
   }
-  await HomeWidget.upsert(widgetKey, items);
+  await HomeWidget.upsert(widgetKey, items, managedSiteId(req));
   return res.json({ success: true, message: `${req.params.type === "events" ? "Events" : "Rallies"} updated`, items });
 }
 
@@ -228,18 +241,19 @@ async function updateVidhanSabhas(req, res) {
   if (items.some((item) => !item.state || !item.name || item.totalSeats < 1)) {
     return res.status(400).json({ success: false, message: "State, assembly name and total seats are required" });
   }
-  await HomeWidget.upsert("vidhan_sabhas", items);
+  await HomeWidget.upsert("vidhan_sabhas", items, managedSiteId(req));
   return res.json({ success: true, message: "Vidhan Sabha data updated", items });
 }
 
 async function getVidhanSabhas(req, res) {
-  const widgets = await HomeWidget.getAll();
+  const widgets = await HomeWidget.getAll(managedSiteId(req));
   return res.json({ success: true, vidhanSabhas: widgets.vidhan_sabhas || [] });
 }
 
 async function updateHomeWidget(req, res) {
   const widgetKey = String(req.params.key || "").trim();
-  const widgets = await HomeWidget.getAll();
+  const siteId = req.user.role === "ADMIN" ? Number(req.body.siteId || req.get("x-management-site-id") || req.user.siteId) : req.user.siteId;
+  const widgets = await HomeWidget.getAll(siteId);
   if (!Object.prototype.hasOwnProperty.call(widgets, widgetKey)) {
     return res.status(404).json({ success: false, message: "Home widget not found" });
   }
@@ -255,12 +269,99 @@ async function updateHomeWidget(req, res) {
     }
     data = { question, options, totalVotes: 0 };
   }
-  await HomeWidget.upsert(widgetKey, data);
+  if (widgetKey === "homepage_sections") {
+    const allowedTypes = new Set(["builtin", "top_news", "latest_news", "leaders", "services", "blogs", "videos", "parties"]);
+    const allowedBuiltinSections = new Set(["top_stories", "editorial_opinion", "latest_blogs", "regional_focus", "in_depth_analysis", "multimedia_hub", "main_ad", "key_figures", "former_prime_ministers", "voices_of_nation", "state_leadership", "political_parties", "parliament", "digital_dispatches", "pm_corner", "press_conferences"]);
+    if (!Array.isArray(data)) return res.status(400).json({ success: false, message: "Homepage sections must be a list" });
+    data = data.slice(0, 30).map((section, index) => ({
+      id: text(section?.id, 100) || `section-${index + 1}`,
+      type: text(section?.type, 50),
+      title: text(section?.title, 150),
+      enabled: section?.enabled !== false,
+      limit: Math.min(12, Math.max(1, integer(section?.limit, 3))),
+      viewAllHref: text(section?.viewAllHref, 500),
+      placement: section?.placement === "after_hero" ? "after_hero" : "main_content",
+      sectionKey: text(section?.sectionKey, 100),
+    }));
+    if (data.some((section) => !allowedTypes.has(section.type) || !section.title)) {
+      return res.status(400).json({ success: false, message: "Every homepage section needs a valid type and title" });
+    }
+    if (data.some((section) => section.type === "builtin" && !allowedBuiltinSections.has(section.sectionKey))) {
+      return res.status(400).json({ success: false, message: "Homepage layout contains an unknown existing section" });
+    }
+    if (data.some((section) => section.viewAllHref && !section.viewAllHref.startsWith("/") && !/^https?:\/\//i.test(section.viewAllHref))) {
+      return res.status(400).json({ success: false, message: "Section links must begin with / or http" });
+    }
+  }
+  if (widgetKey === "advertisements") {
+    const allowedPlacements = new Set([
+      "home_leaderboard_mobile",
+      "home_leaderboard_desktop",
+      "home_sidebar_rectangle",
+      "article_left_rectangle",
+      "article_right_skyscraper",
+      "category_left_rectangle",
+      "category_right_skyscraper",
+      "listing_sidebar_rectangle",
+      "sitewide_footer_leaderboard",
+    ]);
+    if (!Array.isArray(data)) return res.status(400).json({ success: false, message: "Advertisements must be a list" });
+    data = data.slice(0, 100).map((advertisement, index) => ({
+        id: text(advertisement?.id, 100) || `advertisement-${Date.now()}-${index + 1}`,
+        name: text(advertisement?.name, 150),
+        advertiser: text(advertisement?.advertiser, 150),
+        title: text(advertisement?.title, 180),
+        description: text(advertisement?.description, 500),
+        ctaLabel: text(advertisement?.ctaLabel, 60),
+        backgroundColor: /^#[0-9a-f]{6}$/i.test(String(advertisement?.backgroundColor || "")) ? advertisement.backgroundColor : "#f4f4f4",
+        posterFit: advertisement?.posterFit === "cover" ? "cover" : "contain",
+        placement: text(advertisement?.placement || advertisement?.placements?.[0], 100),
+        posterUrl: text(advertisement?.posterUrl, 2000),
+        destinationUrl: text(advertisement?.destinationUrl, 2000),
+        altText: text(advertisement?.altText, 250),
+        startAt: text(advertisement?.startAt, 50),
+        endAt: text(advertisement?.endAt, 50),
+        enabled: advertisement?.enabled !== false,
+      }));
+    if (data.some((advertisement) => !advertisement.name || !allowedPlacements.has(advertisement.placement) || !advertisement.posterUrl)) {
+      return res.status(400).json({ success: false, message: "Every advertisement needs a name, a valid placement, and a poster" });
+    }
+    if (data.some((advertisement) => advertisement.destinationUrl && !/^https?:\/\//i.test(advertisement.destinationUrl))) {
+      return res.status(400).json({ success: false, message: "Advertisement links must begin with http:// or https://" });
+    }
+    if (data.some((advertisement) => advertisement.startAt && advertisement.endAt && new Date(advertisement.startAt) >= new Date(advertisement.endAt))) {
+      return res.status(400).json({ success: false, message: "An advertisement end time must be after its start time" });
+    }
+    const occupiedPlacements = new Map();
+    for (const advertisement of data) {
+      if (!advertisement.enabled) continue;
+      const existing = occupiedPlacements.get(advertisement.placement);
+      if (existing) {
+        return res.status(409).json({
+          success: false,
+          message: `The display location "${advertisement.placement}" is already used by "${existing.title || existing.name}". Pause, remove, or move that advertisement before activating another one there.`,
+        });
+      }
+      occupiedPlacements.set(advertisement.placement, advertisement);
+    }
+  }
+  await HomeWidget.upsert(widgetKey, data, siteId);
   return res.json({ success: true, message: "Home widget updated", key: widgetKey, data });
 }
 
+async function uploadAdvertisementPoster(req, res) {
+  const poster = req.files?.poster?.[0];
+  if (!poster) return res.status(400).json({ success: false, message: "Select a poster image to upload" });
+  return res.status(201).json({
+    success: true,
+    message: "Advertisement poster uploaded",
+    posterUrl: fileUrl("advertisements", poster),
+  });
+}
+
 async function getSiteManagement(req, res) {
-  const [widgets, sections] = await Promise.all([HomeWidget.getAll(), UiSection.findAll()]);
+  const siteId = req.user.role === "ADMIN" ? Number(req.query.siteId || req.get("x-management-site-id") || req.user.siteId) : req.user.siteId;
+  const [widgets, sections] = await Promise.all([HomeWidget.getAll(siteId), UiSection.findAll(siteId)]);
   return res.json({ success: true, widgets, sections });
 }
 
@@ -273,14 +374,24 @@ async function updateSiteHeader(req, res) {
   if (input.countdown?.enabled && (!targetAt || Number.isNaN(new Date(targetAt).getTime()))) {
     return res.status(400).json({ success: false, message: "Choose a valid countdown date and time" });
   }
-  const navItems = input.navItems && typeof input.navItems === "object" && !Array.isArray(input.navItems)
-    ? Object.fromEntries(Object.entries(input.navItems).map(([key, value]) => [String(key).slice(0, 200), Boolean(value)]))
-    : {};
+  const menuItems = Array.isArray(input.menuItems) ? input.menuItems.slice(0, 50).map((item) => ({
+    label: text(item?.label, 80),
+    href: text(item?.href, 500),
+    enabled: item?.enabled !== false,
+    ...(text(item?.feature, 100) ? { feature: text(item.feature, 100) } : {}),
+    ...(item?.requiresServices ? { requiresServices: true } : {}),
+  })) : [];
+  if (menuItems.some((item) => !item.label || !item.href || (!item.href.startsWith("/") && !/^https?:\/\//i.test(item.href)))) {
+    return res.status(400).json({ success: false, message: "Every menu item needs a label and a destination beginning with / or http." });
+  }
+  if (new Set(menuItems.map((item) => item.href)).size !== menuItems.length) {
+    return res.status(400).json({ success: false, message: "Header menu destinations must be unique." });
+  }
   const header = {
     showUpcomingRallies: input.showUpcomingRallies !== false,
     showWeather: input.showWeather !== false,
     showUpcomingEvents: input.showUpcomingEvents !== false,
-    navItems,
+    menuItems,
     countdown: {
       enabled: Boolean(input.countdown?.enabled),
       title: text(input.countdown?.title, 150) || "Election Results",
@@ -289,7 +400,8 @@ async function updateSiteHeader(req, res) {
       buttonLabel: text(input.countdown?.buttonLabel, 100) || "View results",
     },
   };
-  await HomeWidget.upsert("site_header", header);
+  const siteId = req.user.role === "ADMIN" ? Number(req.body.siteId || req.get("x-management-site-id") || req.user.siteId) : req.user.siteId;
+  await HomeWidget.upsert("site_header", header, siteId);
   return res.json({ success: true, message: "Header settings updated", header });
 }
 
@@ -321,19 +433,19 @@ async function updatePageProfiles(req, res) {
     };
     if (!normalized[key].description) return res.status(400).json({ success: false, message: `${key} description is required` });
   }
-  await HomeWidget.upsert("page_profiles", normalized);
+  await HomeWidget.upsert("page_profiles", normalized, managedSiteId(req));
   return res.json({ success: true, message: "Page information updated", profiles: normalized });
 }
 
 async function getPageProfiles(req, res) {
-  const widgets = await HomeWidget.getAll();
+  const widgets = await HomeWidget.getAll(managedSiteId(req));
   return res.json({ success: true, profiles: widgets.page_profiles || null });
 }
 
 async function votePoll(req, res) {
   try {
     const optionIndex = integer(req.body.optionIndex, -1);
-    const poll = await HomeWidget.votePoll(optionIndex);
+    const poll = await HomeWidget.votePoll(optionIndex, req.site.id);
     return res.json({ success: true, message: "Vote recorded", poll });
   } catch (error) {
     return res.status(400).json({ success: false, message: error.message });
@@ -341,8 +453,8 @@ async function votePoll(req, res) {
 }
 
 async function getParliament(req, res) {
-  const widgets = await HomeWidget.getAll();
+  const widgets = await HomeWidget.getAll(req.site?.id || 1);
   return res.json({ success: true, parliament: widgets.parliament_data || null });
 }
 
-module.exports = { listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, getSiteManagement, updateSiteHeader, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles };
+module.exports = { listReferenceData, politicianCrud, partyCrud, stateCrud, updateParliament, updateSchedule, updateVidhanSabhas, updateHomeWidget, uploadAdvertisementPoster, getSiteManagement, updateSiteHeader, updatePageProfiles, votePoll, getParliament, getVidhanSabhas, getPageProfiles };

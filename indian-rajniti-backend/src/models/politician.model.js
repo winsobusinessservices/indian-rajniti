@@ -7,12 +7,12 @@ const pool = require("../config/db");
 
 const TABLE = "politicians";
 const COLUMNS =
-  "id, slug, name, photo_url, born_year, died_year, birth_place, party, state, category, current_position, still_in_office, opposition_party, since_year, education, career_timeline, summary, bio, sort_order";
+  "id, site_id, slug, name, photo_url, born_year, died_year, birth_place, party, state, category, current_position, still_in_office, opposition_party, since_year, education, career_timeline, summary, bio, sort_order";
 
 const Politician = {
-  async findAll({ category } = {}) {
-    const conditions = ["deleted_at IS NULL"];
-    const params = [];
+  async findAll({ category, siteId = 1 } = {}) {
+    const conditions = ["deleted_at IS NULL", "site_id = ?"];
+    const params = [siteId];
     if (category) {
       conditions.push("category = ?");
       params.push(category);
@@ -25,13 +25,13 @@ const Politician = {
     return rows;
   },
 
-  async findBySlug(slug) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ? AND deleted_at IS NULL`, [slug]);
+  async findBySlug(slug, siteId = 1) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE slug = ? AND site_id = ? AND deleted_at IS NULL`, [slug, siteId]);
     return rows[0];
   },
 
-  async findById(id) {
-    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ? AND deleted_at IS NULL`, [id]);
+  async findById(id, siteId = 1) {
+    const [rows] = await pool.query(`SELECT ${COLUMNS} FROM ${TABLE} WHERE id = ? AND site_id = ? AND deleted_at IS NULL`, [id, siteId]);
     return rows[0];
   },
 
@@ -41,6 +41,7 @@ const Politician = {
   },
 
   async upsert({
+    siteId = 1,
     slug,
     name,
     photoUrl,
@@ -63,8 +64,8 @@ const Politician = {
   }) {
     await pool.query(
       `INSERT INTO ${TABLE}
-        (slug, name, photo_url, born_year, died_year, birth_place, party, state, category, current_position, still_in_office, opposition_party, since_year, education, career_timeline, summary, bio, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (site_id, slug, name, photo_url, born_year, died_year, birth_place, party, state, category, current_position, still_in_office, opposition_party, since_year, education, career_timeline, summary, bio, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          photo_url = ${replacePhoto ? "VALUES(photo_url)" : "COALESCE(photo_url, VALUES(photo_url))"},
@@ -84,6 +85,7 @@ const Politician = {
          bio = VALUES(bio),
          sort_order = VALUES(sort_order)`,
       [
+        siteId,
         slug,
         name,
         photoUrl ?? null,

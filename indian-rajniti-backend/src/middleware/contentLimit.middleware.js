@@ -14,8 +14,9 @@ async function enforceDailyContentLimit(req, res, next) {
   if (!['AUTHOR', 'EDITOR'].includes(req.user.role)) return next();
 
   try {
-    const limit = await ContentLimit.get(req.user.role, type);
-    const used = await ContentLimit.getUsage(req.user.userId, type);
+    const siteId = Number(req.user.siteId || req.site?.id || 1);
+    const limit = await ContentLimit.get(req.user.role, type, siteId);
+    const used = await ContentLimit.getUsage(req.user.userId, type, siteId);
     if (used >= limit) {
       return res.status(429).json({
         success: false,

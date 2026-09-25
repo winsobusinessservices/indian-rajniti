@@ -1,5 +1,6 @@
 const express = require("express");
 const { submitContact } = require("../controllers/contact/contact.controller");
+const { optionalAuthenticate } = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
@@ -65,6 +66,6 @@ const router = express.Router();
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post("/contact", submitContact);
+router.post("/contact", optionalAuthenticate, submitContact);
 
 module.exports = router;

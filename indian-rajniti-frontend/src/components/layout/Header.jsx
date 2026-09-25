@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { NAV_LINKS } from "@/lib/constants";
 import { useAuth } from "@/context/AuthContext";
 import { useIsClient } from "@/hooks/useIsClient";
-import { getPoliticalCalendar, getPoliticalRallys, getSiteHeaderSettings } from "@/features/news/news.api";
+import { getManagedPages, getPoliticalCalendar, getPoliticalRallys, getSiteHeaderSettings, getSectionVisibility, getSiteNavigation } from "@/features/news/news.api";
 import SearchBox from "@/components/search/SearchBox";
 import MobileMenu from "./MobileMenu";
 import ProfileMenu from "./ProfileMenu";
 import ChangePasswordModal from "@/components/auth/ChangePasswordModal";
 import HeaderWeather from "@/components/layout/HeaderWeather";
+import { useSite } from "@/context/SiteContext";
+import { mediaUrl } from "@/lib/api";
 
 
 // Renders only after mount so the server-rendered markup (which has no
@@ -118,6 +119,7 @@ function HeaderCountdown({ countdown, showRalliesFallback, mobile = false }) {
 
 
 export default function Header() {
+  const site = useSite();
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
@@ -126,14 +128,20 @@ export default function Header() {
   const [anchorRect, setAnchorRect] = useState(null);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [headerSettings, setHeaderSettings] = useState({ showUpcomingRallies: true, showWeather: true, showUpcomingEvents: true, navItems: {}, countdown: { enabled: false } });
+  const [headerSettings, setHeaderSettings] = useState({ showUpcomingRallies: true, showWeather: true, showUpcomingEvents: true, menuItems: [], countdown: { enabled: false } });
+  const [featureVisibility, setFeatureVisibility] = useState({});
+  const [managedPages, setManagedPages] = useState({});
+  const [siteNavigation, setSiteNavigation] = useState({ more: [], legal: [] });
   const profileButtonRef = useRef(null);
 
   useEffect(() => {
-    getSiteHeaderSettings().then((settings) => setHeaderSettings((current) => ({ ...current, ...settings, navItems: settings.navItems || {}, countdown: { ...current.countdown, ...(settings.countdown || {}) } }))).catch(() => {});
+    getSiteHeaderSettings().then((settings) => setHeaderSettings((current) => ({ ...current, ...settings, menuItems: Array.isArray(settings.menuItems) ? settings.menuItems : [], countdown: { ...current.countdown, ...(settings.countdown || {}) } }))).catch(() => {});
+    getSectionVisibility().then(setFeatureVisibility).catch(() => {});
+    getManagedPages().then(setManagedPages).catch(() => {});
+    getSiteNavigation().then(setSiteNavigation).catch(() => {});
   }, []);
 
-  const visibleNavLinks = NAV_LINKS.filter((link) => headerSettings.navItems?.[link.href] !== false);
+  const visibleNavLinks = (headerSettings.menuItems || []).filter((link) => link.enabled !== false && link.label && link.href && (!link.feature || featureVisibility[link.feature] !== false) && (!link.requiresServices || site.services_enabled));
 
   const openProfileMenu = () => {
     setAnchorRect(profileButtonRef.current.getBoundingClientRect());
@@ -161,7 +169,7 @@ export default function Header() {
 
           <Link href="/" className="block justify-self-center flex flex-col items-center gap-1 md:gap-2">
           
-            <Image src="/images/logo.png" alt="Indian Rajneeti" width={160} height={64} className="h-20 md:h-30 w-auto object-contain" priority />
+            <Image src={site.logo_url ? mediaUrl(site.logo_url) : "/images/logo.png"} alt={site.name} width={160} height={64} className="h-20 md:h-30 w-auto object-contain" priority unoptimized={Boolean(site.logo_url)} />
           </Link>
           <div className="justify-self-end">
             {headerSettings.showUpcomingEvents && <UpcomingEvents />}
@@ -257,7 +265,7 @@ export default function Header() {
         </div>
       </nav>
 
-      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} navLinks={visibleNavLinks} />
+      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} navLinks={visibleNavLinks} featureVisibility={featureVisibility} managedPages={managedPages} siteNavigation={siteNavigation} />
 
       {user && (
         <>

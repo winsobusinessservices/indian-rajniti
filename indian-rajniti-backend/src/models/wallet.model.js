@@ -644,7 +644,7 @@ const Wallet = {
     return this.getEditorReviewRewardPoints();
   },
 
-  async listForAdmin() {
+  async listForAdmin(siteId = 1) {
     const [rows] = await pool.query(
       `SELECT u.id, u.name, u.email, u.role,
               COALESCE(w.available_points, 0) AS available_points,
@@ -657,8 +657,9 @@ const Wallet = {
        LEFT JOIN wallets w ON w.user_id = u.id
        LEFT JOIN wallet_point_rates r ON r.role = u.role
        LEFT JOIN wallet_withdrawal_access a ON a.user_id = u.id
-       WHERE u.deleted_at IS NULL AND u.role IN ('AUTHOR', 'EDITOR')
+       WHERE u.deleted_at IS NULL AND u.site_id = ? AND u.role IN ('AUTHOR', 'EDITOR')
        ORDER BY u.name, u.id`
+      , [siteId]
     );
     return rows.map((row) => ({
       id: Number(row.id),

@@ -7,6 +7,8 @@ import { getBreakingNews } from "@/features/news/news.api";
 import { policiesApi } from "@/lib/api";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { absoluteUrl, buildPageMetadata, serializeJsonLd } from "@/lib/seo";
+import { isSiteFeatureEnabled } from "@/lib/siteFeatures";
+import PostBody from "@/components/common/PostBody";
 
 async function getPolicy(slug) {
   try {
@@ -24,6 +26,7 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function PolicyDetailPage({ params }) {
+  if (!(await isSiteFeatureEnabled("feature_policies"))) notFound();
   const { slug } = await params;
   const policy = await getPolicy(slug);
   if (!policy) notFound();
@@ -52,8 +55,6 @@ export default async function PolicyDetailPage({ params }) {
       { "@type": "ListItem", position: 3, name: policy.title, item: absoluteUrl(`/policies/${slug}`) },
     ],
   };
-  const paragraphs = policy.content.split(/\n\s*\n/).filter(Boolean);
-
   return (
     <>
       <BreakingNews text={breakingNews} />
@@ -75,9 +76,7 @@ export default async function PolicyDetailPage({ params }) {
             <time dateTime={policy.published_at}><i className="fa-regular fa-calendar mr-2 text-primary" />{new Date(policy.published_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</time>
           </div>
 
-          <div className="mt-9 space-y-6">
-            {paragraphs.map((paragraph, index) => <p key={index} className="whitespace-pre-line font-body-md text-base leading-8 text-on-surface-variant">{paragraph}</p>)}
-          </div>
+          <PostBody content={policy.content} className="mt-9 space-y-6 text-base leading-8 text-on-surface-variant" />
 
           <div className="mt-12 border-t border-outline-variant/30 pt-6">
             <Link href="/policies" className="inline-flex items-center gap-2 font-label-md text-sm font-semibold text-primary hover:underline"><i className="fa-solid fa-arrow-left text-xs" /> Back to all policies</Link>

@@ -7,6 +7,12 @@ const { syncApprovedContentRewards, syncEditorReviewRewards } = require("../../s
 const RazorpayPayout = require("../../services/razorpayPayout.service");
 const { getWithdrawalWindow } = require("../../utils/withdrawalWindow");
 
+const managedSiteId = (req) => Number(
+  (req.user?.role === "ADMIN" && (req.get("x-management-site-id") || req.query?.siteId || req.body?.siteId))
+  || req.user?.siteId
+  || 1
+);
+
 function dateOnly(value) {
   if (!value) return null;
   if (value instanceof Date) return value.toISOString().slice(0, 10);
@@ -272,7 +278,7 @@ const razorpayWebhook = async (req, res) => {
 
 const listWalletsForAdmin = async (req, res) => {
   try {
-    return res.status(200).json({ success: true, wallets: await Wallet.listForAdmin() });
+    return res.status(200).json({ success: true, wallets: await Wallet.listForAdmin(managedSiteId(req)) });
   } catch (error) {
     console.error("List wallets for admin error:", error);
     return res.status(500).json({ success: false, message: "Unable to load contributor wallets" });
@@ -284,6 +290,8 @@ const updateWithdrawalAccess = async (req, res) => {
     if (typeof req.body?.enabled !== "boolean") {
       return res.status(400).json({ success: false, message: "enabled must be true or false" });
     }
+    const target = await User.findById(req.params.userId);
+    if (!target || Number(target.site_id) !== managedSiteId(req)) return res.status(404).json({ success: false, message: "Author or editor not found for this website" });
     const access = await Wallet.setWithdrawalAccess({
       userId: req.params.userId,
       enabled: req.body.enabled,
@@ -440,11 +448,12 @@ const awardContentBonus = async (req, res) => {
       return res.status(400).json({ success: false, message: "Bonus reason must contain between 5 and 500 characters" });
     }
 
+    const siteId = managedSiteId(req);
     const [recipient, content] = await Promise.all([User.findById(userId), Model.findById(contentId)]);
-    if (!recipient || !["AUTHOR", "EDITOR"].includes(recipient.role)) {
+    if (!recipient || Number(recipient.site_id) !== siteId || !["AUTHOR", "EDITOR"].includes(recipient.role)) {
       return res.status(404).json({ success: false, message: "Author or Editor not found" });
     }
-    if (!content || content.status !== "APPROVED") {
+    if (!content || Number(content.site_id) !== siteId || content.status !== "APPROVED") {
       return res.status(404).json({ success: false, message: "Approved content not found" });
     }
 

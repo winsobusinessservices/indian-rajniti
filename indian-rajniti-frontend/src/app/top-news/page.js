@@ -2,6 +2,7 @@ import CategoryPageShell from "@/components/category/CategoryPageShell";
 import NewsCard from "@/components/news/NewsCard";
 import { getTopStories } from "@/features/news/news.api";
 import { buildPageMetadata } from "@/lib/seo";
+import EmptyState from "@/components/common/EmptyState";
 
 export const metadata = buildPageMetadata({ title: "Top Indian Political News", description: "Read today's leading Indian political news, election updates, parliamentary developments, and policy stories.", path: "/top-news" });
 
@@ -14,7 +15,7 @@ export default async function TopStoriesPage() {
       count={topStories.length}
       gridClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
     >
-      {!topStories && <p>No top stories</p>}
+      {topStories.length === 0 && <div className="md:col-span-2 lg:col-span-3"><EmptyState icon="fa-newspaper" title="No top news is available yet" description="Approved top stories for this website will appear here." /></div>}
       {topStories.map((story) => (
         <NewsCard key={story.id} variant="stacked" story={story} />
       ))}

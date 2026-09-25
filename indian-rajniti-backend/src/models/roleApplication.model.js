@@ -10,13 +10,16 @@ const pool = require("../config/db");
 
 const TABLE = "role_applications";
 const PUBLIC_COLUMNS =
-  "id, name, email, phone, role, resume, pan_document, aadhar_document, graduation_certificate, message, status, reviewed_by, review_notes, reviewed_at, created_at";
+  "id, applicant_user_id, name, email, phone, pan_number, aadhar_number, role, resume, pan_document, aadhar_document, graduation_certificate, message, status, reviewed_by, review_notes, reviewed_at, created_at";
 
 const RoleApplication = {
   async create({
+    applicantUserId,
     name,
     email,
     phone,
+    panNumber,
+    aadharNumber,
     role,
     passwordHash,
     resume,
@@ -27,12 +30,15 @@ const RoleApplication = {
   }) {
     const [result] = await pool.query(
       `INSERT INTO ${TABLE}
-        (name, email, phone, role, password_hash, resume, pan_document, aadhar_document, graduation_certificate, message)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (applicant_user_id, name, email, phone, pan_number, aadhar_number, role, password_hash, resume, pan_document, aadhar_document, graduation_certificate, message)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        applicantUserId ?? null,
         name,
         email,
         phone ?? null,
+        panNumber ?? null,
+        aadharNumber ?? null,
         role,
         passwordHash,
         resume,
@@ -62,6 +68,11 @@ const RoleApplication = {
     return rows[0] || null;
   },
 
+  async findPendingByUserId(userId) {
+    const [rows] = await pool.query(`SELECT ${PUBLIC_COLUMNS} FROM ${TABLE} WHERE applicant_user_id = ? AND status = 'PENDING' AND deleted_at IS NULL`, [userId]);
+    return rows[0] || null;
+  },
+
   async findAll({ status, role } = {}) {
     const conditions = ["a.deleted_at IS NULL"];
     const params = [];
@@ -79,9 +90,11 @@ const RoleApplication = {
     // email — qualify each column with the `a` alias here instead of reusing it.
     const qualified = PUBLIC_COLUMNS.split(", ").map((col) => `a.${col}`).join(", ");
     const [rows] = await pool.query(
-      `SELECT ${qualified}, r.name AS reviewer_name
+      `SELECT ${qualified}, r.name AS reviewer_name,
+              applicant.email AS applicant_account_email
        FROM ${TABLE} a
        LEFT JOIN users r ON r.id = a.reviewed_by
+       LEFT JOIN users applicant ON applicant.id = a.applicant_user_id
        ${where}
        ORDER BY a.created_at DESC`,
       params

@@ -1,23 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthShell from "@/components/auth/AuthShell";
 import AuthTextField from "@/components/auth/AuthTextField";
 import AuthPasswordField from "@/components/auth/AuthPasswordField";
-import GoogleAuthButton from "@/components/auth/GoogleAuthButton";
 import { authApi, policiesApi } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
 
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
 export default function RegisterForm() {
   const router = useRouter();
-  const { refreshUser } = useAuth();
   const [form, setForm] = useState({
     name: "",
     email: "",
+    phone: "",
     password: "",
     confirmPassword: "",
   });
@@ -26,8 +24,10 @@ export default function RegisterForm() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState("details");
-  const [otp, setOtp] = useState("");
+  const [emailOtp, setEmailOtp] = useState("");
+  const [mobileOtp, setMobileOtp] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
 
   const [registrationPolicies, setRegistrationPolicies] = useState([]);
 
@@ -43,6 +43,7 @@ export default function RegisterForm() {
         { id: "terms", title: "Terms of Service", href: "/policies/terms-of-service" },
         { id: "privacy", title: "Privacy Policy", href: "/policies/privacy-policy" },
       ];
+  const currentStep = step === "details" ? 1 : step === "otp" ? 2 : 3;
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -74,30 +75,42 @@ export default function RegisterForm() {
         const data = await authApi.requestRegistrationOtp({
           name: form.name.trim(),
           email: form.email.trim(),
+          phone: form.phone.trim(),
           password: form.password,
           confirmPassword: form.confirmPassword,
           agreeToTerms: agreedToTerms,
           acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
         });
         setChallengeToken(data.challengeToken);
-        setOtp("");
+        setEmailOtp("");
+        setMobileOtp("");
         setStep("otp");
-        setSuccess(`A six-digit verification code was sent to ${form.email.trim()}.`);
+        setSuccess(`Verification codes were sent for ${form.email.trim()} and ${form.phone.trim()}.`);
         return;
       }
 
-      const verified = await authApi.verifyRegistrationOtp({
-        email: form.email.trim(),
-        otp,
-        challengeToken,
-      });
+      if (step === "otp") {
+        const verified = await authApi.verifyRegistrationOtp({
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          emailOtp,
+          mobileOtp,
+          challengeToken,
+        });
+        setVerificationToken(verified.verificationToken);
+        setStep("verified");
+        setSuccess("Email and mobile number verified. You can now create your account.");
+        return;
+      }
+
       await authApi.register({
         name: form.name.trim(),
         email: form.email.trim(),
+        phone: form.phone.trim(),
         password: form.password,
         agreeToTerms: agreedToTerms,
         acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
-        verificationToken: verified.verificationToken,
+        verificationToken,
       });
       setSuccess("Account created successfully. Redirecting to sign in...");
       setTimeout(() => router.push("/login"), 1200);
@@ -116,14 +129,18 @@ export default function RegisterForm() {
       const data = await authApi.requestRegistrationOtp({
         name: form.name.trim(),
         email: form.email.trim(),
+        phone: form.phone.trim(),
         password: form.password,
         confirmPassword: form.confirmPassword,
         agreeToTerms: agreedToTerms,
         acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
       });
       setChallengeToken(data.challengeToken);
-      setOtp("");
-      setSuccess("A new verification code was sent.");
+      setEmailOtp("");
+      setMobileOtp("");
+      setVerificationToken("");
+      setStep("otp");
+      setSuccess("New email and mobile verification codes were sent.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -131,39 +148,15 @@ export default function RegisterForm() {
     }
   };
 
-  const changeEmail = () => {
+  const changeDetails = () => {
     setStep("details");
-    setForm((current) => ({ ...current, email: "" }));
-    setOtp("");
+    setEmailOtp("");
+    setMobileOtp("");
     setChallengeToken("");
+    setVerificationToken("");
     setError("");
     setSuccess("");
   };
-
-  const handleGoogleCredential = useCallback(async (credential) => {
-    setError("");
-    setSuccess("");
-    if (!agreedToTerms) {
-      setError("Please agree to the required policies.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await authApi.googleAuth({
-        credential,
-        intent: "register",
-        agreeToTerms: true,
-        acceptedPolicyIds: registrationPolicies.map((policy) => policy.id),
-      });
-      await refreshUser();
-      router.push("/");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [agreedToTerms, refreshUser, router, registrationPolicies]);
 
   return (
     <AuthShell
@@ -186,22 +179,11 @@ export default function RegisterForm() {
       }
     >
       <form onSubmit={handleSubmit} inert={loading} aria-busy={loading} className="mt-8 space-y-6">
-        {step === "details" && (
-          <>
-            <GoogleAuthButton
-              intent="register"
-              disabled={loading || !agreedToTerms}
-              onCredential={handleGoogleCredential}
-              onError={setError}
-            />
-
-            <div className="flex items-center gap-4" aria-hidden="true">
-              <span className="h-px flex-1 bg-outline-variant/30" />
-              <span className="font-label-sm text-xs uppercase tracking-widest text-on-surface-variant">or</span>
-              <span className="h-px flex-1 bg-outline-variant/30" />
-            </div>
-          </>
-        )}
+        <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-on-surface-variant" aria-label={`Registration step ${currentStep} of 3`}>
+          <span className="text-primary">Step {currentStep} of 3</span>
+          <span className="h-px flex-1 bg-outline-variant/40" />
+          <span>{step === "details" ? "Account details" : step === "otp" ? "Verify contacts" : "Finish"}</span>
+        </div>
 
         {step === "details" ? (
         <div className="space-y-5 rounded-md">
@@ -216,6 +198,17 @@ export default function RegisterForm() {
             onChange={handleChange}
           />
           <AuthTextField
+            id="mobile-number"
+            name="phone"
+            label="Mobile Number"
+            type="tel"
+            icon="fa-solid fa-mobile-screen-button"
+            autoComplete="tel"
+            required
+            value={form.phone}
+            onChange={handleChange}
+          />
+          <AuthTextField
             id="email-address"
             name="email"
             label="Email Address"
@@ -226,6 +219,7 @@ export default function RegisterForm() {
             value={form.email}
             onChange={handleChange}
           />
+          <p className="text-xs leading-5 text-on-surface-variant">We will send one verification code to your email and another to your mobile number.</p>
           <AuthPasswordField
             id="password"
             name="password"
@@ -248,42 +242,34 @@ export default function RegisterForm() {
             />
           </div>
         </div>
-        ) : (
-          <div className="rounded-lg border border-outline-variant/30 bg-surface-container-low p-5 text-center">
-            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <i className="fa-solid fa-envelope-circle-check" aria-hidden="true" />
-            </span>
-            <h2 className="mt-4 font-headline-md text-lg text-on-surface">Verify your email</h2>
-            <p className="mt-1 font-body-md text-sm text-on-surface-variant">
-              Enter the six-digit code sent to <strong className="text-on-surface">{form.email}</strong>.
-            </p>
-            <label htmlFor="registration-otp" className="sr-only">Verification code</label>
-            <input
-              id="registration-otp"
-              name="otp"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]{6}"
-              maxLength={6}
-              required
-              autoFocus
-              value={otp}
-              onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              className="mt-5 w-full rounded border border-outline-variant/40 bg-surface px-4 py-3 text-center font-headline-lg text-2xl tracking-[0.45em] text-on-surface outline-none focus:border-primary"
-              placeholder="000000"
-            />
-            <div className="mt-4 text-xs font-label-md">
+        ) : step === "otp" ? (
+          <div>
+            <h2 className="font-headline-md text-xl text-on-surface">Verify your contact details</h2>
+            <p className="mt-1 text-sm text-on-surface-variant">Enter the two six-digit codes we sent.</p>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2">
+              <label htmlFor="email-registration-otp" className="block text-sm font-semibold text-on-surface">Email OTP<span className="mt-1 block truncate text-xs font-normal text-on-surface-variant">{form.email}</span>
+                <input id="email-registration-otp" name="emailOtp" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required autoFocus value={emailOtp} onChange={(event) => setEmailOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 w-full rounded-md border border-outline-variant/60 bg-surface px-3 py-3 text-center font-headline-lg text-xl tracking-[0.3em] text-on-surface outline-none focus:border-primary" placeholder="000000" />
+              </label>
+              <label htmlFor="mobile-registration-otp" className="block text-sm font-semibold text-on-surface">Mobile OTP<span className="mt-1 block truncate text-xs font-normal text-on-surface-variant">{form.phone}</span>
+                <input id="mobile-registration-otp" name="mobileOtp" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={mobileOtp} onChange={(event) => setMobileOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 w-full rounded-md border border-outline-variant/60 bg-surface px-3 py-3 text-center font-headline-lg text-xl tracking-[0.3em] text-on-surface outline-none focus:border-primary" placeholder="000000" />
+              </label>
+            </div>
+            <p className="mt-3 text-xs text-on-surface-variant">The mobile code is sent by SMS and may take a few moments to arrive.</p>
+            <div className="mt-5 flex items-center justify-between text-xs font-label-md">
               <button type="button" onClick={resendOtp} disabled={loading} className="text-primary hover:underline disabled:opacity-50">
-                Resend code
+                Resend both codes
+              </button>
+              <button type="button" onClick={changeDetails} disabled={loading} className="font-label-md font-semibold text-primary hover:underline disabled:opacity-50">
+                Change details
               </button>
             </div>
-            <p className="mt-5 border-t border-outline-variant/30 pt-4 font-body-md text-sm text-on-surface-variant">
-              Want to change your email?{" "}
-              <button type="button" onClick={changeEmail} disabled={loading} className="font-label-md font-semibold text-primary hover:underline disabled:opacity-50">
-                Return to sign up
-              </button>
-            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-primary/25 bg-primary/5 p-6 text-center">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary text-on-primary"><i className="fa-solid fa-check" aria-hidden="true" /></span>
+            <h2 className="mt-4 font-headline-md text-lg text-on-surface">Verification complete</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">Your email <strong>{form.email}</strong> and mobile number <strong>{form.phone}</strong> are verified.</p>
+            <button type="button" onClick={changeDetails} disabled={loading} className="mt-4 text-xs font-semibold text-primary hover:underline disabled:opacity-50">Change registration details</button>
           </div>
         )}
 
@@ -335,8 +321,8 @@ export default function RegisterForm() {
             <span className="absolute inset-0 w-full h-full -mt-1 opacity-30 bg-gradient-to-b from-transparent via-transparent to-black pointer-events-none" />
             <span className="relative flex items-center gap-2">
               {loading
-                ? step === "details" ? "Sending Code..." : "Verifying..."
-                : step === "details" ? "Send Verification Code" : "Verify & Create Account"}
+                ? step === "details" ? "Sending Codes..." : step === "otp" ? "Verifying Codes..." : "Creating Account..."
+                : step === "details" ? "Send Verification Codes" : step === "otp" ? "Verify Both Codes" : "Create Account"}
               <i className="fa-solid fa-arrow-right text-xs transition-transform group-hover:translate-x-1" />
             </span>
           </button>

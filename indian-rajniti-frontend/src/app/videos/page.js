@@ -1,16 +1,22 @@
 import CategoryPageShell from "@/components/category/CategoryPageShell";
 import VideoCard from "@/components/news/VideoCard";
-import { getAllVideos } from "@/features/news/news.api";
+import { getAllVideos, getListingPages } from "@/features/news/news.api";
 import { buildPageMetadata } from "@/lib/seo";
+import { notFound } from "next/navigation";
+import { isSiteFeatureEnabled } from "@/lib/siteFeatures";
 
-export const metadata = buildPageMetadata({ title: "Political Videos", description: "Watch political speeches, interviews, press conferences, and video updates from across India.", path: "/videos" });
+export async function generateMetadata() {
+  const page = (await getListingPages()).videos || {};
+  return buildPageMetadata({ title: page.title || "Videos", description: page.description || "", path: "/videos" });
+}
 
 export default async function VideosPage() {
-  const videos = await getAllVideos();
+  if (!(await isSiteFeatureEnabled("feature_videos"))) notFound();
+  const [videos, pages] = await Promise.all([getAllVideos(), getListingPages()]);
 
   return (
     <CategoryPageShell
-      title="Videos"
+      title={pages.videos?.title || ""}
       count={videos.length}
       gridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
     >

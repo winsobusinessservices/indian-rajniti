@@ -3,6 +3,7 @@ import WidgetHeading from "@/components/common/WidgetHeading";
 import { getPopularTags } from "@/features/news/news.api";
 import { getParties, getKeyFigures, getChiefMinisters } from "@/features/politicians/politician.api";
 import { slugify } from "@/lib/slugify";
+import AdSlot from "@/components/common/AdSlot";
 
 function ViewAllLink({ href }) {
   return (
@@ -74,6 +75,10 @@ export default async function CategorySidebar() {
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="empty:hidden pt-4 border-t border-outline-variant/30">
+        <AdSlot placement="listing_sidebar_rectangle" width="300px" height="250px" label="Listing Sidebar Rectangle Ad" />
       </div>
     </div>
   );

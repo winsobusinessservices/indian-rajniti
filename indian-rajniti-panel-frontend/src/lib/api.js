@@ -1,6 +1,10 @@
 import { showToast } from "@/lib/toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+export const AUTH_SESSION_EXPIRED_EVENT = "auth:session-expired";
+
+const AUTH_ENTRY_PATHS = new Set(["/auth/login", "/auth/google"]);
+let lastSessionExpiredToastAt = 0;
 
 // React Strict Mode mounts effects twice in development to expose unsafe side
 // effects. Keep one promise per in-flight GET so both mounts share the same
@@ -42,10 +46,47 @@ export function isOptimizableImageHost(src) {
   }
 }
 
-async function handleResponse(res, { notifySuccess = false, notifyError = true } = {}) {
-  const data = await res.json().catch(() => ({}));
+function handleExpiredSession(notifyError) {
+  const error = new Error("Your session has expired. Please sign in again.");
+  error.status = 401;
+  error.toastShown = true;
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+  }
+
+  const now = Date.now();
+  if (notifyError && now - lastSessionExpiredToastAt > 1500) {
+    lastSessionExpiredToastAt = now;
+    showToast(error.message, "error");
+  }
+
+  throw error;
+}
+
+async function handleResponse(res, { path = "", notifySuccess = false, notifyError = true } = {}) {
+  const rawBody = await res.text().catch(() => "");
+  let data = {};
+  try { data = rawBody ? JSON.parse(rawBody) : {}; } catch { data = {}; }
   if (!res.ok) {
-    const error = new Error(data.message || "Something went wrong. Please try again.");
+    if (res.status === 401 && !AUTH_ENTRY_PATHS.has(path)) {
+      handleExpiredSession(notifyError);
+    }
+    const fallbackMessage = res.status === 413
+      ? "The selected file is too large. Choose a smaller file and try again."
+      : res.status >= 500
+        ? "The server could not complete this request. Please try again. If it continues, contact support with the action you were performing."
+        : res.status === 404
+          ? "The requested item could not be found. It may have been removed or belong to another website."
+          : "Something went wrong. Please check the form and try again.";
+    const backendMessage = /^(?:internal server error|something went wrong)[.!]?$/i.test(String(data.message || "").trim()) ? "" : data.message;
+    const requestId = data.requestId || res.headers.get("x-request-id") || "";
+    const displayMessage = backendMessage || fallbackMessage;
+    const error = new Error(res.status >= 500 && requestId ? `${displayMessage} Reference: ${requestId}` : displayMessage);
+    error.status = res.status;
+    error.code = data.code;
+    error.fieldErrors = data.fieldErrors || data.errors || null;
+    error.requestId = requestId;
     error.toastShown = notifyError;
     if (notifyError) showToast(error.message, "error");
     throw error;
@@ -62,9 +103,10 @@ function handleNetworkError(error) {
 async function request(path, { method = "GET", body, notifyError = true } = {}) {
   const url = `${API_BASE_URL}${path}`;
   const normalizedMethod = method.toUpperCase();
+  const requestKey = url;
 
-  if (normalizedMethod === "GET" && pendingGetRequests.has(url)) {
-    return pendingGetRequests.get(url);
+  if (normalizedMethod === "GET" && pendingGetRequests.has(requestKey)) {
+    return pendingGetRequests.get(requestKey);
   }
 
   const responsePromise = fetch(url, {
@@ -73,7 +115,7 @@ async function request(path, { method = "GET", body, notifyError = true } = {}) 
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   })
-    .then((res) => handleResponse(res, { notifySuccess: normalizedMethod !== "GET", notifyError }))
+    .then((res) => handleResponse(res, { path, notifySuccess: normalizedMethod !== "GET", notifyError }))
     .catch((error) => {
       if (!notifyError) throw error;
       return handleNetworkError(error);
@@ -81,11 +123,11 @@ async function request(path, { method = "GET", body, notifyError = true } = {}) 
 
   if (normalizedMethod !== "GET") return responsePromise;
 
-  pendingGetRequests.set(url, responsePromise);
+  pendingGetRequests.set(requestKey, responsePromise);
   try {
     return await responsePromise;
   } finally {
-    pendingGetRequests.delete(url);
+    pendingGetRequests.delete(requestKey);
   }
 }
 
@@ -98,7 +140,7 @@ async function requestForm(path, { method = "POST", formData } = {}) {
       credentials: "include",
       body: formData,
     });
-    return await handleResponse(res, { notifySuccess: true });
+    return await handleResponse(res, { path, notifySuccess: true });
   } catch (error) {
     return handleNetworkError(error);
   }
@@ -119,7 +161,7 @@ export const authApi = {
   updateUserRole: (id, role) => request(`/auth/users/${id}/role`, { method: "PATCH", body: { role } }),
   // Admin/Investor only — backs the Investor read-only dashboard's user
   // totals (total users, authors, editors).
-  listUsers: () => request("/auth/users"),
+  listUsers: ({ includeDeleted = false } = {}) => request(`/auth/users${includeDeleted ? "?includeDeleted=true" : ""}`),
   // Admin only — combined name/email/role editor for the Team Members table.
   updateUser: (id, payload) => request(`/auth/users/${id}`, { method: "PATCH", body: payload }),
   assignAuthorEditor: (authorId, editorId) => request(`/auth/users/${authorId}/editor`, {
@@ -153,16 +195,29 @@ export const contentLimitsApi = {
 };
 
 export const siteManagementApi = {
-  get: () => request("/admin/site-management"),
-  updateHeader: (header) => request("/admin/site-management/header", { method: "PUT", body: { header } }),
-  updateWidget: (key, data) => request(`/admin/reference-data/home-widgets/${encodeURIComponent(key)}`, { method: "PUT", body: { data } }),
-  setSectionVisibility: (key, isVisible) => request(`/admin/ui-sections/${encodeURIComponent(key)}/visibility`, { method: "PATCH", body: { isVisible } }),
+  get: (siteId) => request(`/admin/site-management${siteId ? `?siteId=${siteId}` : ""}`),
+  updateHeader: (header, siteId) => request("/admin/site-management/header", { method: "PUT", body: { header, siteId } }),
+  updateWidget: (key, data, siteId) => request(`/admin/reference-data/home-widgets/${encodeURIComponent(key)}`, { method: "PUT", body: { data, siteId } }),
+  setSectionVisibility: (key, isVisible, siteId) => request(`/admin/ui-sections/${encodeURIComponent(key)}/visibility`, { method: "PATCH", body: { isVisible, siteId } }),
+};
+
+export const sitesApi = {
+  list: () => request("/admin/sites"),
+  features: () => request("/admin/site-features"),
+  updateSettings: (formData) => requestForm("/admin/site-settings", { method: "PATCH", formData }),
+};
+
+export const servicesApi = {
+  list: (siteId) => request(`/admin/services${siteId ? `?siteId=${siteId}` : ""}`),
+  create: (payload) => request("/admin/services", { method: "POST", body: payload }),
+  update: (id, payload) => request(`/admin/services/${id}`, { method: "PATCH", body: payload }),
+  remove: (id) => request(`/admin/services/${id}`, { method: "DELETE" }),
 };
 
 export const deletionsApi = {
-  list: (state = "ACTIVE") => request(`/admin/deletions?state=${encodeURIComponent(state)}`),
-  restore: (id) => request(`/admin/deletions/${id}/restore`, { method: "PATCH" }),
-  permanentlyDelete: (id) => request(`/admin/deletions/${id}/permanent`, { method: "DELETE" }),
+  list: (state = "ACTIVE", siteId) => request(`/admin/deletions?state=${encodeURIComponent(state)}${siteId ? `&siteId=${siteId}` : ""}`),
+  restore: (id, siteId) => request(`/admin/deletions/${id}/restore`, { method: "PATCH", body: { siteId } }),
+  permanentlyDelete: (id, siteId) => request(`/admin/deletions/${id}/permanent`, { method: "DELETE", body: { siteId } }),
 };
 
 export const walletApi = {
@@ -208,7 +263,7 @@ export const authorApi = {
   createArticle: (formData) => requestForm("/articles", { formData }),
   createBlog: (formData) => requestForm("/blogs", { formData }),
   createVideo: (formData) => requestForm("/videos", { formData }),
-  listCategories: () => request("/categories"),
+  listCategories: (siteId) => request(`/categories${siteId ? `?siteId=${siteId}` : ""}`),
 
   listByType: (type, filters) => request(`/${RESOURCE_PATH[type]}${toQueryString(filters)}`),
 
@@ -250,9 +305,11 @@ export const authorApi = {
 
 export const categoriesApi = {
   list: () => request("/categories"),
-  listVisibilitySettings: () => request("/admin/ui-visibility"),
+  listVisibilitySettings: (siteId) => request(`/admin/ui-visibility${siteId ? `?siteId=${siteId}` : ""}`),
+  listReferenceVisibility: (siteId) => request(`/admin/reference-visibility${siteId ? `?siteId=${siteId}` : ""}`),
+  setReferenceVisibility: (type, id, isVisible, siteId) => request(`/admin/reference-visibility/${type}/${id}`, { method: "PATCH", body: { isVisible, siteId } }),
   create: (payload) => request("/categories", { method: "POST", body: typeof payload === "string" ? { name: payload } : payload }),
-  updateContent: (id, content) => request(`/categories/${id}/content`, { method: "PATCH", body: { content } }),
+  updateContent: (id, content, canonicalSlug = "") => request(`/categories/${id}/content`, { method: "PATCH", body: { content, canonicalSlug } }),
   setVisibility: (id, isVisible) => request(`/categories/${id}/visibility`, { method: "PATCH", body: { isVisible } }),
   setSectionVisibility: (key, isVisible) => request(`/admin/ui-sections/${encodeURIComponent(key)}/visibility`, { method: "PATCH", body: { isVisible } }),
   remove: (id) => request(`/categories/${id}`, { method: "DELETE" }),
@@ -261,11 +318,11 @@ export const categoriesApi = {
 export const policiesApi = {
   list: () => request("/policies"),
   listForRegistration: () => request("/policies/registration", { notifyError: false }),
-  listForAdmin: () => request("/policies/manage"),
+  listForAdmin: (siteId) => request(`/policies/manage${siteId ? `?siteId=${siteId}` : ""}`),
   getBySlug: (slug) => request(`/policies/${encodeURIComponent(slug)}`, { notifyError: false }),
-  create: (payload) => request("/policies", { method: "POST", body: payload }),
-  update: (id, payload) => request(`/policies/${id}`, { method: "PATCH", body: payload }),
-  remove: (id) => request(`/policies/${id}`, { method: "DELETE" }),
+  create: (payload, siteId) => request("/policies", { method: "POST", body: { ...payload, siteId } }),
+  update: (id, payload, siteId) => request(`/policies/${id}`, { method: "PATCH", body: { ...payload, siteId } }),
+  remove: (id, siteId) => request(`/policies/${id}`, { method: "DELETE", body: { siteId } }),
 };
 
 export const referenceAdminApi = {
@@ -289,12 +346,18 @@ export const referenceAdminApi = {
   updateParliament: (parliament) => request("/admin/reference-data/parliament", { method: "PUT", body: { parliament } }),
   updateSchedule: (type, items) => request(`/admin/reference-data/schedule/${type}`, { method: "PUT", body: { items } }),
   updateVidhanSabhas: (items) => request("/admin/reference-data/vidhan-sabhas", { method: "PUT", body: { items } }),
-  updateHomeWidget: (key, data) => request(`/admin/reference-data/home-widgets/${encodeURIComponent(key)}`, { method: "PUT", body: { data } }),
+  updateHomeWidget: (key, data, siteId) => request(`/admin/reference-data/home-widgets/${encodeURIComponent(key)}`, { method: "PUT", body: { data, siteId } }),
+  uploadAdvertisementPoster: (formData) => requestForm("/admin/reference-data/advertisements/poster", { formData }),
   updatePageProfiles: (profiles) => request("/admin/reference-data/page-profiles", { method: "PUT", body: { profiles } }),
 };
 
 export const pollApi = {
   vote: (optionIndex) => request("/poll/vote", { method: "POST", body: { optionIndex } }),
+};
+
+export const applicationsApi = {
+  list: ({ status, role } = {}) => request(`/applications${toQueryString({ status, role })}`),
+  review: (id, payload) => request(`/applications/${id}/review`, { method: "POST", body: payload }),
 };
 
 // Job postings the site is hiring for — admin creates/manages, any logged-in

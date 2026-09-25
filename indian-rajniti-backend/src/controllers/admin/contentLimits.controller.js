@@ -1,8 +1,14 @@
 const { ContentLimit, ROLES, CONTENT_TYPES } = require("../../models/contentLimit.model");
 
+const siteIdFor = (req) => Number(
+  (req.user?.role === "ADMIN" && (req.get("X-Management-Site-Id") || req.body?.siteId))
+  || req.user?.siteId
+  || 1
+);
+
 const getContentLimits = async (req, res) => {
   try {
-    const limits = await ContentLimit.getAll();
+    const limits = await ContentLimit.getAll(siteIdFor(req));
     return res.status(200).json({ success: true, limits });
   } catch (error) {
     console.error("Get content limits error:", error);
@@ -19,8 +25,8 @@ const getMyContentLimitStatus = async (req, res) => {
     const dailyLimits = {};
     await Promise.all(CONTENT_TYPES.map(async (contentType) => {
       const [limit, used] = await Promise.all([
-        ContentLimit.get(req.user.role, contentType),
-        ContentLimit.getUsage(req.user.userId, contentType),
+        ContentLimit.get(req.user.role, contentType, siteIdFor(req)),
+        ContentLimit.getUsage(req.user.userId, contentType, siteIdFor(req)),
       ]);
       dailyLimits[contentType] = {
         type: contentType,
@@ -56,7 +62,7 @@ const updateContentLimits = async (req, res) => {
       }
     }
 
-    const updated = await ContentLimit.setAll(limits, req.user.userId);
+    const updated = await ContentLimit.setAll(limits, req.user.userId, siteIdFor(req));
     return res.status(200).json({ success: true, message: "Daily posting limits updated", limits: updated });
   } catch (error) {
     console.error("Update content limits error:", error);
